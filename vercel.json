@@ -10,6 +10,16 @@
   },
   "rewrites": [
     {
+      "source": "/app",
+      "destination": "/workspace.html"
+    },
+    {
+      "source": "/app/",
+      "destination": "/workspace.html"
+    }
+  ],
+  "redirects": [
+    {
       "source": "/",
       "has": [
         {
@@ -17,15 +27,8 @@
           "key": "board"
         }
       ],
-      "destination": "/workspace.html"
-    },
-    {
-      "source": "/app",
-      "destination": "/workspace.html"
-    },
-    {
-      "source": "/app/",
-      "destination": "/workspace.html"
+      "destination": "/app",
+      "permanent": false
     }
   ]
 }
