@@ -26,3 +26,5 @@ module.exports.authorizeBoard=async(req,{readOnly=false}={})=>{if(!url)return fa
 module.exports.peopleContext=async(req)=>requestClient(req).query('people:context',{boardId:req.headers['x-board-id'],token:req.headers['x-board-token']||''});
 
 module.exports.resolveFiles=async(req,contexts)=>{for(const c of contexts){const a=c.attachment;if(!a?.storageId)continue;const file=await requestClient(req).query('files:read',{boardId:req.headers['x-board-id'],token:req.headers['x-board-token']||'',storageId:a.storageId});if(a.kind==='pdf'?file.mime!=='application/pdf':!/^image\/(png|jpeg|webp|gif)$/.test(file.mime||''))throw Error('Unsupported file');c.attachment={kind:a.kind,url:file.url};}};
+
+module.exports.workspaceKey=async(req)=>{const encryptionKey=process.env.WORKSPACE_KEY_ENCRYPTION_KEY||env.WORKSPACE_KEY_ENCRYPTION_KEY;if(!encryptionKey)throw Error('Workspace key storage is not configured.');const ciphertext=await requestClient(req).query('workspaceKeys:forServer',{boardId:req.headers['x-board-id'],token:req.headers['x-board-token']||'',secret:encryptionKey});return ciphertext?require('./workspace-key.cjs').decrypt(ciphertext,encryptionKey):null;};

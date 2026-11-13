@@ -71,3 +71,13 @@ test('hosted handler accepts HTTPS same-origin requests and rejects cross-site w
   assert.equal(await request('/api/title',{host:'invalid/host'}),403);
  }finally{await new Promise(resolve=>server.close(resolve));}
 });
+
+test('all local AI routes use the workspace key and never fall back after key lookup fails',async()=>{
+ const http=require('node:http'),session=require('../../collaboration/server.cjs'),{createServer}=require('../server.cjs');
+ const originals={authorizeBoard:session.authorizeBoard,workspaceKey:session.workspaceKey,resolveFiles:session.resolveFiles,peopleContext:session.peopleContext};
+ session.authorizeBoard=async()=>true;session.workspaceKey=async()=> 'workspace-test-key';session.resolveFiles=async()=>{};session.peopleContext=async()=>({});
+ let calls=0;const server=createServer('default-test-key',{fetchImpl:async(url,options)=>{calls++;assert.equal(options.headers.Authorization,'Bearer workspace-test-key');return new Response('',{status:401});}});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ const request=route=>new Promise((resolve,reject)=>{const req=http.request({host:'127.0.0.1',port:server.address().port,path:route,method:'POST',headers:{host:'127.0.0.1:4387','content-type':'application/json'}},res=>{let body='';res.on('data',chunk=>body+=chunk);res.on('end',()=>resolve({status:res.statusCode,body}));});req.on('error',reject);req.end(JSON.stringify({text:'Generate a title',messages:[{role:'user',content:'Hello'}]}));});
+ try{for(const route of ['/api/chat','/api/title','/api/expand']){const response=await request(route);assert.equal(response.status,401);assert.ok(!response.body.includes('workspace-test-key'));}assert.equal(calls,3);session.workspaceKey=async()=>{throw Error('locked');};assert.equal((await request('/api/title')).status,503);assert.equal(calls,3);}finally{Object.assign(session,originals);await new Promise(resolve=>server.close(resolve));}
+});

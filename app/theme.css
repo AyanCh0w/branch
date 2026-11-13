@@ -17,8 +17,6 @@
  --theme-shine:#ffffff12;
  --theme-shadow:#00000038;
 }
-.appearance-control{width:auto;max-width:112px;padding:6px 8px;border:1px solid var(--theme-line,#dfe3e9);border-radius:7px;background:var(--theme-surface,#fff);color:var(--theme-ink,#343840);font:11px BDO,Arial,sans-serif;cursor:pointer;flex-shrink:0}
-.appearance-control:focus-visible{outline:2px solid var(--theme-accent,#4879f5);outline-offset:3px}
 .brand-appearance{display:flex;align-items:center;gap:18px}
 :root[data-theme="dark"] img[src*="icons/"]{filter:invert(1)}
 :root[data-theme="dark"] #grid-dot{fill:#a1aabb;fill-opacity:.35}
@@ -29,7 +27,7 @@
 :root[data-theme="dark"] .inspector-excluded{opacity:1}
 /* Actual media and PDF pages keep their original colors. */
 :root[data-theme="dark"] .pdf-page{background:white}
-@media(max-width:600px){.brand-appearance{gap:9px}.appearance-control{max-width:87px;font-size:10px}.top-meta{gap:5px}}
+@media(max-width:600px){.brand-appearance{gap:9px}.top-meta{gap:5px}}
 @media(prefers-contrast:more){:root[data-theme="dark"]{--theme-muted:#e0e5ed;--theme-line:#99a6ba}}
 
 @media(max-width:600px){.a-workspace-identity{min-width:0;flex:1}.a-workspace-picker{flex:1}.a-workspace-trigger{max-width:100%}.a-workspace-trigger>span:nth-child(2){min-width:0}.a-workspace-header{gap:12px}}

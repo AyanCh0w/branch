@@ -64,6 +64,7 @@ export const remove=mutation({args:{teamId:v.id('teams'),confirmation:v.string()
  for(const board of boards)await ctx.db.patch(board._id,{teamId:undefined,updatedAt:Date.now()});
  for(const row of await ctx.db.query('teamMembers').withIndex('team_user',q=>q.eq('teamId',args.teamId)).collect())await ctx.db.delete(row._id);
  for(const row of await ctx.db.query('teamInvites').withIndex('team',q=>q.eq('teamId',args.teamId)).collect())await ctx.db.delete(row._id);
+ const key=await ctx.db.query('workspaceKeys').withIndex('scope',q=>q.eq('scope','team:'+args.teamId)).unique();if(key)await ctx.db.delete(key._id);
  await ctx.db.delete(args.teamId);
 }});
 export const leave=mutation({args:{teamId:v.id('teams')},handler:async(ctx,args)=>{

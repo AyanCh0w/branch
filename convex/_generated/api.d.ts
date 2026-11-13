@@ -20,6 +20,8 @@ import type * as library from "../library.js";
 import type * as people from "../people.js";
 import type * as sharing from "../sharing.js";
 import type * as teams from "../teams.js";
+import type * as workspaceKeyActions from "../workspaceKeyActions.js";
+import type * as workspaceKeys from "../workspaceKeys.js";
 
 import type {
   ApiFromModules,
@@ -40,6 +42,8 @@ declare const fullApi: ApiFromModules<{
   people: typeof people;
   sharing: typeof sharing;
   teams: typeof teams;
+  workspaceKeyActions: typeof workspaceKeyActions;
+  workspaceKeys: typeof workspaceKeys;
 }>;
 
 /**
