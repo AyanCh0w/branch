@@ -244,3 +244,14 @@ body.account-mode #account-app{background:var(--theme-surface, #fff)}
 .topbar #board-title:focus{border:0;outline:none;box-shadow:none}
 .topbar .identity:focus-within{border-color:var(--theme-accent, #8ba3ed);box-shadow:inset 0 1px 0 color-mix(in srgb, var(--theme-shine, #ffffff) 92.94%, transparent),0 0 0 2px var(--theme-shadow, #315bf41a),0 2px 5px var(--theme-shadow, #27354b08)}
 @media(max-width:600px){.topbar #board-title{padding:0}}
+
+/* A quiet, always-visible roster below the top-right board controls. */
+.a-board-presence{position:fixed;top:70px;right:20px;width:184px;max-width:calc(100vw - 32px);padding:10px 12px;background:var(--theme-surface,#fff);border:1px solid var(--theme-line,#e3e5e8);border-radius:12px;box-shadow:inset 0 1px var(--theme-shine,#fff),0 2px 5px var(--theme-shadow,#1723390a);color:var(--theme-ink,#343840);pointer-events:auto}
+.a-board-presence-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:10px;font-weight:500;color:var(--theme-muted,#7b8290)}
+.a-board-presence-heading>span{font-variant-numeric:tabular-nums}
+.a-board-presence ul{list-style:none;margin:7px 0 0;padding:0;display:grid;gap:7px;max-height:min(280px,40dvh);overflow:auto;overscroll-behavior:contain}
+.a-board-presence li{display:flex;align-items:center;gap:8px;min-width:0;font-size:12px;line-height:1.4}
+.a-board-presence .a-person-avatar{width:25px;height:25px;flex:none}
+.a-board-presence li>span{min-width:0;overflow-wrap:anywhere}
+.a-board-presence small{margin-left:auto;color:var(--theme-muted,#7b8290);font-size:10px;flex:none}
+@media(max-width:600px){.a-board-presence{right:12px;top:64px;width:158px}}

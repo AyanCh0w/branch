@@ -97,3 +97,39 @@ export const point = mutation({
     else await ctx.db.insert('cursors',{boardId:args.boardId,userId,tabId:args.tabId,...patch});
   },
 });
+
+// Board attendance is independent of pointer position and editing leases.
+export const activeUsers = query({
+  args:{token:v.string(),boardId:v.id('boards')},
+  handler:async(ctx,args)=>{
+    await access(ctx,args.token,args.boardId);
+    const rows=await ctx.db.query('boardPresence').withIndex('board',q=>q.eq('boardId',args.boardId)).collect();
+    const people=new Map<string,{userId:string,name:string,color:string,expiresAt:number}>();
+    for(const row of rows){
+      if(row.expiresAt<=Date.now())continue;
+      try{await accessForUser(ctx,row.userId,args.boardId);}catch{continue;}
+      const user=await ctx.db.get(row.userId);
+      if(!user)continue;
+      const previous=people.get(row.userId);
+      if(!previous||previous.expiresAt<row.expiresAt)people.set(row.userId,{userId:row.userId,name:user.name,color:user.color||'#6685cf',expiresAt:row.expiresAt});
+    }
+    return [...people.values()].sort((a,b)=>a.name.localeCompare(b.name)||a.userId.localeCompare(b.userId));
+  },
+});
+export const attend = mutation({
+  args:{token:v.string(),boardId:v.id('boards'),tabId:v.string(),active:v.boolean()},
+  handler:async(ctx,args)=>{
+    const {userId}=await access(ctx,args.token,args.boardId);
+    if(!args.tabId||args.tabId.length>100)throw Error('Invalid presence session');
+    const rows=await ctx.db.query('boardPresence').withIndex('board',q=>q.eq('boardId',args.boardId)).collect();
+    let current;
+    for(const row of rows){
+      if(row.expiresAt<=Date.now())await ctx.db.delete(row._id);
+      else if(row.userId===userId&&row.tabId===args.tabId)current=row;
+    }
+    if(!args.active){if(current)await ctx.db.delete(current._id);return;}
+    const expiresAt=Date.now()+15000;
+    if(current)await ctx.db.patch(current._id,{expiresAt});
+    else await ctx.db.insert('boardPresence',{boardId:args.boardId,userId,tabId:args.tabId,expiresAt});
+  },
+});
