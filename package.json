@@ -8,7 +8,8 @@
     "dev": "node app/server.cjs",
     "convex:dev": "convex dev",
     "test": "node --test app/tests/*.test.cjs && vitest run",
-    "typecheck": "tsc --noEmit -p convex"
+    "typecheck": "tsc --noEmit -p convex",
+    "build:vercel": "npm run build && node scripts/build-public.cjs"
   },
   "keywords": [],
   "author": "",
@@ -35,5 +36,8 @@
     "typescript": "^7.0.2",
     "vitest": "^4.1.12"
   },
-  "private": true
+  "private": true,
+  "engines": {
+    "node": "22.x"
+  }
 }

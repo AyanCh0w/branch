@@ -53,3 +53,21 @@ test('public landing and workspace routes stay separate without exposing private
   for(const route of ['/.env.local','/server.cjs','/../accounts/app.jsx'])assert.equal((await read(route)).status,404);
  }finally{await new Promise(resolve=>server.close(resolve));}
 });
+
+test('hosted handler accepts HTTPS same-origin requests and rejects cross-site writes', async()=>{
+ const http=require('node:http');const {createHandler}=require('../server.cjs');
+ const server=http.createServer(createHandler(undefined,{hosted:true}));
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ const request=(path,headers={})=>new Promise((resolve,reject)=>{
+  const req=http.request({host:'127.0.0.1',port:server.address().port,path,method:'POST',headers:{host:'branch.example.com',...headers}},res=>{res.resume();res.on('end',()=>resolve(res.statusCode));});req.on('error',reject);req.end();
+ });
+ try{
+  assert.equal(await request('/api/title',{origin:'https://branch.example.com'}),415);
+  assert.equal(await request('/api/title',{origin:'https://attacker.example'}),403);
+  assert.equal(await request('/api/title',{origin:'http://branch.example.com'}),403);
+  assert.equal(await request('/api/title',{'sec-fetch-site':'cross-site'}),403);
+  assert.equal(await request('/api/claim'),410);
+  assert.equal(await request('/api/collaboration'),410);
+  assert.equal(await request('/api/title',{host:'invalid/host'}),403);
+ }finally{await new Promise(resolve=>server.close(resolve));}
+});

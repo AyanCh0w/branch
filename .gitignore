@@ -17,3 +17,7 @@ app/katex/
 
 .DS_Store
 coverage/
+
+# Deployment output and local Vercel project metadata
+public/
+.vercel/

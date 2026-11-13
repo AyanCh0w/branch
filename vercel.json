@@ -1,0 +1,31 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "npm run build:vercel",
+  "outputDirectory": "public",
+  "functions": {
+    "api/*.js": {
+      "maxDuration": 180
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "board"
+        }
+      ],
+      "destination": "/workspace.html"
+    },
+    {
+      "source": "/app",
+      "destination": "/workspace.html"
+    },
+    {
+      "source": "/app/",
+      "destination": "/workspace.html"
+    }
+  ]
+}

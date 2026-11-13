@@ -37,3 +37,9 @@ The tests include local HTTP server checks, which require permission to listen o
 - `collaboration/`: Yjs client integration, context processing, research helpers, and backend tests.
 
 See [shared-board architecture and limitations](collaboration/README.md) and [canvas interactions](app/README.md) for details. Email recovery and billing are not implemented.
+
+## Vercel hosting
+
+Vercel uses `npm run build:vercel` to copy an explicit set of browser assets into `public/`, with Node.js API handlers in `api/`. Set `CONVEX_URL` and `OPENAI_API_KEY` as server-side Vercel environment variables. Continue to configure the shared AI key in Convex separately. The hosted frontend can use the same Convex deployment as the local app; hosting does not migrate or reset existing accounts and boards.
+
+The Vercel project should connect to `AyanCh0w/branch` with `main` as its production branch. The landing page is `/`, accounts and boards are `/app`, and existing `/?board=…` URLs still open the canvas. Local startup remains `npm run dev`. Development identity migration routes are disabled in hosted mode; do not configure the development bridge secret on Vercel.
