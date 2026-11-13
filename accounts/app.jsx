@@ -12,7 +12,8 @@ window.BranchAvatar=avatarURL;
 const Avatar=({name,color})=><img className="a-person-avatar" src={avatarURL(name,color)} alt=""/>;
 
 const Icon=({name,...props})=><span className="a-icon" {...props} dangerouslySetInnerHTML={{__html:window.Iconoir[name]||''}}/>;
-const Brand=()=> <a className="a-brand" href="/" aria-label="Branch home"><img src="/icons/branch-mark.svg" width="28" height="28" alt="" aria-hidden="true"/><span>branch</span></a>;
+const ThemeControl=()=> <select className="appearance-control" data-appearance aria-label="Appearance" defaultValue={window.BranchTheme?.get()||'system'}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>;
+const Brand=()=> <div className="brand-appearance"><a className="a-brand" href="/" aria-label="Branch home"><img src="/icons/branch-mark.svg" width="28" height="28" alt="" aria-hidden="true"/><span>branch</span></a><ThemeControl/></div>;
 const randomToken=()=>Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');
 const openBoard=id=>location.assign('/?board='+encodeURIComponent(id));
 const initials=name=>(name||'').split(/\s+/).map(x=>x[0]).slice(0,2).join('').toUpperCase()||'B';
