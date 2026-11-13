@@ -1,0 +1,19 @@
+.env
+.env.*
+!.env.example
+*.log
+
+node_modules/
+.convex/
+ux-prototype/collaboration.bundle.js
+
+ux-prototype/accounts.bundle.js
+
+ux-prototype/pdfjs/
+
+# Reproducible browser assets from npm run build
+ux-prototype/markdown.bundle.js
+ux-prototype/katex/
+
+.DS_Store
+coverage/

@@ -1,0 +1,39 @@
+{
+  "name": "board",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "esbuild accounts/app.jsx --bundle --format=iife --define:process.env.NODE_ENV='\"production\"' --outfile=ux-prototype/accounts.bundle.js && esbuild ux-prototype/markdown-entry.js --bundle --format=iife --outfile=ux-prototype/markdown.bundle.js && node ux-prototype/build-math.cjs && node ux-prototype/build-pdf.cjs",
+    "dev": "node ux-prototype/server.cjs",
+    "convex:dev": "convex dev",
+    "test": "node --test ux-prototype/tests/*.test.cjs && vitest run",
+    "typecheck": "tsc --noEmit -p convex"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@blobz/avatar-core": "^0.1.2",
+    "@convex-dev/auth": "^2.0.0",
+    "convex": "^1.49.0",
+    "dompurify": "^3.4.17",
+    "katex": "^0.19.1",
+    "marked": "^18.2.0",
+    "pdfjs-dist": "^6.5.438",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "yjs": "^13.6.33",
+    "youtube-transcript-plus": "^2.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "convex-test": "^0.0.71",
+    "esbuild": "^0.28.2",
+    "jsdom": "^29.1.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.12"
+  },
+  "private": true
+}
