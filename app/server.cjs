@@ -28,6 +28,14 @@ function createHandler(apiKey,{fetchImpl=fetch,hosted=false}={}){
   const url=new URL(req.url,origin);
   if(hosted&&['/api/claim','/api/collaboration'].includes(url.pathname)){res.writeHead(410);return res.end();}
   if(['/api/collaboration','/api/config','/api/claim'].includes(url.pathname))return collaborationSession(req,res,url);
+  if(url.pathname==='/api/embed-check'&&req.method==='POST'){
+   const reply=(code,data)=>{res.writeHead(code,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
+   if((req.headers.origin&&req.headers.origin!==origin)||req.headers['sec-fetch-site']==='cross-site')return reply(403,{error:'Invalid origin'});
+   if(!req.headers['content-type']?.startsWith('application/json'))return reply(415,{error:'JSON required'});
+   if(!await collaborationSession.authorizeBoard(req,{readOnly:true}))return reply(403,{error:'Board access required'});
+   let target;try{let body='',size=0;for await(const chunk of requestChunks(req)){size+=chunk.length;if(size>8192)return reply(413,{error:'Request too large'});body+=chunk;}target=JSON.parse(body).url;if(typeof target!=='string'||!/^https?:\/\//i.test(target))throw Error();}catch{return reply(400,{error:'Invalid URL'});}
+   return reply(200,await require('./embed-check.cjs').checkEmbed(target,origin));
+  }
   if(url.pathname==='/api/transcript'&&req.method==='POST'){
    const reply=(code,data)=>{res.writeHead(code,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
    if((req.headers.origin&&req.headers.origin!==origin)||req.headers['sec-fetch-site']==='cross-site')return reply(403,{error:'Invalid origin'});

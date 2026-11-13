@@ -210,3 +210,37 @@ body.account-mode #account-app{background:#fff}
 .a-workspace-settings .a-delete-actions{flex-wrap:wrap}
 .a-workspace-settings .a-settings-status:empty{display:none}
 @media(max-width:480px){.a-workspace-settings .a-dialog-heading{padding:16px}.a-settings-body{padding:20px 16px}.a-workspace-settings .a-responsibility{padding-left:0}}
+
+/* Separate canvas control pills share the dock's restrained glass surface. */
+.topbar .board-home-button,.topbar .identity,.topbar .top-meta,#creation-dock{
+ background:rgb(255 255 255 / 78%);
+ border:1px solid rgb(210 216 224 / 78%);
+ border-radius:14px;
+ box-shadow:inset 0 1px 0 rgb(255 255 255 / 95%),0 2px 5px #27354b08,0 8px 24px #27354b0c;
+ -webkit-backdrop-filter:blur(16px) saturate(115%);
+ backdrop-filter:blur(16px) saturate(115%);
+}
+.topbar{inset:8px 16px auto;height:49px;padding:0;gap:8px;background:none;border:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;pointer-events:none}
+.topbar>*{pointer-events:auto}
+.topbar .board-home-button{width:45px;height:45px;margin:0;flex-shrink:0}
+.topbar .identity{flex:0 1 auto;height:45px;min-width:0;margin:0;padding:0 12px;gap:8px}
+.topbar #board-title{width:auto;max-width:320px;background:transparent;border-color:transparent;box-shadow:none;padding:5px 4px;font-size:16px;line-height:24px}
+.topbar .top-meta{height:45px;margin-left:auto;padding:0 10px}
+.topbar .top-meta .a-share-trigger{background:transparent;border-color:transparent;box-shadow:none}
+@media(max-width:850px){.topbar .identity{margin:0}.topbar #board-title{max-width:220px}}
+@media(max-width:600px){.topbar{inset:8px 10px auto;height:96px;row-gap:6px;align-content:start}.topbar .identity{order:2;flex:0 1 auto;max-width:100%;height:41px;margin:0}.topbar #board-title{width:auto;max-width:calc(100vw - 88px);padding:4px}.topbar .top-meta{order:1}.topbar .board-home-button{order:0}}
+@media(prefers-reduced-transparency:reduce){.topbar .board-home-button,.topbar .identity,.topbar .top-meta,#creation-dock{background:#fff;-webkit-backdrop-filter:none;backdrop-filter:none}}
+
+/* The canvas continues behind the floating controls, with no header strip. */
+#board{top:0}
+.topbar .board-home-button{display:flex;align-items:center;justify-content:center;gap:8px;width:auto;padding:0 12px;color:#343840}
+.topbar .board-home-button b{font-size:18px;font-weight:600;letter-spacing:-.6px}
+.topbar .board-home-button img{flex-shrink:0}
+@media(max-width:600px){.topbar .board-home-button b{display:none}}
+
+/* The title is the pill's editable content, without a nested input frame. */
+.topbar .identity{padding:0 12px;gap:0}
+.topbar #board-title{padding:0;border:0;border-radius:0;line-height:24px;outline:none;box-shadow:none}
+.topbar #board-title:focus{border:0;outline:none;box-shadow:none}
+.topbar .identity:focus-within{border-color:#8ba3ed;box-shadow:inset 0 1px 0 #ffffffed,0 0 0 2px #315bf41a,0 2px 5px #27354b08}
+@media(max-width:600px){.topbar #board-title{padding:0}}

@@ -25,6 +25,8 @@ function compactChat(n){return n.type==='thread'&&!n.agent&&panelNodeId!==n.id&&
 function onCardEvent(type,handler){document.addEventListener(type,e=>{if(e.target.closest?.('.card'))handler(e);});}
 let mediaRequests=new Map(),mediaBusy=new Set(),mediaErrors=new Map(),suppressMediaClickUntil=0;
 let history=[],future=[],focused=null,selection=null,gesture=null,menuPoint=null;
+let lastHeldNode=null;
+function raiseHeldNode(nodeId){lastHeldNode=nodeId; $$('.card.last-held').forEach(el=>el.classList.remove('last-held'));cardEl(nodeId)?.classList.add('last-held');}
 let camera={x:0,y:0,z:1},editing=null,openContexts=new Set(),frame=0,lastFrame=0,wire=null,cardSprings=new Map();
 const nodeById=id=>state.nodes.find(n=>n.id===id);
 const cardEl=id=>document.querySelector(`[data-node="${id}"]`);
@@ -36,14 +38,14 @@ function undo(redo=false){if(window.BoardShared?.enabled)return window.BoardShar
 function rememberEditing(e){const el=e.target;if(!el.matches('[data-edit]'))return;const n=nodeById(el.closest('.card')?.dataset.node);editing={node:n?.id,field:el.dataset.edit,before:clone(state),value:n?.[el.dataset.edit]??state.title}}
 function commitEdit(){if(!editing)return;const e=editing;editing=null;const n=nodeById(e.node),current=n?n[e.field]:state.title;if(current!==e.value){history.push(e.before);future=[];if(n&&(e.field==='body'||e.field==='title')){n.revision=(n.revision||1)+1;n.author='You';const label=cardEl(n.id)?.querySelector('.node-status');if(label)label.textContent='v'+n.revision;syncContextIndicators(n.id);syncDraftContext(n);scheduleNodeTitle(n)}save();$('#undo').disabled=false;requestDraw()}}
 function nibMarkup(n){if(!BranchContext.hasContent(n))return '';return `<button class="nib" data-port="${n.id}" aria-label="Drag context from ${escapeHTML(n.title)}" ><span class="nib-label">Create branch</span></button>`}
-function contextMarkup(c){const source=nodeById(c.source),stale=source&&(source.revision!==c.revision||(!c.attachment&&!c.quote&&((source.type==='upload'&&!source.text)||(source.type==='media'&&source.mediaType!=='video'))));const symbol=source?.type==='media'?(source.mediaType==='video'?'youtube':'media-image'):source?.type==='upload'?'attachment':source?.type==='thread'?'chat-bubble':'page';return `<span class="context-reference"><button type="button" class="context-chip ${stale?'stale':''}" data-context="${c.id}" aria-label="Inspect context: ${escapeHTML(c.title)}" title="${escapeHTML(c.title)}${stale?' · source updated':''}">${icon(symbol)}<span class="chip-title">${escapeHTML(c.title)}</span>${stale?'<i class="source-updated"></i>':''}</button></span>`}
+function contextMarkup(c){const source=nodeById(c.source),stale=source&&(source.revision!==c.revision||(!c.attachment&&!c.quote&&((source.type==='upload'&&!source.text)||(source.type==='media'&&source.mediaType!=='video'))));const symbol=source?.type==='media'?(source.mediaType==='video'?'youtube':'media-image'):source?.type==='upload'?'attachment':source?.type==='thread'?'chat-bubble':'page';return `<span class="context-reference"><button type="button" class="context-chip ${stale?'stale':''}" data-context="${c.id}" aria-haspopup="dialog" aria-label="Inspect context: ${escapeHTML(c.title)}" title="${escapeHTML(c.title)}${stale?' · source updated':''}">${icon(symbol)}<span class="chip-title">${escapeHTML(c.title)}</span>${stale?'<i class="source-updated"></i>':''}</button></span>`}
 
 function contextPreviewMarkup(c){if(c.enabled===false)return '';const a=c.attachment;const url=a?.url||assetURLs.get(a?.asset);if(a?.kind==='image'&&url)return `<img class="context-image-preview" src="${escapeHTML(url)}" alt="${escapeHTML(c.title)}">`;if(a?.kind==='pdf'&&url)return `<branch-pdf src="${escapeHTML(url)}" data-key="context-${escapeHTML(c.id)}"></branch-pdf>`;return c.availability?`<p class="context-availability">${escapeHTML(c.availability)}</p>`:a?`<p class="context-availability">${a.storageId?'File attached for chat':'File not available to chat yet. Enable chat context on its source card, then refresh this reference.'}</p>`:'';}
 function contextDetails(n){return (n.contexts||[]).filter(c=>openContexts.has(c.id)).map(c=>{const source=nodeById(c.source),stale=source&&(source.revision!==c.revision||(!c.attachment&&!c.quote&&((source.type==='upload'&&!source.text)||(source.type==='media'&&source.mediaType!=='video'))));const upstream=BranchContext.resolveContext(c.inherited||[]);return `<section class="context-detail flat-context"><div class="context-tools"><span>${c.excerptOnly?'Selected text · ':''}${escapeHTML(c.title)}</span><span class="context-version">v${c.revision}</span><label class="icon-toggle" title="Include full source snapshot"><input type="checkbox" data-toggle-context="${c.id}" ${c.enabled?'checked':''}><span>${icon('check')}</span><span class="sr-only">Include full source snapshot</span></label>${stale?`<button type="button" data-refresh-context="${c.id}" title="Refresh source snapshot" aria-label="Refresh source snapshot">${icon('refresh')}</button>`:''}<button type="button" data-detach-context="${c.id}" title="Detach context" aria-label="Detach context">${icon('xmark')}</button></div>${contextPreviewMarkup(c)}<p class="context-excerpt">${escapeHTML(c.enabled?c.body:c.quote||'')}</p>${upstream.length?`<div class="upstream-flat">${upstream.map(u=>`<span title="${escapeHTML(u.quote||u.text)}">${escapeHTML(u.title)}</span>`).join('')}</div>`:''}</section>`}).join('')}
 function personMarkup(person){return person&&window.BranchAvatar?`<span class="person-byline"><img src="${escapeHTML(window.BranchAvatar(person.name,person.color))}" alt=""/>${escapeHTML(person.name)}</span>`:''}
 function bodyMarkup(n){
  if(n.type==='plan')return `<div class="card-main note-content"><div class="plan-body" contenteditable="plaintext-only" role="textbox" aria-label="Plan text" aria-multiline="true" data-edit="body">${escapeHTML(n.body)}</div></div><button type="button" class="chat-preview-toggle note-preview-toggle" aria-expanded="${expandedNotes.has(n.id)}">${expandedNotes.has(n.id)?'Show less':'Show full note'} ${icon('nav-arrow-down')}</button><div class="card-footer"><span class="author">${personMarkup(n.authorProfile)||escapeHTML(n.author||'You')}</span><span class="node-status">v${n.revision}</span></div>`;
- if(n.type==='thread')return `<div class="chat-surface" role="region" aria-label="Conversation transcript" tabindex="${compactChat(n)?-1:0}"><div class="messages">${n.messages.map(m=>`<div class="message ${m.role}" data-message="${m.id}"><div class="message-label"><span class="sr-only">${m.role==='user'?'You':m.model||'Previous demo reply'}</span>${messageNibMarkup(m)}</div><div data-message-text>${m.role==='user'?`<div class="user-message-copy">${personMarkup(m.person)}${messageHTML(m.text)}</div>`:messageHTML(m.text)}${m.error?`<div class="message-error" role="alert">${escapeHTML(m.error)} <button type="button" data-retry-message="${m.id}">Retry</button></div>`:''}</div></div>`).join('')}</div></div>${n.messages.length?`<button type="button" class="chat-preview-toggle" aria-expanded="${!compactChat(n)}">${compactChat(n)?'Show conversation':'Show less'} ${icon('nav-arrow-down')}</button>`:''}<form class="composer chat-composer"><div class="context-list">${(n.contexts||[]).map(contextMarkup).join('')}</div>${contextDetails(n)}<textarea data-prompt aria-label="Message in ${escapeHTML(n.title)}" placeholder="${n.agent?(n.messages.length?'Give a new research goal…':'Give your agent a goal…'):n.messages.length?'Continue the conversation…':'Ask anything…'}" rows="2">${escapeHTML(n.draft||'')}</textarea><div class="composer-controls"><button type="button" class="add-context" aria-label="Add context node" data-tooltip="Add context node" aria-haspopup="menu" aria-controls="context-menu" aria-expanded="false">${icon('plus')}</button><span class="mode-chip">${icon(n.agent?'flash':'chat-bubble')}<span>${n.agent?'Agent':'Chat'}</span></span>${modelPickerMarkup(n)}<button type="submit" class="send-message" aria-label="Send message" title="Send" ${generatingChats.has(n.id)?'disabled':''}><span>${n.agent?'Run':'Send'}</span>${icon('arrow-up')}</button></div></form>`;
+ if(n.type==='thread')return `<div class="chat-surface" role="region" aria-label="Conversation transcript" tabindex="${compactChat(n)?-1:0}"><div class="messages">${n.messages.map(m=>`<div class="message ${m.role}" data-message="${m.id}"><div class="message-label"><span class="sr-only">${m.role==='user'?'You':m.model||'Previous demo reply'}</span>${messageNibMarkup(m)}</div><div data-message-text>${m.role==='user'?`<div class="user-message-copy">${personMarkup(m.person)}${messageHTML(m.text)}</div>`:messageHTML(m.text)}${m.error?`<div class="message-error" role="alert">${escapeHTML(m.error)} <button type="button" data-retry-message="${m.id}">Retry</button></div>`:''}</div></div>`).join('')}</div></div>${n.messages.length?`<button type="button" class="chat-preview-toggle" aria-expanded="${!compactChat(n)}">${compactChat(n)?'Show conversation':'Show less'} ${icon('nav-arrow-down')}</button>`:''}<form class="composer chat-composer"><div class="context-list">${(n.contexts||[]).map(contextMarkup).join('')}</div>${contextDetails(n)}<textarea data-prompt aria-label="Message in ${escapeHTML(n.title)}" placeholder="${n.agent?(n.messages.length?'Give a new research goal…':'Give your agent a goal…'):n.messages.length?'Continue the conversation…':'Ask anything…'}" rows="2">${escapeHTML(n.draft||'')}</textarea><div class="composer-controls"><button type="button" class="add-context" aria-label="Add context node" data-tooltip="Add context node" aria-haspopup="menu" aria-controls="context-menu" aria-expanded="false">${icon('plus')}</button><span class="mode-chip">${icon(n.agent?'flash':'chat-bubble')}<span>${n.agent?'Agent':'Chat'}</span></span>${modelPickerMarkup(n)}<button type="submit" class="send-message" aria-label="Send message" ${generatingChats.has(n.id)?'disabled':''}><span>${n.agent?'Run':'Send'}</span>${icon('arrow-up')}</button></div></form>`;
  if(n.type==='search')return searchMarkup(n);
  if(n.type==='media')return mediaMarkup(n);
  if(n.type==='upload')return uploadMarkup(n);
@@ -51,13 +53,53 @@ function bodyMarkup(n){
  return websiteMarkup(n);
 }
 const websiteFallbacks=new Set();
+const websiteMonitors=new Map(),websiteChecks=new Map();
+function showWebsiteFallback(frame){
+ const n=nodeById(frame.closest('.card')?.dataset.node);
+ if(!frame.isConnected||!n)return;
+ websiteFallbacks.add(n.id);
+ const template=document.createElement('template');template.innerHTML=websiteMarkup(n);
+ frame.closest('.website-preview').replaceWith(template.content.firstElementChild);
+ monitorWebsitePreviews();requestDraw();
+}
+function monitorWebsitePreviews(){
+ for(const [frame,stop]of websiteMonitors)if(!frame.isConnected){stop();websiteMonitors.delete(frame);}
+ for(const frame of $$('.website-viewport iframe')){
+  if(websiteMonitors.has(frame))continue;
+  let timer,observer,started=false,loaded=false,stopped=false;
+  const fail=()=>{if(!stopped)showWebsiteFallback(frame);};
+  const onLoad=()=>{loaded=true;clearTimeout(timer);};
+  frame.addEventListener('load',onLoad);frame.addEventListener('error',fail);
+  websiteMonitors.set(frame,()=>{stopped=true;clearTimeout(timer);observer?.disconnect();frame.removeEventListener('load',onLoad);frame.removeEventListener('error',fail);});
+  const start=()=>{
+   if(started||stopped)return;started=true;observer?.disconnect();
+   // Start the deadline only when a lazy preview enters the viewport.
+   frame.loading='eager';if(!loaded)timer=setTimeout(fail,20000);
+   if(location.protocol==='https:'&&frame.src.startsWith('http:')){fail();return;}
+   const url=frame.src;let check=websiteChecks.get(url);
+   if(!check||Date.now()-check.at>60000){
+    const promise=(async()=>{try{const response=await fetch('/api/embed-check',{method:'POST',headers:{'Content-Type':'application/json',...window.BoardShared?.headers?.()},body:JSON.stringify({url}),signal:AbortSignal.timeout(10000)});return response.ok?await response.json():null;}catch{return null;}})();
+    check={at:Date.now(),promise};websiteChecks.set(url,check);
+    if(websiteChecks.size>100)websiteChecks.delete(websiteChecks.keys().next().value);
+   }
+   check.promise.then(result=>{if(result?.status==='blocked'||result?.status==='unavailable')fail();});
+  };
+  if(typeof IntersectionObserver==='function'){observer=new IntersectionObserver(entries=>{if(entries.some(e=>e.isIntersecting))start();});observer.observe(frame);}else start();
+ }
+}
 function websiteMarkup(n){
  let url;try{url=new URL(n.url);if(!['http:','https:'].includes(url.protocol))return '';}catch{return '';}
  const domain=url.hostname.replace(/^www\./,''),sandbox='allow-scripts allow-forms allow-popups'+(url.origin!==location.origin?' allow-same-origin':'');
- return `<div class="website-preview"><div class="website-viewport">${websiteFallbacks.has(n.id)?`<div class="website-fallback">${icon('link')}<strong>${escapeHTML(domain)}</strong><p>Some sites don’t allow previews inside other apps. You can still open the page and keep this node as a source.</p><a data-open-browser href="${escapeHTML(url.href)}" target="_blank" rel="noopener noreferrer">Open in browser ${icon('arrow-up-right')}</a><button type="button" data-retry-embed>Try preview again</button></div>`:`<iframe title="Interactive page: ${escapeHTML(domain)}" src="${escapeHTML(url.href)}" sandbox="${sandbox}" referrerpolicy="no-referrer" loading="lazy"></iframe>`}</div><div class="website-source">${icon('link')}<span>${escapeHTML(domain)}</span>${websiteFallbacks.has(n.id)?'':'<button type="button" data-embed-help>Preview not loading?</button>'}<a data-open-browser href="${escapeHTML(url.href)}" target="_blank" rel="noopener noreferrer" data-tooltip="Open in browser · use if embedding is blocked" aria-label="Open ${escapeHTML(domain)} in browser">Open in browser ${icon('arrow-up-right')}</a></div></div><section class="website-perspective" id="website-perspective-${n.id}" ${openWebsitePerspectives.has(n.id)?'':'hidden'}><label id="website-notes-label-${n.id}">Your perspective</label><div class="website-notes" contenteditable="plaintext-only" role="textbox" aria-labelledby="website-notes-label-${n.id}" aria-label="Website perspective notes" aria-multiline="true" data-edit="body" data-placeholder="What should AI know about how you’re using this site?">${escapeHTML(n.body||'')}</div></section>`;
+ return `<div class="website-preview"><div class="website-viewport">${websiteFallbacks.has(n.id)?`<div class="website-fallback" role="status">${icon('link')}<strong>${escapeHTML(domain)}</strong><p>This preview couldn’t load. The site may be unavailable or may not allow embedded previews. You can still open it in your browser and keep this node as a source.</p><a data-open-browser href="${escapeHTML(url.href)}" target="_blank" rel="noopener noreferrer">Open in browser ${icon('arrow-up-right')}</a><button type="button" data-retry-embed>Try preview again</button></div>`:`<iframe title="Interactive page: ${escapeHTML(domain)}" src="${escapeHTML(url.href)}" sandbox="${sandbox}" referrerpolicy="no-referrer" loading="lazy"></iframe>`}</div><div class="website-source">${icon('link')}<span>${escapeHTML(domain)}</span>${websiteFallbacks.has(n.id)?'':'<button type="button" data-embed-help>Preview not loading?</button>'}<a data-open-browser href="${escapeHTML(url.href)}" target="_blank" rel="noopener noreferrer" data-tooltip="Open in browser · use if embedding is blocked" aria-label="Open ${escapeHTML(domain)} in browser">Open in browser ${icon('arrow-up-right')}</a></div></div><section class="website-perspective" id="website-perspective-${n.id}" ${openWebsitePerspectives.has(n.id)?'':'hidden'}><label id="website-notes-label-${n.id}">Your perspective</label><div class="website-notes" contenteditable="plaintext-only" role="textbox" aria-labelledby="website-notes-label-${n.id}" aria-label="Website perspective notes" aria-multiline="true" data-edit="body" data-placeholder="What should AI know about how you’re using this site?">${escapeHTML(n.body||'')}</div></section>`;
 }
 
-function cardMarkup(n,i){const kind={plan:'Plan',thread:'Chat',search:'Search',web:'Source',upload:'File',media:'Media'}[n.type];const titleLabel=n.type==='plan'?'Plan title':n.type==='thread'?'Conversation title':'Card title';return `<article class="card ${n.agent?'agent-card':''} ${n.researchSource?'research-source-card':''} ${n.autoGroup?'auto-group-member':''} ${n.type==='plan'&&!expandedNotes.has(n.id)?'compact-note':''} ${compactChat(n)?'compact-chat':''} ${n.type==='thread'&&!n.messages?.length&&!n.contexts?.length?'empty-chat':''} ${n.type==='web'?'web-card':''} ${focused===n.id?'focused':''}" data-node="${n.id}" data-kind="${n.type}" data-bottom-ports="${!!n.bottomPorts}" aria-busy="${generatingChats.has(n.id)}" tabindex="0" aria-label="${escapeHTML(n.type+' card: '+n.title)}" style="--page-height:${n.minHeight||469}px;width:${n.width||(n.type==='web'?540:n.type==='thread'?520:380)}px;min-height:${n.minHeight||0}px;transform:translate3d(${n.x}px,${n.y}px,0)"><div class="card-header"><h2 class="node-label" contenteditable="plaintext-only" role="textbox" aria-label="${titleLabel}" data-edit="title">${escapeHTML(n.title||'Untitled')}</h2><span class="drag-strip" aria-hidden="true"></span><div class="header-actions">${websitePerspectiveButton(n)}${sourceInfoButton(n)}${expandIdeaButton(n)}<button class="title-grip" aria-label="Move ${escapeHTML(n.title)}" title="Move node"><span class="grip-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span></button>${n.type==='thread'?`<button class="open-chat-panel" aria-label="Open chat in side panel" data-tooltip="Open in side panel">${icon('arrow-up-right')}</button><button class="collapse-card" aria-label="${compactChat(n)?'Expand':'Collapse'} conversation" title="${compactChat(n)?'Expand':'Collapse'}" aria-expanded="${!compactChat(n)}">${icon('nav-arrow-down')}</button>`:''}<button class="delete-card" aria-label="Delete ${escapeHTML(n.title)}" title="Delete card">${icon('trash')}</button></div></div>${n.agent?agentIdentityMarkup(n):''}${bodyMarkup(n)}${['thread','upload','media','web'].includes(n.type)||n.contextFor?'':`<div class="node-controls"><button class="add-file" aria-label="Add file beside ${escapeHTML(n.title)}">${icon('plus')}</button><span class="mode-chip" title="${kind}" aria-label="${kind}"><span class="mode-icon">${icon({plan:'page',thread:'chat-bubble',search:'search',web:'arrow-up-right',upload:'upload',media:n.mediaType==='video'?'youtube':'media-image'}[n.type])}</span><span class="sr-only">${kind}</span></span><span class="node-byline">${n.type==='thread'?'AI demo':n.type==='plan'?escapeHTML(n.author||'You'):''}</span></div>`}${sourceInfoMarkup(n)}${ideaPreviewMarkup(n)}${n.type!=='search'?nibMarkup(n):''}${n.type==='thread'||n.contexts?.length||n.previewOrigin?`<span class="socket ${n.previewOrigin?'preview-input':''} ${n.contexts?.length||n.previewOrigin?'has-context':''}" role="img" aria-label="Incoming context"></span>`:''}<span class="drop-inline" aria-hidden="true">${icon('plus')}</span><button class="resize-handle" aria-label="Resize ${escapeHTML(n.title)}" title="Resize">${icon('resize-diagonal')}</button></article>`}
+// Semantic overview is presentation-only: original editors and node data stay intact.
+function overviewMarkup(n){
+ const type=n.agent?'Research agent':({plan:'Note',thread:'Chat',search:'Image search',web:'Website',upload:'File',media:n.mediaType==='video'?'Video':'Image'}[n.type]||'Node');
+ const symbol={plan:'page',thread:'chat-bubble',search:'search',web:'arrow-up-right',upload:'attachment',media:n.mediaType==='video'?'youtube':'media-image'}[n.type]||'page';
+ return `<div class="node-overview"><span class="overview-icon" aria-hidden="true">${icon(symbol)}</span><div class="overview-label"><span class="overview-type">${type}</span><strong>${escapeHTML(n.title||'Untitled')}</strong></div></div>`;
+}
+function cardMarkup(n,i){const kind={plan:'Plan',thread:'Chat',search:'Search',web:'Source',upload:'File',media:'Media'}[n.type];const titleLabel=n.type==='plan'?'Plan title':n.type==='thread'?'Conversation title':'Card title';return `<article class="card ${lastHeldNode===n.id?'last-held':''} ${n.agent?'agent-card':''} ${n.researchSource?'research-source-card':''} ${n.autoGroup?'auto-group-member':''} ${n.type==='plan'&&!expandedNotes.has(n.id)?'compact-note':''} ${compactChat(n)?'compact-chat':''} ${n.type==='thread'&&!n.messages?.length&&!n.contexts?.length?'empty-chat':''} ${n.type==='web'?'web-card':''} ${focused===n.id?'focused':''}" data-node="${n.id}" data-kind="${n.type}" data-bottom-ports="${!!n.bottomPorts}" aria-busy="${generatingChats.has(n.id)}" tabindex="0" aria-label="${escapeHTML(n.type+' card: '+n.title)}" style="--page-height:${n.minHeight||469}px;width:${n.width||(n.type==='web'?540:n.type==='thread'?520:380)}px;min-height:${n.minHeight||0}px;transform:translate3d(${n.x}px,${n.y}px,0)"><button class="title-grip" aria-label="Move ${escapeHTML(n.title)}"><span class="grip-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span></button><div class="card-header"><h2 class="node-label" contenteditable="plaintext-only" role="textbox" aria-label="${titleLabel}" data-edit="title">${escapeHTML(n.title||'Untitled')}</h2><span class="drag-strip" aria-hidden="true"></span><div class="header-actions">${websitePerspectiveButton(n)}${sourceInfoButton(n)}${expandIdeaButton(n)}${n.type==='thread'?`<button class="open-chat-panel" aria-label="Open chat in side panel" data-tooltip="Open in side panel">${icon('arrow-up-right')}</button><button class="collapse-card" aria-label="${compactChat(n)?'Expand':'Collapse'} conversation" title="${compactChat(n)?'Expand':'Collapse'}" aria-expanded="${!compactChat(n)}">${icon('nav-arrow-down')}</button>`:''}<button class="delete-card" aria-label="Delete ${escapeHTML(n.title)}" title="Delete card">${icon('trash')}</button></div></div>${overviewMarkup(n)}${n.agent?agentIdentityMarkup(n):''}${bodyMarkup(n)}${['thread','upload','media','web'].includes(n.type)||n.contextFor?'':`<div class="node-controls"><button class="add-file" aria-label="Add file beside ${escapeHTML(n.title)}">${icon('plus')}</button><span class="mode-chip" title="${kind}" aria-label="${kind}"><span class="mode-icon">${icon({plan:'page',thread:'chat-bubble',search:'search',web:'arrow-up-right',upload:'upload',media:n.mediaType==='video'?'youtube':'media-image'}[n.type])}</span><span class="sr-only">${kind}</span></span><span class="node-byline">${n.type==='thread'?'AI demo':n.type==='plan'?escapeHTML(n.author||'You'):''}</span></div>`}${sourceInfoMarkup(n)}${ideaPreviewMarkup(n)}${n.type!=='search'?nibMarkup(n):''}${n.type==='thread'||n.contexts?.length||n.previewOrigin?`<span class="socket ${n.previewOrigin?'preview-input':''} ${n.contexts?.length||n.previewOrigin?'has-context':''}" role="img" aria-label="Incoming context"></span>`:''}<span class="drop-inline" aria-hidden="true">${icon('plus')}</span><button class="resize-handle" aria-label="Resize ${escapeHTML(n.title)}" title="Resize">${icon('resize-diagonal')}</button></article>`}
 function render(){commitEdit();$('#chat-panel .card')?.remove();$('#cards').innerHTML=state.nodes.map(cardMarkup).join('');mountChatPanel();state.nodes.forEach(updateActivity);$('#board-title').textContent=state.title;$('#undo').disabled=!history.length;observeCards();requestDraw()}
 function refreshCard(n){if(!window.BoardShared?.applying)commitEdit();const old=cardEl(n.id),reading=panelNodeId===n.id?old?.querySelector('.chat-surface'):null,readingTop=reading?.scrollTop,follow=reading?reading.scrollHeight-reading.scrollTop-reading.clientHeight<60:true,entrance=old?.getAnimations().find(a=>a.id==='idea-entrance'),entranceTime=entrance?.currentTime;if(old)old.outerHTML=cardMarkup(n,state.nodes.indexOf(n));else $('#cards').insertAdjacentHTML('beforeend',cardMarkup(n,state.nodes.indexOf(n)));if(entrance&&entranceTime<300){const next=cardEl(n.id),animation=next.animate(entrance.effect.getKeyframes(),{duration:300,easing:'cubic-bezier(.2,.8,.2,1)',id:'idea-entrance'});animation.currentTime=entranceTime;next.addEventListener('pointerdown',()=>animation.cancel(),{once:true});}mountChatPanel();if(reading){const area=cardEl(n.id)?.querySelector('.chat-surface');if(area)area.scrollTop=follow?area.scrollHeight:readingTop;}observeCards();requestDraw();if(!window.BoardShared?.applying)scheduleNodeTitle(n);window.BoardShared?.refreshLocks();updateActivity(n)}
 function sourceText(n,cutoff){return BranchContext.textOf(n,cutoff)}
@@ -146,43 +188,48 @@ function previewWireSegments(){
   if(!r)continue;
   const end=elementPoint(cardEl(node.id)?.querySelector(':scope > .socket'));if(!end)continue;
   link.classList.add('preview-link-connected');
-  segments.push({d:curve({x:r.right+3*camera.z,y:r.top+r.height/2-65},end),kind:'wire-base preview-wire'});
+  segments.push({d:curve({x:r.right+3*camera.z,y:r.top+r.height/2-boardTop()},end),kind:'wire-base preview-wire'});
  }
  return segments;
 }
 function deleteNode(n){if(window.BoardShared?.enabled){commitEdit();return window.BoardShared.deleteNode(n.id);}expandingIdeas.get(n.id)?.abort();clearTimeout(titleTimers.get(n.id));titleTimers.delete(n.id);titleRequests.get(n.id)?.abort();generatingChats.get(n.id)?.abort();generatingChats.delete(n.id);remember();state.nodes=state.nodes.filter(x=>x.id!==n.id);state.nodes.forEach(x=>{if(x.contexts)x.contexts=x.contexts.filter(c=>c.source!==n.id)});cardSprings.delete(n.id);render();record('Deleted card');notify('Card removed · undo available')}
 function detach(n,cid){remember();n.contexts=n.contexts.filter(c=>c.id!==cid);openContexts.delete(cid);refreshCard(n);record('Detached context');notify('Context detached')}
-function boardPoint(clientX,clientY){return{x:(clientX-camera.x)/camera.z,y:(clientY-65-camera.y)/camera.z}}
+function boardTop(){return $('#board').getBoundingClientRect().top}
+function boardPoint(clientX,clientY){return{x:(clientX-camera.x)/camera.z,y:(clientY-boardTop()-camera.y)/camera.z}}
 function screenPoint(x,y){return{x:x*camera.z+camera.x,y:y*camera.z+camera.y}}
-function applyCamera(){ const world=$('#world');world.classList.toggle('zoomed-out',camera.z<.4);world.style.setProperty('--move-grip-scale',String(1/camera.z));reactiveGrid.setCamera(camera); $('#world').style.transform=`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.z})`;const gridStep=24*camera.z;$('#dot-grid').setAttribute('patternTransform',`translate(${camera.x%gridStep} ${camera.y%gridStep}) scale(${camera.z})`);$('#grid-dot').setAttribute('r',.7/camera.z);$('#zoom').textContent=Math.round(camera.z*100)+'%';requestDraw()}
-function zoomAt(factor,x=innerWidth/2,y=innerHeight/2){const before=boardPoint(x,y);camera.z=Math.max(.1,Math.min(3,camera.z*factor));camera.x=x-before.x*camera.z;camera.y=y-65-before.y*camera.z;applyCamera();hideSelection()}
+function applyCamera(){ const world=$('#world');if(camera.z<.4&&!world.classList.contains('zoomed-out')){for(const n of state.nodes){const summary=cardEl(n.id)?.querySelector('.node-overview');if(summary)summary.outerHTML=overviewMarkup(n);}}world.classList.toggle('zoomed-out',camera.z<.4);reactiveGrid.setCamera(camera); $('#world').style.transform=`translate3d(${camera.x}px,${camera.y}px,0) scale(${camera.z})`;const gridStep=24*camera.z;$('#dot-grid').setAttribute('patternTransform',`translate(${camera.x%gridStep} ${camera.y%gridStep}) scale(${camera.z})`);$('#grid-dot').setAttribute('r',.7/camera.z);$('#zoom').textContent=Math.round(camera.z*100)+'%';requestDraw()}
+function zoomAt(factor,x=innerWidth/2,y=innerHeight/2){const before=boardPoint(x,y);camera.z=Math.max(.1,Math.min(3,camera.z*factor));camera.x=x-before.x*camera.z;camera.y=y-boardTop()-before.y*camera.z;applyCamera();hideSelection()}
 function fit(){stopAllSprings();if(!state.nodes.length)return;syncAgentStacks();const bounds=state.nodes.filter(n=>!collapsedAgentSource(n)).map(n=>({x:n.x,y:n.y,w:n.width||(n.type==='web'?540:n.type==='thread'?520:380),h:cardEl(n.id)?.offsetHeight||300}));for(const n of state.nodes.filter(n=>n.agent&&!collapsedAgentWorkspaces.has(n.id)&&agentSources(n).length))bounds.push(agentStackBounds(n));const left=Math.min(...bounds.map(n=>n.x)),top=Math.min(...bounds.map(n=>n.y)),right=Math.max(...bounds.map(n=>n.x+n.w)),bottom=Math.max(...bounds.map(n=>n.y+n.h));camera.z=Math.max(.1,Math.min(1,(innerWidth-130)/(right-left),(innerHeight-190)/(bottom-top)));camera.x=(innerWidth-(right-left)*camera.z)/2-left*camera.z;camera.y=(innerHeight-135-(bottom-top)*camera.z)/2-top*camera.z;applyCamera()}
-function elementPoint(el){if(!el)return null;const r=el.getBoundingClientRect();if(!r.width||!r.height)return null;return{x:r.left+r.width/2,y:r.top+r.height/2-65};}
-function portPoint(n,incoming=false,contextId=null){const el=document.querySelector(`[data-panel-placeholder="${n.id}"]`)||cardEl(n.id);const port=incoming?el?.querySelector(':scope > .socket'):contextId?el?.querySelector(`[data-context="${contextId}"]`):el?.querySelector(':scope > .nib');const measured=elementPoint(port);if(measured)return measured;const r=el?.getBoundingClientRect();return r&&r.width&&r.height?{x:incoming?r.left-12:r.right+18,y:r.top+Math.min(64,r.height/2)-65}:screenPoint(n.x+(incoming?0:(n.width||380)),n.y+40);}
+function elementPoint(el){if(!el)return null;const r=el.getBoundingClientRect();if(!r.width||!r.height)return null;return{x:r.left+r.width/2,y:r.top+r.height/2-boardTop()};}
+function portPoint(n,incoming=false,contextId=null){const el=document.querySelector(`[data-panel-placeholder="${n.id}"]`)||cardEl(n.id);const port=incoming?el?.querySelector(':scope > .socket'):contextId?el?.querySelector(`[data-context="${contextId}"]`):el?.querySelector(':scope > .nib');const measured=elementPoint(port);if(measured)return measured;const r=el?.getBoundingClientRect();return r&&r.width&&r.height?{x:incoming?r.left-12:r.right+18,y:r.top+Math.min(64,r.height/2)-boardTop()}:screenPoint(n.x+(incoming?0:(n.width||380)),n.y+40);}
 
 function wirePoints(a,b,bend=0){const dx=b.x-a.x,dy=b.y-a.y,len=Math.max(1,Math.hypot(dx,dy));return [a,...Array.from({length:7},(_,i)=>{const t=(i+1)/8,offset=Math.sin(t*Math.PI*2)*Math.min(4,len*.012)+bend*Math.sin(t*Math.PI);return{x:a.x+dx*t-dy/len*offset,y:a.y+dy*t+dx/len*offset};}),b];}
 function wirePath(points){let d=`M${points[0].x},${points[0].y}`;for(let i=1;i<points.length-1;i++){const p=points[i],q=points[i+1];d+=` Q${p.x},${p.y} ${(p.x+q.x)/2},${(p.y+q.y)/2}`;}const end=points[points.length-1];return d+` T${end.x},${end.y}`;}
 function curve(a,b){return wirePath(wirePoints(a,b));}
 
-function drawWires(){syncAgentStacks();syncAgentCursors();drawAutoGroups();syncConnectedNibs();const segments=previewWireSegments();state.nodes.forEach(n=>{(n.contexts||[]).forEach(c=>{const source=nodeById(c.source);if(!source||collapsedWorkspaceMember(source)||collapsedAgentSource(n))return;const origin=null,messagePort=c.cutoff&&source.id!==panelNodeId?cardEl(source.id)?.querySelector(`[data-branch-point="${c.cutoff}"] .context-pill`):null;const listPort=collapsedAgentSource(source)?document.querySelector(`[data-source-row="${source.id}"] .source-row-port`):null;const start=elementPoint(listPort)||(origin?portPoint(origin,false,c.originContext):quotePortPoint(source,c.quote)||elementPoint(messagePort)||portPoint(source));const d=curve(start,portPoint(n,true,c.id));segments.push({d,kind:c.enabled&&generatingChats.has(n.id)?'wire-flow':'wire-base'})})});const group=$('#permanent-wires');while(group.children.length>segments.length)group.lastChild.remove();segments.forEach((segment,i)=>{let path=group.children[i];if(!path){path=document.createElementNS('http://www.w3.org/2000/svg','path');group.append(path)}path.setAttribute('d',segment.d);path.setAttribute('class',segment.kind)})}
+function syncConnectionCandidates(){const g=gesture,active=g&&(g.kind==='context'||g.kind==='excerpt'&&g.moved);for(const card of $$('.card[data-kind="thread"]'))card.classList.toggle('connection-candidate',!!active&&card.dataset.node!==g.source&&card.dataset.node!==g.originNode);}
+function drawWires(){syncConnectionCandidates();syncAgentStacks();syncAgentCursors();drawAutoGroups();syncConnectedNibs();const segments=previewWireSegments();state.nodes.forEach(n=>{(n.contexts||[]).forEach(c=>{const source=nodeById(c.source);if(!source||collapsedWorkspaceMember(source)||collapsedAgentSource(n))return;const origin=null,messagePort=c.cutoff&&source.id!==panelNodeId?cardEl(source.id)?.querySelector(`[data-branch-point="${c.cutoff}"] .context-pill`):null;const listPort=collapsedAgentSource(source)?document.querySelector(`[data-source-row="${source.id}"] .source-row-port`):null;const start=elementPoint(listPort)||(origin?portPoint(origin,false,c.originContext):quotePortPoint(source,c.quote)||elementPoint(messagePort)||portPoint(source));const d=curve(start,portPoint(n,true,c.id));segments.push({d,kind:c.enabled&&generatingChats.has(n.id)?'wire-flow':'wire-base'})})});const group=$('#permanent-wires');while(group.children.length>segments.length)group.lastChild.remove();segments.forEach((segment,i)=>{let path=group.children[i];if(!path){path=document.createElementNS('http://www.w3.org/2000/svg','path');group.append(path)}path.setAttribute('d',segment.d);path.setAttribute('class',segment.kind)})}
 function requestDraw(){if(!frame)frame=requestAnimationFrame(tick)}
 function springStep(p,target,dt,k=260,d=31){const a=k*(target-p.value)-d*p.velocity;p.velocity+=a*dt;p.value+=p.velocity*dt;return p.value}
 function tick(time){frame=0;const dt=Math.min(.025,Math.max(.001,(time-(lastFrame||time-16))/1000));lastFrame=time;let keep=false;for(const [nid,s]of cardSprings){const n=nodeById(nid);if(!n){cardSprings.delete(nid);continue}n.x=springStep(s.x,s.tx,dt);n.y=springStep(s.y,s.ty,dt);cardEl(nid).style.transform=`translate3d(${n.x}px,${n.y}px,0)`;if(Math.hypot(n.x-s.tx,n.y-s.ty)<.08&&Math.hypot(s.x.velocity,s.y.velocity)<.5){n.x=s.tx;n.y=s.ty;cardSprings.delete(nid);save()}else keep=true}drawWires();if(previewEntrances.size)keep=true;if(wire){drawLiveWire(dt);keep=true}if(keep)requestDraw()}
 function stopAllSprings(){cardSprings.clear();save()}
 function drawLiveWire(dt){const a=wire.start(),b=wire.target;let endX=b.x,endY=b.y;if(wire.magnet&&!reduced.matches){endX=springStep(wire.ex,b.x,dt,420,40);endY=springStep(wire.ey,b.y,dt,420,40)}else{wire.ex.value=endX;wire.ey.value=endY;wire.ex.velocity=0;wire.ey.velocity=0}wire.bend*=Math.exp(-10*dt);const pts=wirePoints(a,{x:endX,y:endY},wire.bend);for(let i=1;i<pts.length-1;i++){const p=pts[i],s=wire.points[i-1];if(!reduced.matches){p.x=springStep(s.x,p.x,dt,440,42);p.y=springStep(s.y,p.y,dt,440,42);}}const d=wirePath(pts);$('#live-wire').setAttribute('d',d);$('#wire-end').setAttribute('cx',endX);$('#wire-end').setAttribute('cy',endY);$('#live-wire').style.stroke=wire.magnet?'#254bd1':'#4879f5';$('#wire-end').style.fill=wire.magnet?'#254bd1':'#4879f5'}
-function startWire(source,x,y,fromPointer=false,anchor=null,quote=''){const sourceNode=nodeById(source),local=boardPoint(x,y),offset={x:local.x-sourceNode.x,y:local.y-sourceNode.y};const start=()=>{const n=nodeById(source);return quotePortPoint(n,quote)||(anchor?.isConnected?elementPoint(anchor):fromPointer?screenPoint(n.x+offset.x,n.y+offset.y):portPoint(n))};const a=start(),b={x,y:y-65};wire={start,target:b,ex:{value:b.x,velocity:0},ey:{value:b.y,velocity:0},magnet:false,bend:0,points:Array.from({length:7},(_,i)=>{const t=(i+1)/8;return{x:{value:a.x+(b.x-a.x)*t,velocity:0},y:{value:a.y+(b.y-a.y)*t,velocity:0}}})};document.body.classList.add('connecting');requestDraw()}
+function startWire(source,x,y,fromPointer=false,anchor=null,quote=''){const sourceNode=nodeById(source),local=boardPoint(x,y),offset={x:local.x-sourceNode.x,y:local.y-sourceNode.y};const start=()=>{const n=nodeById(source);return quotePortPoint(n,quote)||(anchor?.isConnected?elementPoint(anchor):fromPointer?screenPoint(n.x+offset.x,n.y+offset.y):portPoint(n))};const a=start(),b={x,y:y-boardTop()};wire={start,target:b,ex:{value:b.x,velocity:0},ey:{value:b.y,velocity:0},magnet:false,bend:0,points:Array.from({length:7},(_,i)=>{const t=(i+1)/8;return{x:{value:a.x+(b.x-a.x)*t,velocity:0},y:{value:a.y+(b.y-a.y)*t,velocity:0}}})};document.body.classList.add('connecting');requestDraw()}
 function findTarget(g,x,y){let best=null,bestD=Infinity;for(const n of state.nodes){if(n.id===g.source||n.id===g.originNode)continue;if(n.type!=='thread')continue;const r=cardEl(n.id).getBoundingClientRect(),pad=38;const dx=Math.max(r.left-x,0,x-r.right),dy=Math.max(r.top-y,0,y-r.bottom),d=Math.hypot(dx,dy);if(d<pad&&d<bestD){best=n;bestD=d}}return best}
 function showDragCaption(g,x,y,target){const el=$('#drag-caption');el.hidden=true;}
 function clearTargets(){$$('.card.target').forEach(c=>c.classList.remove('target'))}
 function hideSelection(){clearRoundedSelection();selection=null;$$('.selection-draggable').forEach(el=>el.classList.remove('selection-draggable'))}
 function cancelGesture(){if(gesture){const g=gesture;if(g.kind==='move'){for(const item of g.members||[{id:g.source,x:g.ox,y:g.oy}]){const n=nodeById(item.id);if(n){n.x=item.x;n.y=item.y;positionCard(n);}}}if(g.kind==='resize'){const n=nodeById(g.source);n.width=g.ow;n.minHeight=g.oh;refreshCard(n)}if(g.kind==='pan'){camera.x=g.ox;camera.y=g.oy;applyCamera()}}finishGesture()}
-function finishGesture(){if(gesture?.kind==='agent'){if(gesture.moved)suppressAgentDockClickUntil=performance.now()+500;$('#agent-drag-preview')?.remove();creationDock.classList.remove('agent-in-hand');}if(gesture?.kind==='link'&&gesture.moved)suppressedPreviewClick={link:gesture.link,until:performance.now()+500};$('#link-ghost')?.remove();document.body.classList.remove('dragging-link');gesture=null;wire=null;document.body.classList.remove('connecting','panning','dragging-card');$$('.card.dragging').forEach(el=>el.classList.remove('dragging'));$('#drag-caption').hidden=true;$('#branch-ghost').hidden=true;$('#media-ghost')?.remove();clearTargets();requestDraw()}
-function startGesture(e,g){if((g.kind==='context'||g.kind==='excerpt')&&!BranchContext.canBranch(nodeById(g.source),g.cutoff))return;if(gesture||e.button!==0||e.isPrimary===false)return;e.preventDefault();e.stopPropagation();document.activeElement?.blur();commitEdit();const n=nodeById(g.source);if(n)cardSprings.delete(n.id);const members=g.kind==='move'?groupMoveMembers(n).map(member=>({id:member.id,x:member.x,y:member.y})):undefined;if(members)for(const item of members)cardSprings.delete(item.id);gesture={...g,members,pointer:e.pointerId,sx:e.clientX,sy:e.clientY,lastX:e.clientX,lastY:e.clientY,lastTime:performance.now(),vx:0,vy:0,moved:false,before:clone(state)};e.target.setPointerCapture(e.pointerId);if(g.kind==='context')startWire(g.source,e.clientX,e.clientY,!!g.quote,e.target.closest('[data-context-port],[data-branch-point],.nib')?.querySelector('.context-pill')||e.target.closest('[data-branch-point],.nib'),g.quote||'');if(g.kind==='move'){cardEl(g.source).classList.add('dragging');document.body.classList.add('dragging-card')}if(g.kind==='pan')document.body.classList.add('panning')}
-function onPointerMove(e){const g=gesture;if(!g||g.pointer!==e.pointerId)return;const dx=e.clientX-g.sx,dy=e.clientY-g.sy;const now=performance.now(),dt=Math.max(1,now-g.lastTime);g.vx=(e.clientX-g.lastX)/dt*1000;g.vy=(e.clientY-g.lastY)/dt*1000;g.lastX=e.clientX;g.lastY=e.clientY;g.lastTime=now;if(!g.moved&&Math.hypot(dx,dy)<(['link','excerpt'].includes(g.kind)?7:4))return;g.moved=true;if(g.kind==='agent'){updateAgentDrag(g,e.clientX,e.clientY);return;}if(g.kind==='link'||g.kind==='excerpt'){updateLinkGhost(g,e.clientX,e.clientY);return;}if(g.kind==='media'){updateMediaGhost(g,e.clientX,e.clientY);return;}if(g.kind==='resize'){const n=nodeById(g.source);n.width=Math.max(280,Math.min(1200,g.ow+dx/camera.z));n.minHeight=Math.max(160,Math.min(1800,g.oh+dy/camera.z));const el=cardEl(n.id);el.style.width=n.width+'px';el.style.minHeight=n.minHeight+'px';el.style.setProperty('--page-height',n.minHeight+'px');requestDraw();return}if(g.kind==='move'){for(const item of g.members||[]){const n=nodeById(item.id);if(n){n.x=item.x+dx/camera.z;n.y=item.y+dy/camera.z;positionCard(n);}}requestDraw();return}if(g.kind==='pan'){camera.x=g.ox+dx;camera.y=g.oy+dy;applyCamera();return}if(g.kind==='detach'){showDragCaption(g,e.clientX,e.clientY);return}clearTargets();const target=findTarget(g,e.clientX,e.clientY);g.target=target?.id;if(target)cardEl(target.id).classList.add('target');updateBranchGhost(g,e.clientX,e.clientY,target);wire.magnet=!!target;wire.target=target?portPoint(target,true):{x:e.clientX,y:e.clientY-65};wire.bend=Math.max(-9,Math.min(9,(g.vy-g.vx)*.004));showDragCaption(g,e.clientX,e.clientY,target);requestDraw()}
-function onPointerUp(e){const g=gesture;if(!g||g.pointer!==e.pointerId)return;const moved=g.moved,target=nodeById(g.target),source=nodeById(g.source),releaseRect=['link','excerpt'].includes(g.kind)?$('#link-ghost')?.getBoundingClientRect():null;finishGesture();if(g.kind==='agent'){if(moved&&g.previewPoint&&validMediaDrop(e.clientX,e.clientY)&&(!window.BoardShared?.enabled||window.BoardShared.writable))placeDockAgent(g.previewPoint);return;}if(g.kind==='excerpt'){if(moved&&source&&(!window.BoardShared?.enabled||window.BoardShared.writable)){if(target)addContext(source,target,g.quote);else if(g.previewPoint&&validMediaDrop(e.clientX,e.clientY)){const n=createExcerptNote(g.quote,g.previewPoint);if(n){if(panelNodeId){expandedChats.add(source.id);closeChatPanel();}expandLinkPreview(n,releaseRect);}}hideSelection();getSelection().removeAllRanges();}return;}if(g.kind==='link'){if(moved&&source&&g.previewPoint&&validMediaDrop(e.clientX,e.clientY)&&(!window.BoardShared?.enabled||window.BoardShared.writable))openURL(g.url,source,g.link,true,g.previewPoint,releaseRect);return;}if(g.kind==='media'){if(moved){suppressMediaClickUntil=performance.now()+500;if(g.previewPoint&&validMediaDrop(e.clientX,e.clientY))addMediaCard(g.item,source,g.previewPoint);}return;}if(!moved){if(g.kind==='detach'){openContexts.has(g.context)?openContexts.delete(g.context):openContexts.add(g.context);refreshCard(source)}return}if(g.kind==='resize'){history.push(g.before);future=[];$('#undo').disabled=false;record('Resized card');return}if(g.kind==='move'){history.push(g.before);future=[];if(nodeById(g.source)?.agent)clearAgentWorkspaces();window.BoardShared?.moveNodes?.((g.members||[]).map(item=>nodeById(item.id)).filter(Boolean));record('Moved card');$('#undo').disabled=false;return}if(g.kind==='pan')return;if(g.kind==='detach'){const r=cardEl(source.id).getBoundingClientRect();if(e.clientX<r.left-12||e.clientX>r.right+12||e.clientY<r.top-12||e.clientY>r.bottom+12)detach(source,g.context);return}if(g.binding){const hit=document.elementFromPoint(e.clientX,e.clientY);if(target)branchContextBinding(g,target);else if(e.clientY>75&&e.clientY<innerHeight-75&&!hit?.closest('.card,header,nav,footer'))branchContextBinding(g,null,boardPoint(e.clientX,e.clientY));hideSelection();return;}if(target){addContext(source,target,g.quote||'',g.cutoff);hideSelection()}else{const hit=document.elementFromPoint(e.clientX,e.clientY);if(e.clientY>75&&e.clientY<innerHeight-75&&!hit?.closest('.card,header,nav,footer'))createBranch(source,g.quote||'',g.previewPoint||boardPoint(e.clientX,e.clientY),g.cutoff);}}
+function finishGesture(){if(gesture?.kind==='agent'){if(gesture.moved)suppressAgentDockClickUntil=performance.now()+500;$('#agent-drag-preview')?.remove();creationDock.classList.remove('agent-in-hand');}if(gesture?.kind==='link'&&gesture.moved)suppressedPreviewClick={link:gesture.link,until:performance.now()+500};$('#link-ghost')?.remove();document.body.classList.remove('dragging-link');gesture=null;wire=null;syncConnectionCandidates();document.body.classList.remove('connecting','panning','dragging-card');$$('.card.dragging').forEach(el=>el.classList.remove('dragging'));$('#drag-caption').hidden=true;$('#branch-ghost').hidden=true;$('#media-ghost')?.remove();clearTargets();requestDraw()}
+function startGesture(e,g){if((g.kind==='context'||g.kind==='excerpt')&&!BranchContext.canBranch(nodeById(g.source),g.cutoff))return;if(gesture||e.button!==0||e.isPrimary===false)return;e.preventDefault();e.stopPropagation();document.activeElement?.blur();commitEdit();const n=nodeById(g.source);if(n&&(g.kind==='move'||g.kind==='resize'))raiseHeldNode(n.id);if(n)cardSprings.delete(n.id);const members=g.kind==='move'?groupMoveMembers(n).map(member=>({id:member.id,x:member.x,y:member.y})):undefined;if(members)for(const item of members)cardSprings.delete(item.id);gesture={...g,members,pointer:e.pointerId,sx:e.clientX,sy:e.clientY,lastX:e.clientX,lastY:e.clientY,lastTime:performance.now(),vx:0,vy:0,moved:false,before:clone(state)};e.target.setPointerCapture(e.pointerId);if(g.kind==='context')startWire(g.source,e.clientX,e.clientY,!!g.quote,e.target.closest('[data-context-port],[data-branch-point],.nib')?.querySelector('.context-pill')||e.target.closest('[data-branch-point],.nib'),g.quote||'');if(g.kind==='move'){cardEl(g.source).classList.add('dragging');document.body.classList.add('dragging-card')}if(g.kind==='pan')document.body.classList.add('panning')}
+function onPointerMove(e){const g=gesture;if(!g||g.pointer!==e.pointerId)return;const dx=e.clientX-g.sx,dy=e.clientY-g.sy;const now=performance.now(),dt=Math.max(1,now-g.lastTime);g.vx=(e.clientX-g.lastX)/dt*1000;g.vy=(e.clientY-g.lastY)/dt*1000;g.lastX=e.clientX;g.lastY=e.clientY;g.lastTime=now;if(!g.moved&&Math.hypot(dx,dy)<(['link','excerpt'].includes(g.kind)?7:4))return;g.moved=true;if(g.kind==='agent'){updateAgentDrag(g,e.clientX,e.clientY);return;}if(g.kind==='link'||g.kind==='excerpt'){updateLinkGhost(g,e.clientX,e.clientY);return;}if(g.kind==='media'){updateMediaGhost(g,e.clientX,e.clientY);return;}if(g.kind==='resize'){const n=nodeById(g.source);n.width=Math.max(280,Math.min(1200,g.ow+dx/camera.z));n.minHeight=Math.max(160,Math.min(1800,g.oh+dy/camera.z));const el=cardEl(n.id);el.style.width=n.width+'px';el.style.minHeight=n.minHeight+'px';el.style.setProperty('--page-height',n.minHeight+'px');requestDraw();return}if(g.kind==='move'){for(const item of g.members||[]){const n=nodeById(item.id);if(n){n.x=item.x+dx/camera.z;n.y=item.y+dy/camera.z;positionCard(n);}}requestDraw();return}if(g.kind==='pan'){camera.x=g.ox+dx;camera.y=g.oy+dy;applyCamera();return}if(g.kind==='detach'){showDragCaption(g,e.clientX,e.clientY);return}clearTargets();const target=findTarget(g,e.clientX,e.clientY);g.target=target?.id;if(target)cardEl(target.id).classList.add('target');updateBranchGhost(g,e.clientX,e.clientY,target);wire.magnet=!!target;wire.target=target?portPoint(target,true):{x:e.clientX,y:e.clientY-boardTop()};wire.bend=Math.max(-9,Math.min(9,(g.vy-g.vx)*.004));showDragCaption(g,e.clientX,e.clientY,target);requestDraw()}
+function onPointerUp(e){const g=gesture;if(!g||g.pointer!==e.pointerId)return;const moved=g.moved,target=nodeById(g.target),source=nodeById(g.source),releaseRect=['link','excerpt'].includes(g.kind)?$('#link-ghost')?.getBoundingClientRect():null;finishGesture();if(g.kind==='agent'){if(moved&&g.previewPoint&&validMediaDrop(e.clientX,e.clientY)&&(!window.BoardShared?.enabled||window.BoardShared.writable))placeDockAgent(g.previewPoint);return;}if(g.kind==='excerpt'){if(moved&&source&&(!window.BoardShared?.enabled||window.BoardShared.writable)){if(target)addContext(source,target,g.quote);else if(g.previewPoint&&validMediaDrop(e.clientX,e.clientY)){const n=createExcerptNote(g.quote,g.previewPoint);if(n){if(panelNodeId){expandedChats.add(source.id);closeChatPanel();}expandLinkPreview(n,releaseRect);}}hideSelection();getSelection().removeAllRanges();}return;}if(g.kind==='link'){if(moved&&source&&g.previewPoint&&validMediaDrop(e.clientX,e.clientY)&&(!window.BoardShared?.enabled||window.BoardShared.writable))openURL(g.url,source,g.link,true,g.previewPoint,releaseRect);return;}if(g.kind==='media'){if(moved){suppressMediaClickUntil=performance.now()+500;if(g.previewPoint&&validMediaDrop(e.clientX,e.clientY))addMediaCard(g.item,source,g.previewPoint);}return;}if(!moved){if(g.kind==='detach'){openContexts.has(g.context)?openContexts.delete(g.context):openContexts.add(g.context);refreshCard(source)}return}if(g.kind==='resize'){history.push(g.before);future=[];$('#undo').disabled=false;record('Resized card');return}if(g.kind==='move'){history.push(g.before);future=[];window.BoardShared?.moveNodes?.((g.members||[]).map(item=>nodeById(item.id)).filter(Boolean));record('Moved card');$('#undo').disabled=false;return}if(g.kind==='pan')return;if(g.kind==='detach'){const r=cardEl(source.id).getBoundingClientRect();if(e.clientX<r.left-12||e.clientX>r.right+12||e.clientY<r.top-12||e.clientY>r.bottom+12)detach(source,g.context);return}if(g.binding){const hit=document.elementFromPoint(e.clientX,e.clientY);if(target)branchContextBinding(g,target);else if(e.clientY>75&&e.clientY<innerHeight-75&&!hit?.closest('.card,header,nav,footer'))branchContextBinding(g,null,boardPoint(e.clientX,e.clientY));hideSelection();return;}if(target){addContext(source,target,g.quote||'',g.cutoff);hideSelection()}else{const hit=document.elementFromPoint(e.clientX,e.clientY);if(e.clientY>75&&e.clientY<innerHeight-75&&!hit?.closest('.card,header,nav,footer'))createBranch(source,g.quote||'',g.previewPoint||boardPoint(e.clientX,e.clientY),g.cutoff);}}
 onCardEvent('pointerdown',e=>{
+ const clickedCard=e.target.closest('.card');
+ if(clickedCard&&e.button===0&&e.isPrimary!==false)raiseHeldNode(clickedCard.dataset.node);
  if(window.BoardShared?.enabled&&!window.BoardShared.writable)return;
  const card=e.target.closest('.card');if(!card)return;const n=nodeById(card.dataset.node);focused=n.id;$$('.card.focused').forEach(el=>el.classList.remove('focused'));card.classList.add('focused');
+ if(camera.z<.4&&card.closest('#world'))return startGesture(e,{kind:'move',source:n.id,ox:n.x,oy:n.y});
  if(selection&&selection.source===n.id&&!e.shiftKey&&!e.metaKey&&!e.ctrlKey&&!e.altKey&&e.detail<2){const selected=getSelection();if(selected.rangeCount&&selected.toString().trim()===selection.quote){const range=selected.getRangeAt(0),rects=[...range.getClientRects()].filter(r=>r.width&&r.height);const hit=rects.find(r=>e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom);if(hit){const r=range.getBoundingClientRect();return startGesture(e,{kind:'excerpt',source:n.id,quote:selection.quote,offsetX:(e.clientX-r.left)/camera.z,offsetY:(e.clientY-r.top)/camera.z,boxWidth:r.width/camera.z,boxHeight:r.height/camera.z});}}}
  const link=e.target.closest('a[data-node-link]');if(link&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&!e.altKey){const r=link.getBoundingClientRect();return startGesture(e,{kind:'link',source:n.id,link,url:link.href,offsetX:(e.clientX-r.left)/camera.z,offsetY:(e.clientY-r.top)/camera.z,boxWidth:r.width/camera.z,boxHeight:r.height/camera.z});}
  const result=e.target.closest('[data-media-result]');if(result){const item=n.mediaResults?.[+result.dataset.mediaResult];if(item){const r=result.getBoundingClientRect();return startGesture(e,{kind:'media',source:n.id,item:clone(item),offsetX:(e.clientX-r.left)/camera.z,offsetY:(e.clientY-r.top)/camera.z});}}
@@ -210,7 +257,7 @@ $('#board').addEventListener('wheel',e=>{
 },{passive:false});
 function updateSelectionHandle(){
  if(gesture)return;const selected=getSelection();if(!selected.rangeCount||!selected.toString().trim()){hideSelection();return;}
- const content=selected.anchorNode?.parentElement?.closest('.plan-body,.website-notes,[data-message-text],.file-text');if(!content||!content.contains(selected.focusNode)){hideSelection();return;}
+ const content=selectionContent(selected.anchorNode);if(!content||!content.contains(selected.focusNode)){hideSelection();return;}
  const node=nodeById(content.closest('.card').dataset.node);selection={source:node.id,quote:selected.toString().trim()};const rects=[...selected.getRangeAt(0).getClientRects()].filter(r=>r.width&&r.height&&r.right>0&&r.left<innerWidth&&r.bottom>70&&r.top<innerHeight);paintRoundedSelection(content,rects);
 }
 document.addEventListener('selectionchange',updateSelectionHandle);
@@ -228,11 +275,11 @@ onCardEvent('click',async e=>{
   e.preventDefault();openURL(link.href,n,link,e.detail>0);return;
  }
  if(e.target.closest('[data-embed-help]')){websiteFallbacks.add(n.id);refreshCard(n);return;}
- if(e.target.closest('[data-retry-embed]')){websiteFallbacks.delete(n.id);refreshCard(n);return;}
+ if(e.target.closest('[data-retry-embed]')){try{websiteChecks.delete(new URL(n.url).href);}catch{}websiteFallbacks.delete(n.id);refreshCard(n);return;}
  if(e.target.closest('[data-workspace-toggle]')){collapsedAgentWorkspaces.has(n.id)?collapsedAgentWorkspaces.delete(n.id):collapsedAgentWorkspaces.add(n.id);syncAgentStacks();settleAutomaticNodes();requestDraw();return;}
  if(e.target.closest('[data-stop-agent]')){if(window.BoardShared?.enabled)await window.BoardShared.stop(n.id);else generatingChats.get(n.id)?.abort();return;}
  if(e.target.closest('[data-website-perspective]')){toggleWebsitePerspective(n,!openWebsitePerspectives.has(n.id));return;}
- if(e.target.closest('[data-source-info]')){const el=cardEl(n.id),button=el.querySelector('[data-source-info]');if(inspectedSources.has(n.id)){inspectedSources.delete(n.id);el.querySelector('.source-context-detail')?.remove();}else{inspectedSources.add(n.id);el.insertAdjacentHTML('beforeend',sourceInfoMarkup(n));}button.setAttribute('aria-expanded',String(inspectedSources.has(n.id)));requestDraw();return;}
+ if(e.target.closest('[data-source-info]')){openContextInspector(n);return;}
  if(e.target.closest('[data-expand-idea]')){expandIdea(n,e);return;}
  if(e.target.closest('[data-close-ideas]')){expandingIdeas.get(n.id)?.abort();ideaPreviews.delete(n.id);updateIdeaPreview(n);return;}
  if(e.target.closest('[data-select-idea]')){const index=Number(e.target.closest('[data-select-idea]').dataset.selectIdea),preview=ideaPreviews.get(n.id);preview.ideas[index].selected=!preview.ideas[index].selected;updateIdeaPreview(n);cardEl(n.id)?.querySelector(`[data-select-idea="${index}"]`)?.focus({preventScroll:true});return;}
@@ -241,7 +288,7 @@ onCardEvent('click',async e=>{
  if(e.target.closest('[data-launch-ideas]')){launchIdeas(n);return;}
  if(e.target.closest('.open-chat-panel')){openChatPanel(n);return;}
  if(e.target.closest('.note-preview-toggle')){expandedNotes.has(n.id)?expandedNotes.delete(n.id):expandedNotes.add(n.id);refreshCard(n);return;}
- if(e.target.closest('.collapse-card,.chat-preview-toggle')){expandedChats.has(n.id)?expandedChats.delete(n.id):expandedChats.add(n.id);refreshCard(n);return;}
+ if(e.target.closest('.collapse-card,.chat-preview-toggle')){toggleConversation(n,e);return;}
  const retry=e.target.closest('[data-retry-message]');if(retry&&!generatingChats.has(n.id)){const index=n.messages.findIndex(m=>m.id===retry.dataset.retryMessage);if(index>=0){const failed=n.messages[index];n.draft=failed.retryPrompt;n.messages.splice(index-1,2);send(n);}return;}
  if(e.target.closest('.delete-card'))return deleteNode(n);
  if(e.target.closest('.add-context'))return showContextMenu(n,e.target.closest('.add-context'));
@@ -257,7 +304,7 @@ onCardEvent('click',async e=>{
  const credit=e.target.closest('[data-media-credit]');if(credit){n.creditOpen=!n.creditOpen;refreshCard(n);return}
  const detachButton=e.target.closest('[data-detach-context]');if(detachButton)return detach(n,detachButton.dataset.detachContext);
  const refresh=e.target.closest('[data-refresh-context]');if(refresh){const c=n.contexts.find(c=>c.id===refresh.dataset.refreshContext),source=nodeById(c?.source);if(source){remember();const savedId=c.id,enabled=c.enabled;Object.assign(c,contextSnapshot(source,c.quote,c.cutoff),{id:savedId,enabled});refreshCard(n);record('Refreshed context snapshot')}return}
- const chip=e.target.closest('[data-context]');if(chip){const cid=chip.dataset.context;openContexts.has(cid)?openContexts.delete(cid):openContexts.add(cid);refreshCard(n)}
+ const chip=e.target.closest('[data-context]');if(chip){openContextInspector(n,chip.dataset.context)}
  const branchPoint=e.target.closest('[data-branch-point]');if(branchPoint&&e.detail===0)createBranch(n,'',freePosition(n.x+(n.width||380)+110,n.y+20),branchPoint.dataset.branchPoint);
  const port=e.target.closest('.nib');if(port&&e.detail===0)createBranch(n,'',freePosition(n.x+490,n.y+20));
 });
@@ -265,7 +312,7 @@ onCardEvent('change',e=>{if(!e.target.matches('[data-toggle-context]'))return;co
 onCardEvent('submit',e=>{e.preventDefault();const n=nodeById(e.target.closest('.card').dataset.node);if(e.target.matches('.composer'))return send(n);if(e.target.matches('.search-form')){runMediaSearch(n);return}if(e.target.matches('.url-form'))openURL(e.target.querySelector('[data-url]').value,n)});
 onCardEvent('keydown',e=>{if(window.BoardShared?.enabled&&!window.BoardShared.writable)return;
  const n=nodeById(e.target.closest('.card')?.dataset.node);if(!n)return;
- if(e.target.closest('.title-grip')&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();remember();const dx=({ArrowRight:20,ArrowLeft:-20}[e.key]||0),dy=({ArrowDown:20,ArrowUp:-20}[e.key]||0);for(const member of groupMoveMembers(n)){member.x+=dx;member.y+=dy;positionCard(member);}window.BoardShared?.moveNodes?.(groupMoveMembers(n));record('Moved card');requestDraw();return}
+ if((e.target.closest('.title-grip')||(camera.z<.4&&e.target.matches('#world .card')))&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();remember();const dx=({ArrowRight:20,ArrowLeft:-20}[e.key]||0),dy=({ArrowDown:20,ArrowUp:-20}[e.key]||0);for(const member of groupMoveMembers(n)){member.x+=dx;member.y+=dy;positionCard(member);}window.BoardShared?.moveNodes?.(groupMoveMembers(n));record('Moved card');requestDraw();return}
  if(e.target.closest('.resize-handle')&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();remember();const el=cardEl(n.id);n.width=Math.max(280,Math.min(1200,el.offsetWidth+({ArrowRight:20,ArrowLeft:-20}[e.key]||0)));n.minHeight=Math.max(160,el.offsetHeight+({ArrowDown:20,ArrowUp:-20}[e.key]||0));refreshCard(n);record('Resized card');cardEl(n.id).querySelector('.resize-handle').focus();return}
  if(e.target.matches('[data-prompt]')&&e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();send(n)}
  if(e.target.matches('.card')&&(e.key==='Backspace'||e.key==='Delete')){e.preventDefault();deleteNode(n)}
@@ -333,7 +380,7 @@ function syncContextIndicators(sourceId){
 function updateNotePreviews(){
  $$('.card[data-kind=plan]').forEach(card=>{const body=card.querySelector('.plan-body');card.classList.toggle('long-note',!!body&&body.scrollHeight>240);});
 }
-function observeCards(){syncAgentStacks();updateNotePreviews();if(!cardObserver)return;cardObserver.disconnect();$$('.card').forEach(el=>cardObserver.observe(el))}
+function observeCards(){monitorWebsitePreviews();syncAgentStacks();updateNotePreviews();if(!cardObserver)return;cardObserver.disconnect();$$('.card').forEach(el=>cardObserver.observe(el))}
 let uploadPoint=null,uploadChat=null;
 const fileDatabase=new Promise((resolve,reject)=>{const request=indexedDB.open('branch-files',1);request.onupgradeneeded=()=>request.result.createObjectStore('files');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
 fileDatabase.catch(()=>{});
@@ -385,7 +432,7 @@ function updateLinkGhost(g,x,y){
   ghost.style.width=Math.max(32,g.boxWidth)+'px';ghost.style.height=Math.max(22,g.boxHeight)+'px';
   $('#world').append(ghost);document.body.classList.add('dragging-link');
   startWire(g.source,g.sx,g.sy,true,null,g.quote||'');
-  const fallback=wire.start;if(g.kind==='link')wire.start=()=>{const r=previewLinkRect(g.link);return r?{x:r.right+3*camera.z,y:r.top+r.height/2-65}:fallback();};
+  const fallback=wire.start;if(g.kind==='link')wire.start=()=>{const r=previewLinkRect(g.link);return r?{x:r.right+3*camera.z,y:r.top+r.height/2-boardTop()}:fallback();};
  }
  const at=boardPoint(x,y);g.previewPoint={x:at.x-g.offsetX,y:at.y-g.offsetY};
  ghost.style.transform=`translate3d(${g.previewPoint.x}px,${g.previewPoint.y}px,0)`;
@@ -417,7 +464,7 @@ $('#board').addEventListener('drop',e=>{if(window.BoardShared?.enabled&&!window.
 function addContextNode(chat){const note=newCard('plan',freePosition(chat.x-440,chat.y,380));note.title='Context';note.contextFor=chat.id;chat.contexts.push(contextSnapshot(note));refreshCard(note);refreshCard(chat);const rect=cardEl(note.id).getBoundingClientRect();if(rect.left<20)camera.x+=20-rect.left;else if(rect.right>innerWidth-20)camera.x-=rect.right-innerWidth+20;if(rect.top<115)camera.y+=115-rect.top;else if(rect.bottom>innerHeight-90)camera.y-=Math.min(rect.top-115,rect.bottom-innerHeight+90);applyCamera();save();cardEl(note.id).querySelector('.plan-body').focus({preventScroll:true});}
 function syncDraftContext(note){if(!note.contextFor)return;const chat=nodeById(note.contextFor),binding=chat?.contexts?.find(c=>c.source===note.id);if(!binding)return;const bindingId=binding.id,enabled=binding.enabled;Object.assign(binding,contextSnapshot(note),{id:bindingId,enabled});chat.revision++;refreshCard(chat);}
 const branchHint=document.createElement('div');branchHint.id='branch-hint';branchHint.textContent='Create branch';branchHint.hidden=true;branchHint.setAttribute('aria-hidden','true');document.body.append(branchHint);
-document.addEventListener('pointermove',e=>{const nib=e.target.closest('.nib,[data-branch-point],[data-context-port]');branchHint.hidden=!nib||!!gesture;if(!branchHint.hidden){branchHint.style.left=Math.min(innerWidth-110,e.clientX+15)+'px';branchHint.style.top=Math.min(innerHeight-35,e.clientY+18)+'px';}const selected=getSelection();$$('.selection-draggable').forEach(el=>el.classList.remove('selection-draggable'));if(!gesture&&selection&&selected.rangeCount){const inside=[...selected.getRangeAt(0).getClientRects()].some(r=>e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom);if(inside)e.target.closest('.plan-body,.website-notes,[data-message-text],.file-text')?.classList.add('selection-draggable');}});
+document.addEventListener('pointermove',e=>{const nib=e.target.closest('.nib,[data-branch-point],[data-context-port]');branchHint.hidden=!nib||!!gesture;if(!branchHint.hidden){branchHint.style.left=Math.min(innerWidth-110,e.clientX+15)+'px';branchHint.style.top=Math.min(innerHeight-35,e.clientY+18)+'px';}const selected=getSelection();$$('.selection-draggable').forEach(el=>el.classList.remove('selection-draggable'));if(!gesture&&selection&&selected.rangeCount){const inside=[...selected.getRangeAt(0).getClientRects()].some(r=>e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom);if(inside)e.target.closest('p,li,pre,[contenteditable],[data-message-text],.file-text')?.classList.add('selection-draggable');}});
 document.addEventListener('pointerdown',()=>{branchHint.hidden=true;});
 window.addEventListener('blur',()=>{branchHint.hidden=true;});
 
@@ -438,30 +485,105 @@ contextLink.querySelector('[type=button]').onclick=()=>{contextLink.hidden=true;
 contextLink.addEventListener('keydown',e=>{if(e.key==='Escape'){contextLink.hidden=true;e.stopPropagation();}});
 contextLink.onsubmit=e=>{e.preventDefault();const raw=contextLink.querySelector('input').value.trim(),chat=nodeById(contextLinkChat);let url;try{url=new URL(raw);if(!['https:','http:'].includes(url.protocol))throw Error();}catch{return notify('Use an http or https link');}if(!chat)return;remember();const point=freePosition(chat.x-440,chat.y,380),vid=BranchMedia.videoId(raw);const n={id:id(),type:vid?'media':'web',title:vid?'YouTube video':url.hostname.replace(/^www\./,''),x:point.x,y:point.y,width:vid?520:440,revision:1,...(vid?{mediaType:'video',videoId:vid,source:url.href}:{url:url.href})};state.nodes.push(n);refreshCard(n);connectContextNode(n,chat);record('Added link context');contextLink.hidden=true;};
 
-function quotePortPoint(node,quote){if(node.id===panelNodeId)return null;if(!quote)return null;for(const content of cardEl(node.id)?.querySelectorAll('.plan-body,.website-notes,[data-message-text],.file-text')||[]){const at=content.textContent.indexOf(quote);if(at<0)continue;const walker=document.createTreeWalker(content,NodeFilter.SHOW_TEXT);let leaf,offset=0,start=null,end=null;while(leaf=walker.nextNode()){const next=offset+leaf.textContent.length;if(!start&&at<next)start={node:leaf,offset:at-offset};if(at+quote.length<=next){end={node:leaf,offset:at+quote.length-offset};break;}offset=next;}if(!start||!end)continue;const range=document.createRange();range.setStart(start.node,start.offset);range.setEnd(end.node,end.offset);const rects=[...range.getClientRects()].filter(r=>r.width&&r.height);const r=rects[rects.length-1];if(r)return{x:r.right,y:r.top+r.height/2-65};}return null;}
+function quotePortPoint(node,quote){if(node.id===panelNodeId)return null;if(!quote)return null;for(const content of cardEl(node.id)?.querySelectorAll('.plan-body,.website-notes,[data-message-text],.file-text')||[]){const at=content.textContent.indexOf(quote);if(at<0)continue;const walker=document.createTreeWalker(content,NodeFilter.SHOW_TEXT);let leaf,offset=0,start=null,end=null;while(leaf=walker.nextNode()){const next=offset+leaf.textContent.length;if(!start&&at<next)start={node:leaf,offset:at-offset};if(at+quote.length<=next){end={node:leaf,offset:at+quote.length-offset};break;}offset=next;}if(!start||!end)continue;const range=document.createRange();range.setStart(start.node,start.offset);range.setEnd(end.node,end.offset);const rects=[...range.getClientRects()].filter(r=>r.width&&r.height);const r=rects[rects.length-1];if(r)return{x:r.right,y:r.top+r.height/2-boardTop()};}return null;}
 
-function clearRoundedSelection(){document.querySelectorAll('.rounded-selection').forEach(el=>el.classList.remove('rounded-selection'));document.getElementById('selection-highlight')?.remove();}
+function clearRoundedSelection(doc=document){doc.querySelectorAll('.rounded-selection').forEach(el=>el.classList.remove('rounded-selection'));doc.getElementById('selection-highlight')?.remove();}
 function selectionBlobs(rects){
- // Merge duplicate and inline-formatting fragments before joining nearby lines.
  const rows=[];
- for(const r of [...rects].sort((a,b)=>a.top-b.top||a.left-b.left)){
-  const row=rows.find(row=>Math.abs(row.top-r.top)<Math.min(row.bottom-row.top,r.height)*.5&&r.left<=row.right+4&&r.right>=row.left-4);
+ for(const r of [...rects].filter(r=>r.width&&r.height).sort((a,b)=>a.top-b.top||a.left-b.left)){
+  const row=rows.find(row=>Math.abs(row.top-r.top)<Math.min(row.bottom-row.top,r.height)*.5);
   if(row){row.left=Math.min(row.left,r.left);row.right=Math.max(row.right,r.right);row.top=Math.min(row.top,r.top);row.bottom=Math.max(row.bottom,r.bottom);}
   else rows.push({left:r.left,right:r.right,top:r.top,bottom:r.bottom});
  }
- return rows.map(row=>{
-  let top=row.top-2,bottom=row.bottom+2;
-  for(const other of rows){if(other===row||other.left>=row.right||other.right<=row.left)continue;
-   const limit=Math.min(row.bottom-row.top,other.bottom-other.top)*.65;
-   if(other.top>=row.bottom&&other.top-row.bottom<=limit)bottom=Math.max(bottom,(row.bottom+other.top)/2+2);
-   if(other.bottom<=row.top&&row.top-other.bottom<=limit)top=Math.min(top,(row.top+other.bottom)/2-2);
-  }
-  return {left:row.left-3,top,width:row.right-row.left+6,height:bottom-top};
- });
+ // Shared horizontal seams make wrapped lines a single silhouette, including line-height gaps.
+ return rows.map((row,i)=>({left:row.left-3,right:row.right+3,top:i?(rows[i-1].bottom+row.top)/2:row.top-2,bottom:i<rows.length-1?(row.bottom+rows[i+1].top)/2:row.bottom+2}));
 }
-function paintRoundedSelection(content,rects){clearRoundedSelection();content.classList.add('rounded-selection');const layer=document.createElement('div');layer.id='selection-highlight';layer.setAttribute('aria-hidden','true');for(const r of selectionBlobs(rects)){const mark=document.createElement('span');mark.style.cssText=`left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px`;layer.append(mark);}document.body.append(layer);}
-
-
+function selectionOutline(rows){
+ if(!rows.length)return '';
+ const bands=[];
+ for(let i=0;i<rows.length;i++){
+  const row={...rows[i]},next=rows[i+1];
+  if(next&&Math.min(row.right,next.right)<=Math.max(row.left,next.left)){
+   const seam=row.bottom;row.bottom-=2;bands.push(row,{left:Math.min(row.left,next.left),right:Math.max(row.right,next.right),top:seam-2,bottom:seam+2});
+   rows[i+1]={...next,top:seam+2};
+  }else bands.push(row);
+ }
+ const points=[];
+ for(const row of bands)points.push([row.right,row.top],[row.right,row.bottom]);
+ for(const row of [...bands].reverse())points.push([row.left,row.bottom],[row.left,row.top]);
+ const clean=points.filter((p,i)=>!i||p[0]!==points[i-1][0]||p[1]!==points[i-1][1]);
+ // Round the perimeter itself, rather than rounding every line independently.
+ return clean.map((p,i)=>{
+  const prev=clean[(i+clean.length-1)%clean.length],next=clean[(i+1)%clean.length];
+  const before=Math.hypot(p[0]-prev[0],p[1]-prev[1]),after=Math.hypot(next[0]-p[0],next[1]-p[1]),r=Math.min(6,before/2,after/2);
+  const a=[p[0]+(prev[0]-p[0])*r/before,p[1]+(prev[1]-p[1])*r/before],b=[p[0]+(next[0]-p[0])*r/after,p[1]+(next[1]-p[1])*r/after];
+  return `${i?'L':'M'}${a} Q${p} ${b}`;
+ }).join(' ')+' Z';
+}
+function paintRoundedSelection(content,rects){
+ const doc=content.ownerDocument;clearRoundedSelection(doc);if(!rects.length)return;content.classList.add('rounded-selection');
+ const layer=doc.createElementNS('http://www.w3.org/2000/svg','svg');layer.id='selection-highlight';layer.setAttribute('aria-hidden','true');
+ const path=doc.createElementNS(layer.namespaceURI,'path');path.setAttribute('d',selectionOutline(selectionBlobs(rects)));layer.append(path);doc.body.append(layer);
+}
+function selectionContent(node){return (node?.nodeType===1?node:node?.parentElement)?.closest('.card');}
+function wordAtPoint(doc,x,y,container){
+ const caret=doc.caretPositionFromPoint?.(x,y),range=caret?null:doc.caretRangeFromPoint?.(x,y);
+ const node=caret?.offsetNode||range?.startContainer,offset=caret?.offset??range?.startOffset;
+ if(!node||node.nodeType!==3||!container.contains(node))return null;
+ const root=node.parentElement.closest('p,li,pre,blockquote,h1,h2,h3,h4,h5,h6,td,th,div')||container;
+ const walker=doc.createTreeWalker(root,4),leaves=[];let leaf,text='',at=0;
+ while(leaf=walker.nextNode()){if(leaf===node)at=text.length+offset;leaves.push({node:leaf,start:text.length});text+=leaf.data;}
+ const words=[...new Intl.Segmenter(undefined,{granularity:'word'}).segment(text)].filter(s=>s.isWordLike);
+ const word=words.find(s=>at>=s.index&&at<s.index+s.segment.length)||words.find(s=>at===s.index+s.segment.length);
+ if(!word)return null;
+ const point=index=>{const item=leaves.find(l=>index>=l.start&&index<=l.start+l.node.length)||leaves.at(-1);return [item.node,index-item.start];};
+ const result=doc.createRange();result.setStart(...point(word.index));result.setEnd(...point(word.index+word.segment.length));return result;
+}
+function installWordSelection(doc=document){
+ let drag=null,suppressClick=false;
+ const win=doc.defaultView;
+ const contentFor=node=>doc===document?selectionContent(node):doc.body;
+ doc.addEventListener('pointerdown',e=>{
+  drag=null;if(e.button!==0||e.detail>=2||e.isPrimary===false||e.pointerType==='touch'||e.shiftKey||e.metaKey||e.ctrlKey||e.altKey)return;
+  if(e.target.closest('button,a,input,textarea,select,.title-grip,.resize-handle,.nib,[data-branch-point]'))return;
+  const content=contentFor(e.target);if(!content)return;
+  const selected=win.getSelection();
+  // An existing selection keeps its direct manipulation / excerpt drag behavior.
+  if(doc===document&&selection&&selected.rangeCount&&[...selected.getRangeAt(0).getClientRects()].some(r=>e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom))return;
+  const word=wordAtPoint(doc,e.clientX,e.clientY,content);if(word)drag={pointer:e.pointerId,content,word,x:e.clientX,y:e.clientY,active:false,target:e.target};
+ },true);
+ // Own the mouse selection so the browser's subsequent mousemove cannot restore partial words.
+ // Keep a normal caret for a click in editable text; snapping starts once the pointer moves.
+ doc.addEventListener('mousedown',e=>{
+  if(!drag||gesture)return;e.preventDefault();
+  e.target.closest('[contenteditable]')?.focus({preventScroll:true});
+  const caret=doc.caretPositionFromPoint?.(e.clientX,e.clientY),range=caret?null:doc.caretRangeFromPoint?.(e.clientX,e.clientY);
+  if(caret)win.getSelection().collapse(caret.offsetNode,caret.offset);
+  else if(range)win.getSelection().collapse(range.startContainer,range.startOffset);
+ },true);
+ doc.addEventListener('keydown',e=>{if(e.key==='Escape')drag=null;},true);
+ doc.addEventListener('pointermove',e=>{
+  if(!drag||e.pointerId!==drag.pointer||gesture)return;
+  if(!drag.active&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<3)return;
+  const word=wordAtPoint(doc,e.clientX,e.clientY,drag.content);if(!word)return;
+  e.preventDefault();drag.active=true;
+  const backward=word.compareBoundaryPoints(0,drag.word)<0,selected=win.getSelection();
+  selected.setBaseAndExtent(backward?drag.word.endContainer:drag.word.startContainer,backward?drag.word.endOffset:drag.word.startOffset,backward?word.startContainer:word.endContainer,backward?word.startOffset:word.endOffset);
+  if(doc===document)updateSelectionHandle();else paintRoundedSelection(drag.content,[...selected.getRangeAt(0).getClientRects()]);
+ },true);
+ doc.addEventListener('pointerup',e=>{if(drag&&e.pointerId===drag.pointer){suppressClick=drag.active;drag=null;}},true);
+ doc.addEventListener('pointercancel',()=>{drag=null;});win.addEventListener('blur',()=>{drag=null;});
+ doc.addEventListener('click',e=>{if(suppressClick){suppressClick=false;e.preventDefault();e.stopPropagation();}},true);
+ if(doc!==document){
+  const style=doc.createElement('style');style.textContent='.rounded-selection::selection,.rounded-selection *::selection{background:transparent;color:inherit}#selection-highlight{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:2147483647;mix-blend-mode:multiply;opacity:.4}#selection-highlight path{fill:#a9c8fb}';doc.head.append(style);
+  const repaint=()=>{const selected=win.getSelection();if(!selected.rangeCount||selected.isCollapsed)clearRoundedSelection(doc);else paintRoundedSelection(doc.body,[...selected.getRangeAt(0).getClientRects()]);};
+  doc.addEventListener('selectionchange',repaint);doc.addEventListener('scroll',repaint,true);win.addEventListener('resize',repaint);
+ }
+}
+installWordSelection();
+// Install only where browser access is allowed. Never weaken an embed's sandbox.
+const selectionFrameDocuments=new WeakSet();
+document.addEventListener('load',e=>{if(e.target.tagName!=='IFRAME')return;try{const doc=e.target.contentDocument;if(doc?.body&&!selectionFrameDocuments.has(doc)){selectionFrameDocuments.add(doc);installWordSelection(doc);}}catch{}},true);
 
 
 async function fetchVideoTranscript(videoId){
@@ -513,7 +635,7 @@ function renderStreamText(el,text){
 function websitePerspectiveButton(n){return n.type==='web'&&!n.researchSource?`<button type="button" class="website-perspective-toggle" data-website-perspective aria-label="Your perspective" data-tooltip="Your perspective" aria-expanded="${openWebsitePerspectives.has(n.id)}" aria-controls="website-perspective-${n.id}">${icon('user')}</button>`:'';}
 function toggleWebsitePerspective(n,open){const card=cardEl(n.id),section=card?.querySelector('.website-perspective'),button=card?.querySelector('[data-website-perspective]');if(!section||!button)return;if(open)openWebsitePerspectives.add(n.id);else{if(section.contains(document.activeElement))document.activeElement.blur();openWebsitePerspectives.delete(n.id);hideSelection();}section.hidden=!open;button.setAttribute('aria-expanded',String(open));if(open)section.querySelector('.website-notes')?.focus({preventScroll:true});else button.focus({preventScroll:true});requestDraw();}
 onCardEvent('keydown',e=>{if(e.key==='Escape'&&e.target.closest('.website-perspective')){const n=nodeById(e.target.closest('.card').dataset.node);e.preventDefault();e.stopImmediatePropagation();toggleWebsitePerspective(n,false);}});
-function sourceInfoButton(n){return ['plan','media','web','upload'].includes(n.type)?`<button type="button" data-source-info aria-label="Inspect source context" title="Context details" aria-expanded="${inspectedSources.has(n.id)}" aria-controls="source-context-${n.id}">${icon('info-circle')}</button>`:'';}
+function sourceInfoButton(n){return ['plan','media','web','upload','thread'].includes(n.type)?`<button type="button" data-source-info aria-label="Inspect source context" title="Context details" aria-haspopup="dialog" aria-controls="context-inspector">${icon('info-circle')}</button>`:'';}
 function sourceInfoMarkup(n){if(!inspectedSources.has(n.id))return '';const video=n.type==='media'&&n.mediaType==='video';const notice=video&&!n.transcript?(videoErrors.get(n.videoId)||'Captions are loading. Connecting this video includes its transcript once ready; Send waits for retrieval.'):n.type==='web'?'Chats receive this URL and your perspective notes. AI looks up the page when you send, with citations in its reply. Some sites may block access.':n.type==='upload'&&!n.text?(n.storageId?(n.mime==='application/pdf'?'Chats receive the complete PDF, including page images and text.':/^image\/(png|jpeg|webp|gif)$/.test(n.mime)?'Chats receive the image itself for visual analysis.':'This file format is not supported in chat. Use a PDF, supported image, or text file.'):'Enable chat context to make this file available, then refresh existing chat references.'):n.type==='media'&&n.mediaType!=='video'?'Chats receive the image itself and its source attribution.':'';return `<section id="source-context-${n.id}" class="source-context-detail" aria-label="Source context details"><h3>${video&&n.transcript?'Transcript & context':'Context shared with chats'}</h3>${notice?`<p class="source-context-status">${escapeHTML(notice)}</p>`:''}<pre>${escapeHTML(sourceText(n)||'No context yet.')}</pre><p class="source-context-footnote">Connected chats keep the snapshot from when this source was attached. Inspect the source inside a chat to see that snapshot.</p></section>`;}
 
 function messageNibMarkup(m){return m.text?.trim()?`<button class="message-branch" data-branch-point="${m.id}" aria-label="Branch conversation at this message" title="Branch from here"><span class="context-pill"></span></button>`:"";}
@@ -523,7 +645,7 @@ function modelPickerMarkup(n){const stage=Number.isInteger(n.modelStage)?Math.ma
 $('#cards').addEventListener('input',e=>{if(!e.target.matches('[data-model-stage]'))return;const n=nodeById(e.target.closest('.card').dataset.node);if(!n)return;n.modelBalance=Number(e.target.value);n.modelStage=Math.min(2,Math.floor(n.modelBalance/ (100/3)));const name=['Thoughtful','Balanced','Fast'][n.modelStage];e.target.setAttribute('aria-valuetext',name+' reasoning');e.target.closest('.model-picker').querySelector(':scope > summary').innerHTML=modelTriggerMarkup(n.modelStage);});
 $('#cards').addEventListener('change',e=>{if(e.target.matches('[data-model-stage]'))save();});
 $('#cards').addEventListener('click',async e=>{const button=e.target.closest('[data-select-model]');if(button){const menu=button.closest('.model-select');menu.open=false;menu.querySelector('summary').focus({preventScroll:true});}});
-document.addEventListener('pointerdown',e=>{document.querySelectorAll('.model-picker[open]').forEach(p=>{if(!p.contains(e.target))p.open=false;});});
+document.addEventListener('pointerdown',e=>{document.querySelectorAll('.model-picker[open]').forEach(p=>{if(!p.contains(e.target))p.open=false;});},true);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.model-picker[open]').forEach(p=>{p.open=false;p.querySelector('summary').focus({preventScroll:true});});}});
 
 function expandIdeaButton(n){return BranchContext.hasContent(n)?`<button type="button" data-expand-idea data-tooltip="Expand on idea" aria-label="Expand on idea" aria-expanded="${ideaPreviews.has(n.id)}" ${expandingIdeas.has(n.id)?'disabled aria-busy="true"':''}>${icon('brain')}</button>`:'';}
@@ -626,11 +748,38 @@ $('#file-input').addEventListener('cancel',()=>{$('#file-input').accept='';});
 
 function revealDockNode(node){const el=cardEl(node?.id);if(!el)return;const r=el.getBoundingClientRect();let dx=0,dy=0;if(r.left<35)dx=35-r.left;else if(r.right>innerWidth-35)dx=innerWidth-35-r.right;const bottom=innerHeight-155;if(r.height>bottom-125)dy=125-r.top;else if(r.bottom>bottom)dy=bottom-r.bottom;else if(r.top<125)dy=125-r.top;camera.x+=dx;camera.y+=dy;applyCamera();}
 
+// Keep the live transcript and composer intact while unfolding the conversation.
+function toggleConversation(n,event){
+ const card=cardEl(n.id),surface=card?.querySelector('.chat-surface');if(!surface)return;
+ const from=parseFloat(getComputedStyle(surface).height),opening=!expandedChats.has(n.id);
+ surface.getAnimations().filter(a=>a.id==='conversation-unfold').forEach(a=>{a.oncancel?.();a.oncancel=null;a.cancel();});
+ opening?expandedChats.add(n.id):expandedChats.delete(n.id);
+ card.classList.toggle('compact-chat',compactChat(n));
+ surface.tabIndex=compactChat(n)?-1:0;
+ const toggle=card.querySelector('.chat-preview-toggle'),header=card.querySelector('.collapse-card');
+ if(toggle){toggle.setAttribute('aria-expanded',String(!compactChat(n)));toggle.innerHTML=`${compactChat(n)?'Show conversation':'Show less'} ${icon('nav-arrow-down')}`;}
+ if(header){header.setAttribute('aria-expanded',String(!compactChat(n)));header.setAttribute('aria-label',`${compactChat(n)?'Expand':'Collapse'} conversation`);header.dataset.tooltip=compactChat(n)?'Expand':'Collapse';header.removeAttribute('title');}
+ const to=parseFloat(getComputedStyle(surface).height);
+ if(event.detail===0||matchMedia('(prefers-reduced-motion: reduce)').matches||Math.abs(to-from)<1){requestDraw();return;}
+ // A measured height keeps the composer and connected wires attached to the reveal.
+ // Remove all constraints at rest so later streamed messages grow naturally.
+ const messages=surface.querySelector('.messages');
+ surface.style.maxHeight='none';surface.style.overflow='hidden';surface.style.flex='none';
+ if(messages){messages.style.maxHeight='none';messages.style.maskImage='none';}
+ const cleanup=()=>{
+  surface.style.removeProperty('max-height');surface.style.removeProperty('overflow');surface.style.removeProperty('flex');
+  if(messages){messages.style.removeProperty('max-height');messages.style.removeProperty('mask-image');}
+  requestDraw();
+ };
+ const animation=surface.animate([{height:`${from}px`},{height:`${to}px`}],{duration:opening?250:190,easing:'cubic-bezier(.23,1,.32,1)',id:'conversation-unfold'});
+ animation.onfinish=cleanup;animation.oncancel=cleanup;
+}
+
 function updateActivity(n){
  const surface=cardEl(n.id)?.querySelector('.chat-surface');if(!surface)return;
  let el=surface.querySelector('.chat-activity');const busy=!!n.activeRun||generatingChats.has(n.id);
  const phase=n.activity||'thinking',label=phase==='searching'?'Searching':phase==='writing'?'Writing':'Thinking';
- const agent=cardEl(n.id)?.querySelector('.agent-identity');if(agent){agent.dataset.running=String(busy);const status=agent.querySelector('[data-agent-status]');if(status)status.textContent=busy?((n.agentStage||'Discovering pages')+' · '+label):(n.agentStage||'Ready for a goal');}
+ const agent=cardEl(n.id)?.querySelector('.agent-identity');if(agent){agent.dataset.running=String(busy);const progress=agent.querySelector('.agent-progress');if(progress)progress.hidden=!busy;const status=agent.querySelector('[data-agent-status]');if(status)status.textContent=busy?((n.agentStage||'Discovering pages')+' · '+label):(n.agentStage||'Ready for a goal');}
  if(!busy){el?.remove();return;}
  if(!el){el=document.createElement('div');el.className='chat-activity';el.setAttribute('role','status');el.setAttribute('aria-live','polite');surface.append(el);}
  if(el.dataset.phase!==phase){el.dataset.phase=phase;el.innerHTML=icon(phase==='searching'?'search':phase==='thinking'?'brain':'chat-bubble')+'<span>'+label+'</span><i aria-hidden="true"></i>';}
@@ -676,10 +825,10 @@ function agentColor(n){
  return '#'+rgb.map(v=>Math.round((v+m)*255).toString(16).padStart(2,'0')).join('');
 }
 function ensureAgentIdentity(n){if(!n.agentName){const seed=agentIdentitySeed(n);n.agentName=agentNameAdjectives[(seed>>>8)%agentNameAdjectives.length]+' '+agentNameNouns[(seed>>>16)%agentNameNouns.length];}return n.agentName;}
-function agentIdentityMarkup(n){const name=n.agentName||'Scout',busy=!!n.activeRun||generatingChats.has(n.id),avatar=window.BranchAvatar?.('Agent '+name+' '+n.id,agentColor(n));return `<section class="agent-identity" style="--agent-color:${agentColor(n)};--agent-ink:hsl(${agentHue(n)} 78% 32%)" data-running="${busy}" aria-label="${escapeHTML(name)} research agent"><div class="agent-avatar">${avatar?`<img src="${escapeHTML(avatar)}" alt="${escapeHTML(name)} avatar">`:icon('brain')}<i aria-hidden="true"></i></div><div class="agent-heading"><strong>${escapeHTML(name)}<span>Research agent</span></strong><span role="status" data-agent-status>${escapeHTML(busy?(n.agentStage||'Discovering pages'):n.agentStage||'Ready for a goal')}</span></div>${busy?`<button type="button" data-stop-agent aria-label="Stop ${escapeHTML(name)}" data-tooltip="Stop research">${icon('xmark')}</button>`:`<span class="agent-ready">${n.agentStage==='Complete'?'Done':'3 passes'}</span>`}<button type="button" class="workspace-toggle" data-workspace-toggle aria-label="Toggle agent workspace" aria-expanded="${!collapsedAgentWorkspaces.has(n.id)}">${icon('nav-arrow-down')}</button><div class="agent-stages" aria-label="Discover, verify, synthesize">${['Discover','Verify','Synthesize'].map((label,i)=>`<span class="${n.agentStage==='Complete'||(n.agentStage||'').startsWith(['Discover','Verif','Synth'][i])?'current':''}"><i></i>${label}</span>`).join('')}</div></section>`;}
+function agentIdentityMarkup(n){const name=n.agentName||'Scout',busy=!!n.activeRun||generatingChats.has(n.id),avatar=window.BranchAvatar?.('Agent '+name+' '+n.id,agentColor(n),true);return `<section class="agent-identity" style="--agent-color:${agentColor(n)};--agent-ink:hsl(${agentHue(n)} 78% 32%)" data-running="${busy}" aria-label="${escapeHTML(name)} research agent"><div class="agent-avatar">${avatar?`<img src="${escapeHTML(avatar)}" alt="${escapeHTML(name)} avatar">`:icon('brain')}<i aria-hidden="true"></i></div><div class="agent-heading"><strong>${escapeHTML(name)}</strong><span role="status" data-agent-status>${escapeHTML(busy?(n.agentStage||'Discovering pages'):n.agentStage||'Ready for a goal')}</span></div>${busy?`<button type="button" data-stop-agent aria-label="Stop ${escapeHTML(name)}" data-tooltip="Stop research">${icon('xmark')}</button>`:''}<button type="button" class="workspace-toggle" data-workspace-toggle aria-label="Toggle agent workspace" aria-expanded="${!collapsedAgentWorkspaces.has(n.id)}">${icon('nav-arrow-down')}</button><div class="agent-progress" role="progressbar" aria-label="Research in progress"${busy?'':' hidden'}><i></i></div></section>`;}
 function measuredNodes(){return state.nodes.map(n=>({...n,layoutHeight:cardEl(n.id)?.offsetHeight||n.layoutHeight}));}
 let settlingAutoNodes=false;
-function settleAutomaticNodes(){if(settlingAutoNodes||gesture||!window.BranchAutoLayout||window.BoardShared?.enabled&&!window.BoardShared.writable)return;settlingAutoNodes=true;let changed=false;try{const occupied=measuredNodes().filter(n=>!n.autoGroup||n.agent);for(const n of state.nodes.filter(n=>n.autoGroup&&!n.agent&&!collapsedAgentSource(n))){const el=cardEl(n.id);if(!el||n.id===panelNodeId)continue;const h=el.offsetHeight||n.layoutHeight||260;const point=BranchAutoLayout.place(occupied,{x:n.x,y:n.y},el.offsetWidth||n.width||440,h);if(point.x!==n.x||point.y!==n.y){n.x=point.x;n.y=point.y;el.style.transform=`translate3d(${n.x}px,${n.y}px,0)`;changed=true;}if(Math.abs((n.layoutHeight||0)-h)>2){n.layoutHeight=h;changed=true;}occupied.push({...n,layoutHeight:h});}if(clearAgentWorkspaces())changed=true;if(changed)save();}finally{settlingAutoNodes=false;}}
+function settleAutomaticNodes(){if(settlingAutoNodes||gesture||!window.BranchAutoLayout||window.BoardShared?.enabled&&!window.BoardShared.writable)return;settlingAutoNodes=true;let changed=false;try{const occupied=measuredNodes().filter(n=>!n.autoGroup||n.agent);for(const n of state.nodes.filter(n=>n.autoGroup&&!n.agent&&!collapsedAgentSource(n))){const el=cardEl(n.id);if(!el||n.id===panelNodeId)continue;const h=el.offsetHeight||n.layoutHeight||260;const point=BranchAutoLayout.place(occupied,{x:n.x,y:n.y},el.offsetWidth||n.width||440,h);if(point.x!==n.x||point.y!==n.y){n.x=point.x;n.y=point.y;el.style.transform=`translate3d(${n.x}px,${n.y}px,0)`;changed=true;}if(Math.abs((n.layoutHeight||0)-h)>2){n.layoutHeight=h;changed=true;}occupied.push({...n,layoutHeight:h});}if(changed)save();}finally{settlingAutoNodes=false;}}
 function agentSources(agent){return state.nodes.filter(n=>n.researchSource&&n.autoGroup===agent.id);}
 function collapsedWorkspaceMember(n){return !!(n.autoGroup&&n.id!==n.autoGroup&&collapsedAgentWorkspaces.has(n.autoGroup));}
 function collapsedAgentSource(n){return collapsedWorkspaceMember(n)||!!(n.researchSource&&nodeById(n.autoGroup)?.agent&&!expandedAgentSources.has(n.autoGroup)&&n.id!==panelNodeId);}
@@ -724,22 +873,6 @@ function drawAutoGroups(){
  for(const box of [...layer.children])if(!visible.has(box.dataset.group))box.remove();
 }
 
-function clearAgentWorkspaces(){
- if(gesture||!window.BranchAutoLayout||window.BoardShared?.enabled&&!window.BoardShared.writable)return false;
- let changed=false;
- for(const agent of state.nodes.filter(n=>n.agent)){
-  const members=groupMoveMembers(agent),ids=new Set(members.map(n=>n.id));
-  const rects=members.filter(n=>!collapsedAgentSource(n)).map(n=>({x:n.x,y:n.y-49,w:n.width||520,h:(cardEl(n.id)?.offsetHeight||260)+49}));
-  if(!collapsedAgentWorkspaces.has(agent.id)&&agentSources(agent).length)rects.push(agentStackBounds(agent));
-  const left=Math.min(...rects.map(r=>r.x))-48,top=Math.min(...rects.map(r=>r.y))-68,right=Math.max(...rects.map(r=>r.x+r.w))+48,bottom=Math.max(...rects.map(r=>r.y+r.h))+48;
-  const obstacles=state.nodes.filter(n=>!ids.has(n.id)&&!collapsedAgentSource(n)).map(n=>({...n,y:n.y-49,layoutHeight:(cardEl(n.id)?.offsetHeight||260)+49}));
-  const point=BranchAutoLayout.place(obstacles,{x:left,y:top},right-left,bottom-top),dx=point.x-left,dy=point.y-top;
-  if(!dx&&!dy)continue;for(const n of members){n.x+=dx;n.y+=dy;positionCard(n);}window.BoardShared?.moveNodes?.(members);changed=true;
- }
- return changed;
-}
-
-
 // The dock holds the next agent; its identity travels with the full card.
 let dockAgent=null,suppressAgentDockClickUntil=0;
 function stockDockAgent(animate=false){
@@ -750,13 +883,28 @@ function stockDockAgent(animate=false){
 }
 function paintDockAgent(){
  const button=creationDock.querySelector('[data-dock="agent"]');if(!button||!dockAgent)return;
- const avatar=window.BranchAvatar?.('Agent '+dockAgent.agentName+' '+dockAgent.id,agentColor(dockAgent));
+ const avatar=window.BranchAvatar?.('Agent '+dockAgent.agentName+' '+dockAgent.id,agentColor(dockAgent),true);
  button.querySelector('.dock-agent-avatar')?.remove();button.querySelector(':scope > .icon')?.remove();
  button.style.setProperty('--agent-color',agentColor(dockAgent));
+ button.setAttribute('aria-label',dockAgent.agentName);
+ const tooltip=button.querySelector('.dock-tooltip');if(tooltip)tooltip.textContent=dockAgent.agentName;
  button.insertAdjacentHTML('afterbegin',`<span class="dock-agent-avatar" aria-hidden="true">${avatar?`<img draggable="false" src="${escapeHTML(avatar)}" alt="">`:icon('brain')}</span>`);
 }
 function updateAgentDrag(g,x,y){
  let preview=$('#agent-drag-preview');
+ const dockRect=creationDock.getBoundingClientRect();
+ const insideDock=x>=dockRect.left&&x<=dockRect.right&&y>=dockRect.top&&y<=dockRect.bottom;
+ if(!insideDock)g.leftDock=true;
+ if(preview&&g.leftDock&&insideDock){
+  const avatar=creationDock.querySelector('.dock-agent-avatar'),target=avatar.getBoundingClientRect(),at=boardPoint(target.left+target.width/2,target.top+target.height/2);
+  preview.removeAttribute('id');preview.className='agent-return-preview';
+  finishGesture();
+  if(reduced.matches||!preview.animate){preview.remove();return;}
+  preview.style.transformOrigin=`${g.previewPoint.x}px ${g.previewPoint.y}px`;
+  const animation=preview.animate([{transform:'translate(0,0) scale(1)',opacity:1},{transform:`translate(${at.x-g.previewPoint.x}px,${at.y-g.previewPoint.y}px) scale(.04)`,opacity:0}],{duration:180,easing:'cubic-bezier(.2,.8,.2,1)',fill:'forwards'});
+  animation.finished?.then(()=>preview.remove(),()=>preview.remove());setTimeout(()=>preview.remove(),220);
+  return;
+ }
  if(!preview){preview=document.createElement('div');preview.id='agent-drag-preview';preview.setAttribute('aria-hidden','true');preview.inert=true;preview.innerHTML=cardMarkup(dockAgent,state.nodes.length);$('#world').append(preview);creationDock.classList.add('agent-in-hand');}
  const at=boardPoint(x,y);g.previewPoint={x:at.x-42,y:at.y-48};
  preview.firstElementChild.style.transform=`translate3d(${g.previewPoint.x}px,${g.previewPoint.y}px,0)`;
@@ -821,3 +969,33 @@ document.addEventListener('pointerdown',interruptAgentCursors,true);
 document.addEventListener('wheel',interruptAgentCursors,{passive:true,capture:true});
 document.addEventListener('visibilitychange',interruptAgentCursors);
 reduced.addEventListener('change',interruptAgentCursors);
+
+function openContextInspector(node,contextId=null){
+ commitEdit();
+ const previous=$('#context-inspector');if(previous)previous.close();
+ const binding=contextId?node.contexts?.find(c=>c.id===contextId):BranchContext.snapshotNode(node,state.nodes);if(!binding)return;
+ const snapshot=clone(binding),resolved=BranchContext.resolveContext([snapshot]),source=nodeById(snapshot.source),writable=!window.BoardShared?.enabled||window.BoardShared.writable;
+ const dialog=document.createElement('dialog');dialog.id='context-inspector';dialog.setAttribute('aria-labelledby','context-inspector-title');
+ const textBlock=text=>`<pre class="inspector-text">${escapeHTML(text)}</pre>`;
+ const describe=(c,included)=>{
+  if(!included)return 'Not sent to the model.';
+  if(c.excerptOnly||c.enabled===false)return 'Only the selected passage is included.';
+  if(c.video)return c.video.included?'Spoken captions included. Video visuals are not included.':'Captions still loading. Send waits until they are ready.';
+  if(c.attachment)return c.attachment.kind==='image'?'The image itself is included for visual understanding.':c.attachment.kind==='pdf'?'The full PDF is included, with text and page images.':'Unsupported file. Replace it before sending.';
+  const type=nodeById(c.source)?.type;
+  if(type==='web')return 'URL and your notes included. The page is looked up when you send.';
+  if(type==='thread')return c.cutoff?'Conversation up to the branch point is included.':'The saved conversation is included.';
+  return 'This note’s text is included.';
+ };
+ const tree=(c,depth=0,parentEnabled=true)=>{
+  const included=parentEnabled&&(c.enabled!==false||!!c.quote),full=parentEnabled&&c.enabled!==false,live=nodeById(c.source),text=included?(full?c.body||'':c.quote||''):'',children=depth<12?(c.inherited||[]):[];
+  const symbol=c.attachment?.kind==='image'?'media-image':c.attachment?'attachment':c.video?'youtube':live?.type==='thread'?'chat-bubble':live?.type==='web'?'link':'page';
+  return `<li>${children.length?`<ol class="inspector-upstream">${children.map(child=>tree(child,depth+1,full)).join('')}</ol><div class="inspector-flow" aria-hidden="true">↓</div>`:''}<article class="inspector-input inspector-node ${depth===0?'inspector-selected':''} ${!included?'inspector-excluded':''}"><div class="inspector-node-heading">${icon(symbol)}<strong>${escapeHTML(c.title||'Untitled')}</strong><span>${!included?'Excluded':depth===0?'This item':'Upstream'}</span></div><p class="inspector-node-description">${describe(c,included)}</p>${text?`<p class="inspector-snippet">${escapeHTML(text.slice(0,180))}${text.length>180?'…':''}</p>`:''}${included&&(text||c.quote||c.availability)?`<details><summary>View content</summary>${text?textBlock(text):''}${full&&c.quote&&c.quote!==text?textBlock(c.quote):''}${c.availability?`<p class="inspector-help">${escapeHTML(c.availability)}</p>`:''}</details>`:''}${live&&live.revision!==c.revision?'<p class="inspector-snapshot-status">Source has newer edits · saved version shown</p>':''}</article></li>`;
+ };
+ dialog.innerHTML=`<header class="inspector-header"><div><h2 id="context-inspector-title">Included context</h2><p>${contextId?'Saved for this chat':'Current source preview'} · ${resolved.length} ${resolved.length===1?'source':'sources'}</p></div><button type="button" data-inspector-close aria-label="Close context details">${icon('xmark')}</button></header><div class="inspector-body"><ol class="inspector-tree">${tree(snapshot)}</ol></div>${contextId?`<footer class="inspector-footer"><label><input type="checkbox" data-inspector-include ${snapshot.enabled!==false?'checked':''} ${!writable?'disabled':''}> Include source + upstream</label><div><button type="button" data-inspector-refresh ${!writable||!source?'disabled':''}>Refresh</button><button type="button" data-inspector-detach ${!writable?'disabled':''}>Detach</button></div></footer>`:''}`;
+ dialog.addEventListener('keydown',e=>e.stopPropagation());
+ dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+ dialog.addEventListener('click',e=>{if(e.target.closest('[data-inspector-close]'))dialog.close();if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}const refresh=e.target.closest('[data-inspector-refresh]'),detachButton=e.target.closest('[data-inspector-detach]');if(!refresh&&!detachButton)return;if(window.BoardShared?.enabled&&!window.BoardShared.writable)return;const current=nodeById(node.id),c=current?.contexts?.find(c=>c.id===contextId);if(!c)return dialog.close();if(detachButton){detach(current,contextId);dialog.close();return;}const latest=nodeById(c.source);if(!latest)return;remember();Object.assign(c,contextSnapshot(latest,c.quote,c.cutoff),{id:c.id,enabled:c.enabled});refreshCard(current);record('Refreshed context snapshot');openContextInspector(current,contextId);});
+ dialog.addEventListener('change',e=>{if(!e.target.matches('[data-inspector-include]')||(window.BoardShared?.enabled&&!window.BoardShared.writable))return;const current=nodeById(node.id),c=current?.contexts?.find(c=>c.id===contextId);if(!c)return dialog.close();remember();c.enabled=e.target.checked;refreshCard(current);record('Changed context inclusion');openContextInspector(current,contextId);});
+ document.body.append(dialog);dialog.showModal();
+}

@@ -21,7 +21,7 @@ module.exports = async function accountRoute(req,res,requestURL){
   res.statusCode=410;res.end(JSON.stringify({error:'Sign in to access your boards.'}));
  }catch(error){res.statusCode=403;res.end(JSON.stringify({error:'Could not complete this account request. Sign in and try again.'}));}
 };
-module.exports.authorizeBoard=async(req)=>{if(!url)return false;const boardId=req.headers['x-board-id'];if(!boardId)return false;try{const permission=await requestClient(req).query('library:permission',{boardId,token:req.headers['x-board-token']||''});return permission&&permission.role!=='viewer';}catch{return false;}};
+module.exports.authorizeBoard=async(req,{readOnly=false}={})=>{if(!url)return false;const boardId=req.headers['x-board-id'];if(!boardId)return false;try{const permission=await requestClient(req).query('library:permission',{boardId,token:req.headers['x-board-token']||''});return !!permission&&(readOnly||permission.role!=='viewer');}catch{return false;}};
 
 module.exports.peopleContext=async(req)=>requestClient(req).query('people:context',{boardId:req.headers['x-board-id'],token:req.headers['x-board-token']||''});
 

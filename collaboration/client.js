@@ -186,7 +186,7 @@ function updateLocks(){
     const people=new Map(editors.map(r=>[r.userId,r.name]));if(self)people.set(currentUserId()||tabId,people.get(currentUserId())||'You');
     const other=otherPersonEditing(node.id);
     const blocked=!writable||!connected||!!failure||other||sending.has(node.id)||!!node.activeRun;
-    const button=el.querySelector('.send-message');if(button){button.disabled=!!blocked;button.removeAttribute('title');button.dataset.tooltip=other?'Someone else is editing this node':node.activeRun?'Generating':'Send';}
+    const button=el.querySelector('.send-message');if(button){button.disabled=!!blocked;button.removeAttribute('title');button.removeAttribute('data-tooltip');}
     for(const field of el.querySelectorAll('[data-prompt],[data-edit]')){if(field instanceof HTMLTextAreaElement)field.readOnly=!writable||!connected||!!failure;else field.contentEditable=writable&&connected&&!failure?'plaintext-only':'false';}
     el.classList.toggle('shared-editing',other);
     let badge=el.querySelector('.editing-presence');if(people.size){if(!badge){badge=document.createElement('span');badge.className='editing-presence';el.querySelector('.composer-controls')?.prepend(badge);}badge.replaceChildren(...[...people].map(([id,name])=>{const person=editors.find(r=>r.userId===id);const img=document.createElement('img');img.src=avatarURL(name,person?.color);img.alt=name;img.width=22;img.height=22;return img;}));badge.removeAttribute('title');badge.dataset.tooltip=[...people.values()].join(', ');badge.setAttribute('aria-label',badge.dataset.tooltip);}else badge?.remove();

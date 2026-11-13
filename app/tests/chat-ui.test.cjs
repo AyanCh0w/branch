@@ -164,7 +164,7 @@ test('agent sources fold locally, expand with keyboard and the entire group foll
  }finally{dom.window.close();}
 });
 
-test('agent list keeps live pipes, folds to the agent, and clears collisions as one workspace',()=>{
+test('agent list keeps live pipes, folds to the agent, and preserves agent placement on content growth',()=>{
  const dom=boot(),w=dom.window,d=w.document;
  try{
   w.eval(fs.readFileSync(path.join(root,'auto-layout.js'),'utf8'));
@@ -173,7 +173,7 @@ test('agent list keeps live pipes, folds to the agent, and clears collisions as 
   const port=d.querySelector('.source-row-port');port.getBoundingClientRect=()=>({left:100,top:150,width:6,height:12});
   w.paintFrame(16);assert.ok(d.querySelector('#permanent-wires .wire-flow'));
   const before=w.BranchHost.getState().nodes.map(n=>({...n}));w.resizeCards();
-  const after=w.BranchHost.getState().nodes,delta=after.find(n=>n.id==='a').y-before[0].y;assert.ok(delta>0);
+  const after=w.BranchHost.getState().nodes,delta=after.find(n=>n.id==='a').y-before[0].y;assert.equal(delta,0);
   for(const key of ['s','out'])assert.equal(after.find(n=>n.id===key).y-before.find(n=>n.id===key).y,delta);
   assert.equal(after.find(n=>n.id==='obstacle').y,200);
   d.querySelector('[data-workspace-toggle]').click();assert.ok(d.querySelector('[data-node="a"]').classList.contains('workspace-folded'));assert.ok(d.querySelector('[data-node="out"]').hidden);assert.equal(d.querySelector('[data-agent-stack]'),null);
@@ -193,7 +193,7 @@ test('board menu creates at the click, navigates with keys and dismisses without
   d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown',{key:'n',bubbles:true}));
   assert.equal(w.BranchHost.getState().nodes.length,count);
   menu.querySelector('button').click();
-  const node=w.BranchHost.getState().nodes.at(-1);assert.equal(node.type,'thread');assert.equal(node.x,420);assert.equal(node.y,235);assert.equal(menu.hidden,true);
+  const node=w.BranchHost.getState().nodes.at(-1);assert.equal(node.type,'thread');assert.equal(node.x,420);assert.equal(node.y,300);assert.equal(menu.hidden,true);
   open();d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));assert.equal(menu.hidden,true);
   open();board.dispatchEvent(new w.Event('pointerdown',{bubbles:true}));assert.equal(menu.hidden,true);
   w.BoardShared={enabled:true,writable:false};open();assert.equal(menu.hidden,true);
@@ -287,7 +287,7 @@ test('creation shortcuts use the pointer at any pan/zoom without scrolling, and 
     d.body.dispatchEvent(new w.KeyboardEvent('keydown',{key,bubbles:true}));
     const node=w.BranchHost.getState().nodes.at(-1);
     assert.ok(Math.abs(node.x-(320-Number(cx))/Number(z))<.01);
-    assert.ok(Math.abs(node.y-(270-65-Number(cy))/Number(z))<.01);
+    assert.ok(Math.abs(node.y-(270-Number(cy))/Number(z))<.01);
     assert.equal(world.style.transform,before);
     assert.equal(focuses.at(-1).preventScroll,true);
    }
@@ -335,7 +335,7 @@ test('selected text drags like a link into an editable note with the same grab o
 test('Agent dock control creates a ready agent without starting a run and blocks viewers',()=>{
  const dom=boot(),w=dom.window,d=w.document;
  try{
-  const button=d.querySelector('[data-dock="agent"]');assert.equal(button.getAttribute('aria-label'),'Agent');
+  const button=d.querySelector('[data-dock="agent"]');assert.equal(button.getAttribute('aria-label'),button.querySelector('.dock-tooltip').textContent);assert.notEqual(button.getAttribute('aria-label'),'Agent');
   button.click();const agent=w.BranchHost.getState().nodes.find(n=>n.agent);
   assert.ok(agent);assert.equal(agent.type,'thread');assert.equal(agent.contexts.length,0);assert.equal(agent.messages.length,0);assert.ok(agent.agentName);assert.equal(agent.activeRun,undefined);
   assert.equal(d.activeElement,d.querySelector(`[data-node="${agent.id}"] [data-prompt]`));
@@ -358,6 +358,33 @@ test('agent dock drags the full node, preserves identity and placement, restocks
   pointer(button,'pointerdown',500,700);pointer(d.body,'pointermove',700,350);assert.notEqual(d.querySelector('#agent-drag-preview .card').dataset.node,agentId);
   d.body.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));pointer(d.body,'pointerup',700,350);
   assert.equal(d.querySelector('#agent-drag-preview'),null);assert.equal(w.BranchHost.getState().nodes.length,2);assert.equal(restocks,1);assert.ok(!d.querySelector('#creation-dock').classList.contains('agent-in-hand'));
+ }finally{dom.window.close();}
+});
+
+for(const reduce of [false,true])test(`returning a held agent to the dock absorbs it before release (reduced motion: ${reduce})`,()=>{
+ const dom=boot(reduce),w=dom.window,d=w.document;
+ try{
+  d.body.classList.remove('account-mode');w.HTMLElement.prototype.setPointerCapture=()=>{};d.elementFromPoint=()=>d.querySelector('#board');
+  const dock=d.querySelector('#creation-dock'),button=d.querySelector('[data-dock="agent"]');
+  dock.getBoundingClientRect=()=>({left:400,right:800,top:650,bottom:710,width:400,height:60});
+  const original=button.querySelector('.dock-agent-avatar');
+  const pointer=(target,type,x,y)=>target.dispatchEvent(new w.MouseEvent(type,{button:0,clientX:x,clientY:y,bubbles:true,cancelable:true}));
+  let absorbed=0;w.HTMLElement.prototype.animate=function(){if(this.classList.contains('agent-return-preview'))absorbed++;return{cancel(){}};};
+  pointer(button,'pointerdown',500,680);
+  pointer(d.body,'pointermove',500,674);
+  const initialPreview=d.querySelector('#agent-drag-preview');assert.ok(initialPreview);
+  pointer(d.body,'pointermove',500,668);
+  assert.equal(d.querySelector('#agent-drag-preview'),initialPreview,'movement inside the dock while lifting must not absorb the preview');
+  pointer(d.body,'pointermove',600,350);
+  assert.equal(d.querySelector('#agent-drag-preview'),initialPreview,'the preview follows the initial drag out of the dock');
+  assert.ok(d.querySelector('#agent-drag-preview'));
+  pointer(d.body,'pointermove',550,675);
+  assert.equal(d.querySelector('#agent-drag-preview'),null);
+  assert.equal(dock.classList.contains('agent-in-hand'),false);
+  assert.equal(button.querySelector('.dock-agent-avatar'),original);
+  assert.equal(absorbed,reduce?0:1);
+  pointer(d.body,'pointermove',600,350);pointer(d.body,'pointerup',600,350);button.click();
+  assert.equal(w.BranchHost.getState().nodes.length,1,'absorbed drag cannot place or click-create an agent');
  }finally{dom.window.close();}
 });
 
@@ -402,4 +429,72 @@ test('playful agent identities keep saturated colors across dock, card and share
   w.BranchHost.receive({title:'Colors',nodes:Array.from({length:24},(_,i)=>({...agent,id:'agent-'+i,autoGroup:'agent-'+i}))});
   const colors=[...d.querySelectorAll('.agent-identity')].map(el=>el.style.getPropertyValue('--agent-color'));assert.ok(new Set(colors).size>15);
  }finally{dom.window.close();}
+});
+
+test('embed checks automatically show fallback, preserve notes, and retry fresh',async()=>{
+ const dom=boot(),w=dom.window,d=w.document;let resolveCheck,calls=0;
+ try{
+  w.fetch=()=>{calls++;return new Promise(resolve=>{resolveCheck=resolve;});};
+  const state=JSON.parse(JSON.stringify(w.BranchHost.getState()));state.nodes.push({id:'site',type:'web',title:'Example',url:'https://example.com',body:'My perspective',x:0,y:0});w.BranchHost.receive(state);
+  const before=JSON.stringify(w.BranchHost.getState());
+  d.querySelector('iframe').dispatchEvent(new w.Event('load'));
+  resolveCheck({ok:true,json:async()=>({status:'blocked'})});await new Promise(r=>setImmediate(r));
+  assert.ok(d.querySelector('.website-fallback'));assert.equal(d.querySelector('.website-notes').textContent,'My perspective');assert.equal(JSON.stringify(w.BranchHost.getState()),before);
+  d.querySelector('[data-retry-embed]').click();assert.equal(calls,2);assert.ok(d.querySelector('iframe'));
+  resolveCheck({ok:true,json:async()=>({status:'allowed'})});await new Promise(r=>setImmediate(r));assert.equal(d.querySelector('.website-fallback'),null);
+ }finally{w.close();}
+});
+test('offscreen previews wait; stalled previews time out and loaded previews cancel the deadline',()=>{
+ const dom=boot(),w=dom.window,d=w.document;const timers=new Map();let visibility,next=0;
+ try{
+  w.IntersectionObserver=class{constructor(cb){visibility=cb;}observe(){}disconnect(){}};
+  w.setTimeout=(cb,ms)=>{const id=++next;if(ms===20000)timers.set(id,cb);return id;};w.clearTimeout=id=>timers.delete(id);
+  const state=JSON.parse(JSON.stringify(w.BranchHost.getState()));state.nodes.push({id:'site',type:'web',title:'Example',url:'https://example.com',x:0,y:0});w.BranchHost.receive(state);
+  assert.equal(timers.size,0);visibility([{isIntersecting:false}]);assert.equal(timers.size,0);
+  visibility([{isIntersecting:true}]);assert.equal(timers.size,1);[...timers.values()][0]();assert.ok(d.querySelector('.website-fallback'));
+  d.querySelector('[data-retry-embed]').click();visibility([{isIntersecting:true}]);assert.equal(timers.size,1);
+  d.querySelector('iframe').dispatchEvent(new w.Event('load'));assert.equal(timers.size,0);
+ }finally{w.close();}
+});
+test('late blocked results cannot replace a retried frame',async()=>{
+ const dom=boot(),w=dom.window,d=w.document,resolvers=[];
+ try{
+  w.fetch=()=>new Promise(resolve=>resolvers.push(resolve));
+  const state=JSON.parse(JSON.stringify(w.BranchHost.getState()));state.nodes.push({id:'site',type:'web',title:'Example',url:'https://example.com',x:0,y:0});w.BranchHost.receive(state);
+  d.querySelector('[data-embed-help]').click();d.querySelector('[data-retry-embed]').click();
+  resolvers[0]({ok:true,json:async()=>({status:'blocked'})});await new Promise(r=>setImmediate(r));assert.ok(d.querySelector('iframe'));assert.equal(d.querySelector('.website-fallback'),null);
+ }finally{w.close();}
+});
+
+test('zoom overview uses the 40% threshold and whole-card movement preserves chat content',()=>{
+ const dom=boot(),w=dom.window,d=w.document;
+ try{
+  w.HTMLElement.prototype.setPointerCapture=()=>{};
+  const card=d.querySelector('[data-node="chat"]'),before=JSON.parse(JSON.stringify(w.BranchHost.getState().nodes[0]));
+  const pinch=factor=>d.querySelector('#board').dispatchEvent(new w.WheelEvent('wheel',{bubbles:true,cancelable:true,ctrlKey:true,deltaY:-Math.log(factor)/.008,clientX:300,clientY:250}));pinch(.41);assert.equal(d.querySelector('#world').classList.contains('zoomed-out'),false);
+  pinch(.3/.41);assert.equal(d.querySelector('#world').classList.contains('zoomed-out'),true);
+  assert.equal(card.querySelector('.overview-type').textContent,'Chat');assert.equal(card.querySelector('.overview-label strong').textContent,'Test chat');
+  const pointer=(target,type,x,y)=>target.dispatchEvent(new w.MouseEvent(type,{bubbles:true,cancelable:true,button:0,clientX:x,clientY:y}));
+  pointer(card,'pointerdown',100,100);pointer(card,'pointermove',130,115);pointer(card,'pointerup',130,115);
+  let moved=w.BranchHost.getState().nodes[0];assert.ok(Math.abs(moved.x-before.x-100)<.001);assert.ok(Math.abs(moved.y-before.y-50)<.001);
+  card.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));assert.ok(Math.abs(w.BranchHost.getState().nodes[0].x-before.x-120)<.001);
+  d.querySelector('#zoom').click();assert.equal(d.querySelector('#world').classList.contains('zoomed-out'),false);
+  moved=w.BranchHost.getState().nodes[0];assert.deepEqual(JSON.parse(JSON.stringify(moved.messages)),before.messages);assert.equal(moved.draft,before.draft);assert.ok(card.querySelector('[data-prompt]'));
+ }finally{dom.window.close();}
+});
+
+test('context inspector shows frozen upstream input, exclusions and explicit refresh',()=>{
+ const dom=boot(),w=dom.window,d=w.document;
+ w.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','')};
+ w.HTMLDialogElement.prototype.close=function(){this.removeAttribute('open');this.dispatchEvent(new w.Event('close'))};
+ try{
+  const snapshot=JSON.parse(JSON.stringify(w.BranchHost.getState()));
+  snapshot.nodes.push({id:'source',type:'plan',title:'Current note',body:'New source content',revision:2,x:0,y:0,contexts:[]});
+  snapshot.nodes[0].contexts=[{id:'binding',source:'source',title:'Saved note',body:'Frozen source content',revision:1,enabled:true,inherited:[{source:'upstream',title:'Upstream note',body:'Frozen upstream content',revision:1,enabled:true},{source:'excluded',title:'Excluded note',body:'DO NOT INCLUDE',revision:1,enabled:false}]}];
+  w.BranchHost.receive(snapshot);d.querySelector('[data-context="binding"]').click();
+  let dialog=d.querySelector('#context-inspector');assert.ok(dialog.open);
+  const inputs=dialog.querySelectorAll('.inspector-input:not(.inspector-excluded)');assert.equal(inputs.length,2);assert.match(inputs[0].textContent,/Frozen upstream content/);assert.match(inputs[1].textContent,/Frozen source content/);assert.doesNotMatch(dialog.textContent,/New source content|DO NOT INCLUDE/);assert.match(dialog.textContent,/Source has newer edits/);assert.match(dialog.querySelector('.inspector-tree').textContent,/Excluded/);
+  dialog.querySelector('[data-inspector-refresh]').click();dialog=d.querySelector('#context-inspector');assert.match(dialog.textContent,/New source content/);assert.doesNotMatch(dialog.textContent,/Frozen upstream content/);
+  dialog.querySelector('[data-inspector-close]').click();assert.equal(d.querySelector('#context-inspector'),null);
+ }finally{w.close();}
 });
