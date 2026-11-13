@@ -91,11 +91,11 @@ Deleting a workspace requires owner authorization and an exact name confirmation
 
 Personal libraries also show individually accessible boards from workspaces the user has not joined (or has left). This keeps single-board invitations and retained ownership discoverable without exposing the rest of that workspace. Deploy the updated schema, teams functions, and sharing settings query together before using this frontend. Validation includes owner-only settings/deletion, inherited access removal, ownership preservation, explicit invitation/link preservation, and leaving a workspace.
 
-## Agent cursor feedback
+## Agent activity
 
-Active agents have a named, non-interactive cursor showing their acknowledged Thinking/Searching/Writing activity. Newly received research sources and generated nodes trigger one 280 ms carry gesture per batch toward the rendered source row or card, with a 120 ms release beat. Nodes and context are available immediately; motion never delays or writes backend state. Bursts replace the current gesture, initial snapshots do not replay historical work, and user pointer/scroll input interrupts motion. Completion, stop, deletion, hidden tabs and off-screen agents remove cursor feedback. Reduced motion retains stationary status cursors without carry gestures. This is agent activity visualization, not live human cursor presence.
+Agent Thinking/Searching/Writing status stays on the card; there is no agent cursor overlay. Research sources and generated nodes appear immediately through live board subscriptions.
 
-New agents receive playful two-part names and saturated hues derived from their random UUIDs. Dock, card avatar and cursor share the identity; existing names are preserved and colors stay stable across reloads and collaborators without new backend fields.
+New agents receive playful two-part names and saturated hues derived from their random UUIDs. Dock and card avatar share the identity; existing names are preserved and colors stay stable across reloads and collaborators without new backend fields.
 
 ## Workspace OpenAI keys
 

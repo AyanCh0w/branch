@@ -570,18 +570,9 @@ body.dragging-link #live-wire{animation:none}
 #agent-drag-preview .card{box-shadow:0 5px 18px var(--theme-shadow, #24355020)}
 #agent-drag-preview.invalid{opacity:.5}
 /* Agent presence is quiet between real actions and never captures input. */
-.agent-cursor{position:fixed;left:0;top:0;z-index:18;pointer-events:none;color:var(--theme-muted, #5375b3);contain:layout style;will-change:transform}
-.agent-cursor *{pointer-events:none}
-.agent-cursor>svg{display:block;filter:drop-shadow(0 1px 1px var(--theme-shadow, #24355020))}
-.agent-cursor-label{position:absolute;left:15px;top:19px;padding:3px 7px;border-radius:5px;background:var(--theme-control, #5375b3);color:var(--theme-on-dark, #fff);white-space:nowrap;font-size:10px;line-height:16px;box-shadow:0 1px 2px var(--theme-shadow, #24355015)}
-.agent-cursor-cargo{position:absolute;left:22px;top:-39px;max-width:220px;padding:9px 12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid var(--theme-line, #dce3ef);border-radius:10px;background:var(--theme-surface, #fff);color:var(--theme-ink, #414b5b);font-size:12px;box-shadow:inset 0 1px 0 var(--theme-shine, #fff),0 3px 9px var(--theme-shadow, #24355016)}
-body.account-mode .agent-cursor,body.shared-starting .agent-cursor{display:none}
-@media(prefers-reduced-motion:reduce){.agent-cursor{will-change:auto}}
 .dock-agent-avatar,.agent-avatar{color:var(--agent-color,var(--theme-muted, #5375b3))}
 .agent-identity[data-running="true"] .agent-avatar > i,.agent-progress i{background:var(--agent-color,var(--theme-control, #5375b3))}
 
-.agent-cursor{color:var(--agent-color,var(--theme-muted, #5375b3))}
-.agent-cursor-label{background:var(--agent-ink,var(--theme-control, #5375b3))}
 
 /* Context content sits inside the same padded glass frame as conversations. */
 .card[data-kind]:not([data-kind=thread])>.card-main{padding:4px 6px 8px}

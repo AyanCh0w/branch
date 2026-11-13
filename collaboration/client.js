@@ -226,10 +226,11 @@ async function start(config){
   try{
     credentials=config;client=config.client||new ConvexClient(config.url);writable=config.role!=='viewer';
     const snapshot=await client.query('boards:read',args());receive(snapshot);ready=true;connected=client.connectionState().isWebSocketConnected;
-    const url=new URL(location.href);url.searchParams.set('board',config.boardId);window.history.replaceState(null,'',url);
     subscriptions.push(client.onUpdate('boards:read',args(),receive,error=>{failure=error;document.body.classList.add('shared-starting');status('Access changed · return to your boards');host.notify('Access to this board changed. Return to your boards.');updateLocks();}));
     subscriptions.push(client.onUpdate('collaboration:editors',args(),value=>{rows=value;updateLocks();},()=>{}));
     subscriptions.push(client.subscribeToConnectionState(state=>{connected=state.isWebSocketConnected;status(connected?'Shared · saved':'Reconnecting · Send paused');updateLocks();}));
     document.body.classList.remove('shared-starting');status('Shared · saved');updateLocks();focusEditor(document.activeElement);
+    // URL bookkeeping must never prevent live subscriptions or leave the canvas locked.
+    try{const url=new URL(location.href);if(url.searchParams.get('board')!==String(config.boardId)){url.searchParams.set('board',config.boardId);const browserHistory=window.history;browserHistory.replaceState.call(browserHistory,null,'',url.href);}}catch{}
   }catch(error){status('Shared setup unavailable');host.notify(error.message);}
 }

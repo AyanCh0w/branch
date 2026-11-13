@@ -388,28 +388,16 @@ for(const reduce of [false,true])test(`returning a held agent to the dock absorb
  }finally{dom.window.close();}
 });
 
-for(const reduce of [false,true])test(`agent cursors reflect real arrivals without replay or state delays (reduced motion: ${reduce})`,()=>{
+for(const reduce of [false,true])test(`agent updates arrive without cursor overlays (reduced motion: ${reduce})`,()=>{
  const dom=boot(reduce),w=dom.window,d=w.document;
  try{
-  d.body.classList.remove('account-mode');
-  w.HTMLElement.prototype.getBoundingClientRect=function(){const row=this.matches('[data-source-row]');return {left:row?100:450,top:200,right:row?340:970,bottom:240,width:row?240:520,height:40};};
-  const animations=[];w.HTMLElement.prototype.animate=function(frames,options){const animation={cancelled:false,cancel(){this.cancelled=true;}};if(this.classList.contains('agent-cursor'))animations.push({frames,options,animation});return animation;};
   const agent={id:'researcher',type:'thread',agent:true,agentName:'Atlas',activeRun:'run1',activity:'searching',x:450,y:100,title:'Research',messages:[],contexts:[]};
-  const source=i=>({id:'source'+i,type:'web',title:'Source '+i,url:'https://example.com/'+i,researchSource:true,autoGroup:agent.id,x:100,y:100});
-  const receive=nodes=>w.BranchHost.receive(JSON.parse(JSON.stringify({title:'Research',nodes})));
-  receive([agent,source(0)]);
-  assert.match(d.querySelector('.agent-cursor-label').textContent,/Atlas · Agent · Searching/);assert.equal(animations.length,0,'existing sources must not replay on opening a board');
-  receive([agent,source(0),source(1),source(2)]);
-  assert.equal(w.BranchHost.getState().nodes.length,4,'nodes are immediately available');
-  assert.equal(animations.length,reduce?0:1,'batch uses one motion');
-  if(!reduce){assert.equal(animations[0].options.duration,280);assert.match(d.querySelector('.agent-cursor-cargo').textContent,/Source 2 \+1/);assert.match(animations[0].frames[1].transform,/120px/,'lands on the real collapsed context row');}
-  receive([agent,source(0),source(1),source(2)]);assert.equal(animations.length,reduce?0:1,'stream updates do not replay arrivals');
-  receive([agent,source(0),source(1),source(2),source(3)]);
-  if(!reduce){assert.equal(animations.length,2);assert.ok(animations[0].animation.cancelled);assert.equal(d.querySelectorAll('.agent-cursor-cargo').length,1);}
-  d.body.dispatchEvent(new w.Event('pointerdown',{bubbles:true}));assert.equal(d.querySelector('.agent-cursor-cargo'),null,'user actions interrupt decorative motion');
-  receive([{...agent,activeRun:undefined,activity:undefined},source(0)]);assert.equal(d.querySelector('.agent-cursor'),null,'completion/stop removes cursor');
-  receive([{...agent,activeRun:'run2'},source(0),source(4)]);assert.equal(animations.length,reduce?0:2,'new runs do not replay old arrivals');
-  receive([]);assert.equal(d.querySelector('.agent-cursor'),null,'deletion/navigation cleans up');
+  const source={id:'source',type:'web',title:'Source',url:'https://example.com',researchSource:true,autoGroup:agent.id,x:100,y:100};
+  w.BranchHost.receive({title:'Research',nodes:[agent]});
+  w.BranchHost.receive({title:'Research',nodes:[agent,source]});
+  assert.equal(w.BranchHost.getState().nodes.length,2);
+  assert.ok(d.querySelector('[data-node="researcher"]'));
+  assert.equal(d.querySelector('.agent-cursor'),null);
  }finally{dom.window.close();}
 });
 
