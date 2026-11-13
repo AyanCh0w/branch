@@ -183,12 +183,30 @@ body.account-mode #account-app{background:#fff}
 .a-dashboard-person>.a-profile-actions{flex:0 0 auto}
 @media(max-width:540px){.a-dashboard-person>.a-profile-actions{flex-basis:100%;margin-left:60px}}
 
-.a-workspace-settings{width:600px;background:#fff}
-.a-settings-heading{font-size:14px;font-weight:500;margin:0 0 16px}
-.a-settings-section{border-top:1px solid #eceef1;margin-top:24px;padding-top:22px}
-.a-settings-section .a-muted{font-size:13px;line-height:1.6}
-.a-workspace-settings textarea{resize:vertical;min-height:84px}
-.a-settings-confirm{margin-top:12px;padding:14px;border:1px solid #e5e7eb;border-radius:10px;background:#fafafa;font-size:13px;line-height:1.6}
+/* Workspace settings owns its scrolling body; the heading stays reachable. */
+.a-workspace-settings{width:600px;box-sizing:border-box;max-height:min(800px,calc(100dvh - 32px));padding:0;background:#fff;overflow:hidden}
+.a-workspace-settings[open]{display:flex;flex-direction:column}
+.a-workspace-settings .a-dialog-heading{flex:none;margin:0;padding:20px 24px;border-bottom:1px solid #eceef1}
+.a-workspace-settings .a-dialog-heading h2{font-size:19px;line-height:1.4}
+.a-workspace-settings .a-dialog-heading .a-icon-button{flex:none;margin:0}
+.a-settings-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:24px;scrollbar-gutter:stable}
+.a-settings-heading{font-size:14px;font-weight:500;line-height:1.5;margin:0 0 16px}
+.a-settings-section{border-top:1px solid #eceef1;margin-top:24px;padding-top:24px}
+.a-settings-section .a-muted{font-size:13px;line-height:1.6;margin:0 0 12px}
+.a-workspace-settings .a-field{gap:8px;margin:0 0 16px;line-height:1.5}
+.a-workspace-settings .a-field .a-muted{font-size:inherit;margin:0}
+.a-workspace-settings .a-form-note{margin:12px 0 0;line-height:1.6;color:#7c8189}
+.a-workspace-settings textarea{resize:vertical;min-height:76px}
+.a-workspace-settings .a-settings-members{margin:24px 0 0;gap:20px}
+.a-settings-members>div+div{border-top:1px solid #eceef1;padding-top:20px}
+.a-settings-members .a-member{flex-wrap:wrap;row-gap:8px}
+.a-settings-members .a-member>.a-muted{margin:0;flex:none;font-size:11px}
+.a-settings-members .a-member-details{min-width:80px;overflow-wrap:anywhere}
+.a-settings-members .a-member-details>span{white-space:normal}
+.a-workspace-settings .a-responsibility{padding:12px 0 0 40px}
+.a-workspace-settings .a-responsibility .a-field{margin:0 0 8px}
+.a-workspace-settings .a-settings-confirm{margin:16px 0 0;padding:16px;border:1px solid #e5e7eb;border-radius:10px;background:#fafafa;font-size:13px;line-height:1.6;overflow-wrap:anywhere}
 .a-settings-confirm p{margin:0 0 12px}
-.a-workspace-settings .a-member-details{min-width:0;overflow-wrap:anywhere}
-.a-workspace-settings .a-dialog-heading{margin-bottom:24px}
+.a-workspace-settings .a-delete-actions{flex-wrap:wrap}
+.a-workspace-settings .a-settings-status:empty{display:none}
+@media(max-width:480px){.a-workspace-settings .a-dialog-heading{padding:16px}.a-settings-body{padding:20px 16px}.a-workspace-settings .a-responsibility{padding-left:0}}
