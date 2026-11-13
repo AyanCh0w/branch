@@ -107,14 +107,14 @@ test('delete then Ctrl/Command+Z restores the local card and all context attachm
  }finally{dom.window.close();}
 });
 
-test('agents created on sources have an identity, attached context and goal composer on their card',()=>{
+test('dock agents have an identity and goal composer without item-level launch buttons',()=>{
  const dom=boot(),w=dom.window,d=w.document;
  try{
   w.eval(fs.readFileSync(path.join(root,'auto-layout.js'),'utf8'));
   d.body.classList.remove('account-mode');
-  d.querySelector('[data-create-agent]').click();
+  assert.equal(d.querySelector('[data-create-agent]'),null);d.querySelector('[data-dock="agent"]').click();
   const agent=w.BranchHost.getState().nodes.find(n=>n.agent);
-  assert.ok(agent.agentName);assert.equal(agent.autoGroup,agent.id);assert.equal(agent.contexts[0].source,'chat');
+  assert.ok(agent.agentName);assert.equal(agent.autoGroup,agent.id);assert.equal(agent.contexts.length,0);
   const el=d.querySelector(`[data-node="${agent.id}"]`);
   assert.ok(el.classList.contains('agent-card'));assert.equal(el.classList.contains('compact-chat'),false);
   assert.equal(el.querySelector('[data-prompt]').placeholder,'Give your agent a goal…');
@@ -265,5 +265,141 @@ test('unavailable embeds have a local browser fallback and retry without changin
   assert.equal(d.querySelector('.website-fallback [data-open-browser]').href,'https://example.com/');
   assert.equal(JSON.stringify(w.BranchHost.getState().nodes),before);
   d.querySelector('[data-retry-embed]').click();assert.ok(d.querySelector('.website-viewport iframe'));assert.equal(d.querySelector('.website-fallback'),null);
+ }finally{dom.window.close();}
+});
+test('creation shortcuts use the pointer at any pan/zoom without scrolling, and animate with reduced-motion support',()=>{
+ for(const reduce of [false,true]){
+  const dom=boot(reduce),w=dom.window,d=w.document;
+  try{
+   d.body.classList.remove('account-mode');
+   const animations=[],focuses=[];
+   w.HTMLElement.prototype.animate=function(frames,options){const entry={frames,options,cancelled:false};animations.push(entry);return {cancel(){entry.cancelled=true;}};};
+   const focus=w.HTMLElement.prototype.focus;
+   w.HTMLElement.prototype.focus=function(options){focuses.push(options);return focus.call(this,options);};
+   const board=d.querySelector('#board'),world=d.querySelector('#world');
+   board.dispatchEvent(new w.WheelEvent('wheel',{bubbles:true,cancelable:true,deltaX:370,deltaY:240}));
+   board.dispatchEvent(new w.WheelEvent('wheel',{bubbles:true,cancelable:true,ctrlKey:true,deltaY:150,clientX:400,clientY:300}));
+   const before=world.style.transform;
+   const [,cx,cy,z]=before.match(/translate3d\(([-\d.]+)px,\s*([-\d.]+)px,0\) scale\(([-\d.]+)\)/)||[];
+   assert.ok(z,before);
+   for(const key of ['c','n','s']){
+    board.dispatchEvent(new w.MouseEvent('pointermove',{bubbles:true,clientX:320,clientY:270}));
+    d.body.dispatchEvent(new w.KeyboardEvent('keydown',{key,bubbles:true}));
+    const node=w.BranchHost.getState().nodes.at(-1);
+    assert.ok(Math.abs(node.x-(320-Number(cx))/Number(z))<.01);
+    assert.ok(Math.abs(node.y-(270-65-Number(cy))/Number(z))<.01);
+    assert.equal(world.style.transform,before);
+    assert.equal(focuses.at(-1).preventScroll,true);
+   }
+   assert.equal(animations.length,reduce?0:3);
+   if(!reduce){assert.equal(animations[0].options.duration,180);d.querySelector('.card:last-child').dispatchEvent(new w.MouseEvent('pointerdown',{bubbles:true,button:2}));assert.equal(animations.at(-1).cancelled,true);}
+  }finally{dom.window.close();}
+ }
+});
+test('agent trash control routes through shared deletion',()=>{
+ const dom=boot(),w=dom.window,d=w.document;
+ try{
+  assert.equal(d.querySelector('[data-create-agent]'),null);d.querySelector('[data-dock="agent"]').click();
+  const agent=w.BranchHost.getState().nodes.find(n=>n.agent),deleted=[];
+  w.BoardShared={enabled:true,writable:true,saveState(){},deleteNode:key=>deleted.push(key)};
+  d.querySelector(`[data-node="${agent.id}"] .delete-card`).click();
+  assert.deepEqual(deleted,[agent.id]);
+ }finally{dom.window.close();}
+});
+
+test('selected text drags like a link into an editable note with the same grab offset',()=>{
+ const dom=boot(),w=dom.window,d=w.document;
+ try{
+  d.body.classList.remove('account-mode');w.HTMLElement.prototype.setPointerCapture=()=>{};
+  d.elementFromPoint=()=>d.querySelector('#board');
+  const state=JSON.parse(JSON.stringify(w.BranchHost.getState()));state.nodes[0].messages[0].text='Before [selected words](https://example.com) after';w.BranchHost.receive(state);
+  const link=d.querySelector('[data-message-text] a'),range=d.createRange();range.selectNodeContents(link);
+  const rect={left:200,top:200,right:300,bottom:220,width:100,height:20};
+  w.Range.prototype.getClientRects=()=>[rect];w.Range.prototype.getBoundingClientRect=()=>rect;
+  w.getSelection().addRange(range);d.dispatchEvent(new w.Event('selectionchange'));
+  const pointer=(target,type,x,y)=>target.dispatchEvent(new w.MouseEvent(type,{button:0,clientX:x,clientY:y,bubbles:true,cancelable:true}));
+  pointer(link,'pointerdown',210,210);pointer(d.body,'pointermove',213,210);
+  assert.equal(d.querySelector('#link-ghost'),null,'same seven-pixel threshold as links');
+  pointer(d.body,'pointermove',600,350);
+  const ghost=d.querySelector('#link-ghost');assert.equal(ghost.textContent,'selected words');assert.ok(ghost.classList.contains('excerpt-ghost'));const placement=ghost.style.transform;
+  pointer(d.body,'pointerup',600,350);
+  const branch=w.BranchHost.getState().nodes.find(n=>n.id!=='chat');assert.equal(branch.type,'plan');assert.equal(branch.body,'selected words');assert.ok(d.querySelector(`[data-node="${branch.id}"] .plan-body[contenteditable]`));assert.ok(d.querySelector(`[data-node="${branch.id}"] .nib`));assert.equal(d.querySelector(`[data-node="${branch.id}"]`).style.transform,placement);assert.equal(d.querySelector('#link-ghost'),null);
+  // A cancelled second drag must leave both cards intact.
+  w.getSelection().addRange(range);d.dispatchEvent(new w.Event('selectionchange'));
+  pointer(link,'pointerdown',210,210);pointer(d.body,'pointermove',650,350);
+  d.body.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));pointer(d.body,'pointerup',650,350);
+  assert.equal(w.BranchHost.getState().nodes.length,2);assert.equal(d.querySelector('#link-ghost'),null);
+ }finally{dom.window.close();}
+});
+
+test('Agent dock control creates a ready agent without starting a run and blocks viewers',()=>{
+ const dom=boot(),w=dom.window,d=w.document;
+ try{
+  const button=d.querySelector('[data-dock="agent"]');assert.equal(button.getAttribute('aria-label'),'Agent');
+  button.click();const agent=w.BranchHost.getState().nodes.find(n=>n.agent);
+  assert.ok(agent);assert.equal(agent.type,'thread');assert.equal(agent.contexts.length,0);assert.equal(agent.messages.length,0);assert.ok(agent.agentName);assert.equal(agent.activeRun,undefined);
+  assert.equal(d.activeElement,d.querySelector(`[data-node="${agent.id}"] [data-prompt]`));
+  w.BoardShared={enabled:true,writable:false};button.click();assert.equal(w.BranchHost.getState().nodes.filter(n=>n.agent).length,1);
+ }finally{dom.window.close();}
+});
+
+test('agent dock drags the full node, preserves identity and placement, restocks and cancels cleanly',()=>{
+ const dom=boot(false),w=dom.window,d=w.document;
+ try{
+  d.body.classList.remove('account-mode');w.HTMLElement.prototype.setPointerCapture=()=>{};d.elementFromPoint=()=>d.querySelector('#board');
+  let restocks=0;w.HTMLElement.prototype.animate=function(){if(this.classList.contains('dock-agent-avatar'))restocks++;return{cancel(){}};};
+  const button=d.querySelector('[data-dock="agent"]'),pointer=(target,type,x,y)=>target.dispatchEvent(new w.MouseEvent(type,{button:0,clientX:x,clientY:y,bubbles:true,cancelable:true}));
+  pointer(button,'pointerdown',500,700);pointer(d.body,'pointermove',600,350);
+  const preview=d.querySelector('#agent-drag-preview .agent-card'),agentId=preview.dataset.node,placement=preview.style.transform;
+  assert.ok(preview.querySelector('[data-prompt]'));assert.ok(preview.querySelector('.agent-identity'));assert.equal(w.BranchHost.getState().nodes.length,1);assert.ok(d.querySelector('#creation-dock').classList.contains('agent-in-hand'));
+  pointer(d.body,'pointerup',600,350);
+  assert.equal(d.querySelector('#agent-drag-preview'),null);assert.equal(d.querySelector(`[data-node="${agentId}"]`).style.transform,placement);assert.ok(w.BranchHost.getState().nodes.find(n=>n.id===agentId)?.agent);assert.equal(restocks,1);
+  button.click();assert.equal(w.BranchHost.getState().nodes.length,2,'release click does not duplicate agent');
+  pointer(button,'pointerdown',500,700);pointer(d.body,'pointermove',700,350);assert.notEqual(d.querySelector('#agent-drag-preview .card').dataset.node,agentId);
+  d.body.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));pointer(d.body,'pointerup',700,350);
+  assert.equal(d.querySelector('#agent-drag-preview'),null);assert.equal(w.BranchHost.getState().nodes.length,2);assert.equal(restocks,1);assert.ok(!d.querySelector('#creation-dock').classList.contains('agent-in-hand'));
+ }finally{dom.window.close();}
+});
+
+for(const reduce of [false,true])test(`agent cursors reflect real arrivals without replay or state delays (reduced motion: ${reduce})`,()=>{
+ const dom=boot(reduce),w=dom.window,d=w.document;
+ try{
+  d.body.classList.remove('account-mode');
+  w.HTMLElement.prototype.getBoundingClientRect=function(){const row=this.matches('[data-source-row]');return {left:row?100:450,top:200,right:row?340:970,bottom:240,width:row?240:520,height:40};};
+  const animations=[];w.HTMLElement.prototype.animate=function(frames,options){const animation={cancelled:false,cancel(){this.cancelled=true;}};if(this.classList.contains('agent-cursor'))animations.push({frames,options,animation});return animation;};
+  const agent={id:'researcher',type:'thread',agent:true,agentName:'Atlas',activeRun:'run1',activity:'searching',x:450,y:100,title:'Research',messages:[],contexts:[]};
+  const source=i=>({id:'source'+i,type:'web',title:'Source '+i,url:'https://example.com/'+i,researchSource:true,autoGroup:agent.id,x:100,y:100});
+  const receive=nodes=>w.BranchHost.receive(JSON.parse(JSON.stringify({title:'Research',nodes})));
+  receive([agent,source(0)]);
+  assert.match(d.querySelector('.agent-cursor-label').textContent,/Atlas · Agent · Searching/);assert.equal(animations.length,0,'existing sources must not replay on opening a board');
+  receive([agent,source(0),source(1),source(2)]);
+  assert.equal(w.BranchHost.getState().nodes.length,4,'nodes are immediately available');
+  assert.equal(animations.length,reduce?0:1,'batch uses one motion');
+  if(!reduce){assert.equal(animations[0].options.duration,280);assert.match(d.querySelector('.agent-cursor-cargo').textContent,/Source 2 \+1/);assert.match(animations[0].frames[1].transform,/120px/,'lands on the real collapsed context row');}
+  receive([agent,source(0),source(1),source(2)]);assert.equal(animations.length,reduce?0:1,'stream updates do not replay arrivals');
+  receive([agent,source(0),source(1),source(2),source(3)]);
+  if(!reduce){assert.equal(animations.length,2);assert.ok(animations[0].animation.cancelled);assert.equal(d.querySelectorAll('.agent-cursor-cargo').length,1);}
+  d.body.dispatchEvent(new w.Event('pointerdown',{bubbles:true}));assert.equal(d.querySelector('.agent-cursor-cargo'),null,'user actions interrupt decorative motion');
+  receive([{...agent,activeRun:undefined,activity:undefined},source(0)]);assert.equal(d.querySelector('.agent-cursor'),null,'completion/stop removes cursor');
+  receive([{...agent,activeRun:'run2'},source(0),source(4)]);assert.equal(animations.length,reduce?0:2,'new runs do not replay old arrivals');
+  receive([]);assert.equal(d.querySelector('.agent-cursor'),null,'deletion/navigation cleans up');
+ }finally{dom.window.close();}
+});
+
+test('playful agent identities keep saturated colors across dock, card and shared reload',()=>{
+ const dom=boot(),w=dom.window,d=w.document;
+ try{
+  const avatars=[];w.BranchAvatar=(name,color)=>{avatars.push({name,color});return 'data:image/svg+xml,';};w.dispatchEvent(new w.Event('load'));
+  const dockColor=d.querySelector('[data-dock="agent"]').style.getPropertyValue('--agent-color');
+  d.querySelector('[data-dock="agent"]').click();const agent=w.BranchHost.getState().nodes.find(n=>n.agent);
+  assert.match(agent.agentName,/^\w+ \w+$/);
+  const identity=()=>d.querySelector(`[data-node="${agent.id}"] .agent-identity`);
+  assert.equal(identity().style.getPropertyValue('--agent-color'),dockColor);
+  assert.ok(avatars.some(a=>a.name.includes(agent.id)&&a.color===dockColor));
+  const rgb=dockColor.slice(1).match(/../g).map(v=>parseInt(v,16));assert.ok((Math.max(...rgb)-Math.min(...rgb))/Math.max(...rgb)>.8);
+  const snapshot=JSON.parse(JSON.stringify(w.BranchHost.getState()));w.BranchHost.receive(snapshot);
+  assert.equal(identity().style.getPropertyValue('--agent-color'),dockColor);assert.equal(w.BranchHost.getState().nodes.find(n=>n.id===agent.id).agentName,agent.agentName);
+  w.BranchHost.receive({title:'Colors',nodes:Array.from({length:24},(_,i)=>({...agent,id:'agent-'+i,autoGroup:'agent-'+i}))});
+  const colors=[...d.querySelectorAll('.agent-identity')].map(el=>el.style.getPropertyValue('--agent-color'));assert.ok(new Set(colors).size>15);
  }finally{dom.window.close();}
 });
