@@ -1,0 +1,36 @@
+import {convexTest} from 'convex-test';
+import {it,expect,vi,afterEach} from 'vitest';
+import schema from '../convex/schema';
+import {api} from '../convex/_generated/api';
+import {contextForChat} from '../convex/documents';
+const modules=import.meta.glob('../convex/**/*.ts');
+afterEach(()=>{vi.unstubAllEnvs();vi.useRealTimers();});
+it('shared resolution preserves excerpts, attachments and exclusions exactly',()=>{
+ const base={source:'one',title:'PDF',revision:1,body:'Document',enabled:true,attachment:{kind:'pdf',storageId:'one'}};
+ expect(contextForChat([base,{...base,quote:'a'},{...base,quote:'b'},base])).toHaveLength(3);
+ expect(contextForChat([{...base,enabled:false}])).toEqual([]);
+ expect(contextForChat([base])[0].attachment).toEqual(base.attachment);
+});
+it('files are board-scoped and send freezes real typed attachments with owner billing',async()=>{
+ vi.useFakeTimers();vi.stubEnv('DEV_BRIDGE_SECRET','test');vi.stubEnv('ENABLE_DEVELOPMENT_BRIDGE','true');
+ const t=convexTest(schema,modules);
+ const a=await t.mutation(api.boards.developmentSession,{secret:'test',identityKey:'alice',token:'alice'});
+ const auth={boardId:a.boardId,token:'alice'};
+ const ticket=await t.mutation(api.files.uploadUrl,auth);
+ const storageId=await t.run(ctx=>ctx.storage.store(new Blob(['%PDF-1.7 fixture'],{type:'application/pdf'})));
+ await t.mutation(api.files.finish,{...auth,ticket:ticket.ticket,storageId});
+ expect((await t.query(api.files.read,{...auth,storageId})).mime).toBe('application/pdf');
+ await expect(t.query(api.files.read,{...auth,token:'wrong',storageId})).rejects.toThrow();
+ await expect(t.mutation(api.files.finish,{...auth,ticket:ticket.ticket,storageId})).rejects.toThrow();
+ const other=await t.run(async ctx=>{const boardId=await ctx.db.insert('boards',{title:'Other',ownerId:a.userId,development:true,initialized:true});await ctx.db.insert('boardMembers',{boardId,userId:a.userId,role:'owner'});return boardId;});
+ await expect(t.query(api.files.read,{...auth,boardId:other,storageId})).rejects.toThrow(/not available/);
+ const context={source:'pdf',title:'Report',body:'Report',enabled:true,revision:1,attachment:{kind:'pdf',asset:'legacy-file'}};
+ await t.mutation(api.boards.initialize,{...auth,title:'Test',nodes:[{id:'chat',type:'thread',title:'Chat',draft:'Read the report',contexts:[context],messages:[]}]});
+ await expect(t.mutation(api.chat.send,{...auth,nodeKey:'chat',requestId:'missing',expectedVersion:0})).rejects.toThrow(/unavailable on this device/);
+ await expect(t.mutation(api.chat.send,{...auth,nodeKey:'chat',requestId:'mismatch',expectedVersion:0,localFiles:[{asset:'other-file',storageId}]})).rejects.toThrow(/unavailable on this device/);
+ const runId=await t.mutation(api.chat.send,{...auth,nodeKey:'chat',requestId:'send',expectedVersion:0,localFiles:[{asset:'legacy-file',storageId}]});
+ const run=await t.run(ctx=>ctx.db.get(runId));
+ expect(run!.input.contexts[0].attachment.kind).toBe('pdf');expect(run!.input.contexts[0].attachment.url).toMatch(/^https?:/);expect(run!.billedUserId).toBe(a.userId);
+ await t.mutation(api.boards.patchNodes,{...auth,changes:[{id:'chat',patch:{contexts:[]}}]});
+ expect((await t.run(ctx=>ctx.db.get(runId)))!.input.contexts[0].attachment.url).toBe(run!.input.contexts[0].attachment.url);
+});
