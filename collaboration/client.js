@@ -1,3 +1,4 @@
+import {startCursors} from './cursors';
 import {avatarURL} from '../accounts/avatar';
 import { ConvexClient } from 'convex/browser';
 import * as Y from 'yjs';
@@ -229,6 +230,7 @@ async function start(config){
     subscriptions.push(client.onUpdate('boards:read',args(),receive,error=>{failure=error;document.body.classList.add('shared-starting');status('Access changed · return to your boards');host.notify('Access to this board changed. Return to your boards.');updateLocks();}));
     subscriptions.push(client.onUpdate('collaboration:editors',args(),value=>{rows=value;updateLocks();},()=>{}));
     subscriptions.push(client.subscribeToConnectionState(state=>{connected=state.isWebSocketConnected;status(connected?'Shared · saved':'Reconnecting · Send paused');updateLocks();}));
+    subscriptions.push(startCursors({client,scope:args(),tabId,host}));
     document.body.classList.remove('shared-starting');status('Shared · saved');updateLocks();focusEditor(document.activeElement);
     // URL bookkeeping must never prevent live subscriptions or leave the canvas locked.
     try{const url=new URL(location.href);if(url.searchParams.get('board')!==String(config.boardId)){url.searchParams.set('board',config.boardId);const browserHistory=window.history;browserHistory.replaceState.call(browserHistory,null,'',url.href);}}catch{}

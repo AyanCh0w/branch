@@ -654,3 +654,10 @@ body.dragging-link #live-wire{animation:none}
 .inspector-excluded{opacity:.65}
 #context-inspector .inspector-footer{padding:10px 14px;gap:6px}
 #context-inspector .inspector-footer label,#context-inspector .inspector-footer button{font-size:10px}
+
+/* Human cursor presence sits in canvas coordinates and never intercepts input. */
+.human-cursors{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:9}
+.human-cursor{position:absolute;left:0;top:0;pointer-events:none}
+.human-cursor svg{display:block;filter:drop-shadow(0 1px 1px #0002)}
+.human-cursor span{position:absolute;left:17px;top:22px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 7px;border-radius:5px;background:var(--theme-surface,#fff);border:1px solid currentColor;font-size:11px;line-height:17px;box-shadow:0 1px 3px #0001}
+body.account-mode .human-cursors,body.shared-starting .human-cursors{display:none}

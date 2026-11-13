@@ -1,7 +1,7 @@
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 import * as Y from 'yjs';
-import { access } from './access';
+import { access, accessForUser } from './access';
 import { loadDocument, encodeDocument } from './documents';
 
 export const LEASE_MS = 15000;
@@ -60,5 +60,40 @@ export const updateText = mutation({
     await ctx.db.patch(node._id, { textState: encodeDocument(doc), textVersion: version, updatedBy: userId });
     doc.destroy();
     return { version };
+  },
+});
+
+// Cursor presence is separate from editing leases: viewers can point without locking Send.
+export const cursors = query({
+  args: { token:v.string(), boardId:v.id('boards') },
+  handler: async(ctx,args)=>{
+    const {userId}=await access(ctx,args.token,args.boardId);
+    const rows=await ctx.db.query('cursors').withIndex('board',q=>q.eq('boardId',args.boardId)).collect();
+    const result=[];
+    for(const row of rows){
+      if(row.userId===userId||row.expiresAt<=Date.now())continue;
+      try{await accessForUser(ctx,row.userId,args.boardId);}catch{continue;}
+      const user=await ctx.db.get(row.userId);
+      result.push({tabId:row.tabId,userId:row.userId,x:row.x,y:row.y,expiresAt:row.expiresAt,name:user?.name||'Collaborator',color:user?.color||'#6685cf'});
+    }
+    return result;
+  },
+});
+export const point = mutation({
+  args:{token:v.string(),boardId:v.id('boards'),tabId:v.string(),position:v.union(v.null(),v.object({x:v.number(),y:v.number()}))},
+  handler:async(ctx,args)=>{
+    const {userId}=await access(ctx,args.token,args.boardId);
+    if(!args.tabId||args.tabId.length>100)throw Error('Invalid cursor session');
+    if(args.position&&(!Number.isFinite(args.position.x)||!Number.isFinite(args.position.y)||Math.abs(args.position.x)>1e7||Math.abs(args.position.y)>1e7))throw Error('Invalid cursor position');
+    const rows=await ctx.db.query('cursors').withIndex('board',q=>q.eq('boardId',args.boardId)).collect();
+    let current;
+    for(const row of rows){
+      if(row.expiresAt<=Date.now())await ctx.db.delete(row._id);
+      else if(row.userId===userId&&row.tabId===args.tabId)current=row;
+    }
+    if(!args.position){if(current)await ctx.db.delete(current._id);return;}
+    const patch={...args.position,expiresAt:Date.now()+15000};
+    if(current)await ctx.db.patch(current._id,patch);
+    else await ctx.db.insert('cursors',{boardId:args.boardId,userId,tabId:args.tabId,...patch});
   },
 });
