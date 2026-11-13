@@ -67,6 +67,16 @@ function enqueue(work) {
   queue = next.catch(error => { failure = error; keepRecovery(); status('Sync paused · edits kept on this device'); host.notify(error.message); updateLocks(); });
   return next;
 }
+function forgetDeletedNode(key) {
+  if (pending.has(key)) keepRecovery();
+  pending.delete(key);
+  overlays.delete(key);
+  const item = docs.get(key);
+  item?.undo.destroy();
+  item?.doc.destroy();
+  docs.delete(key);
+  if (active?.key === key) active = null;
+}
 function makeDoc(key, state, epoch) {
   let item = docs.get(key);
   if (!item) {
@@ -129,7 +139,16 @@ async function flush() {
   }
   const updates=[...pending.entries()];pending.clear();
   for(const [key,list]of updates){const item=docs.get(key);if(!item)continue;const update=Y.mergeUpdates(list);const epoch=item.epoch;
-    await enqueue(async()=>{await focusTask;await client.mutation('collaboration:updateText',args({nodeKey:key,update:bytes(update),tabId,epoch}));});
+    await enqueue(async()=>{
+      await focusTask;
+      if (docs.get(key) !== item) return;
+      const result = await client.mutation('collaboration:updateText',args({nodeKey:key,update:bytes(update),tabId,epoch}));
+      if (result?.deleted) {
+        keepRecovery();
+        forgetDeletedNode(key);
+        receive(await client.query('boards:read',args()));
+      }
+    });
   }
   await queue;
   if(failure)throw failure;
@@ -138,7 +157,7 @@ async function flush() {
 function fieldOf(el){return el?.matches?.('[data-prompt]')?'draft':el?.dataset?.edit;}
 function selectionOffset(el){if(el instanceof HTMLTextAreaElement)return [el.selectionStart,el.selectionEnd];const selection=getSelection();if(!selection.rangeCount||!el.contains(selection.anchorNode)||!el.contains(selection.focusNode))return null;const range=document.createRange();range.selectNodeContents(el);range.setEnd(selection.anchorNode,selection.anchorOffset);const a=range.toString().length;range.selectNodeContents(el);range.setEnd(selection.focusNode,selection.focusOffset);return [a,range.toString().length];}
 function caretSnapshot(){const el=document.activeElement,field=fieldOf(el),key=el?.closest?.('.card')?.dataset.node,item=docs.get(key);if(!item||!fields.includes(field))return null;const offsets=selectionOffset(el);if(!offsets)return null;return {key,field,positions:offsets.map(i=>Y.createRelativePositionFromTypeIndex(item.doc.getText(field),i))};}
-function restoreCaret(saved){if(!saved)return;const item=docs.get(saved.key);const el=document.querySelector(`[data-node="${saved.key}"] ${saved.field==='draft'?'[data-prompt]':`[data-edit="${saved.field}"]`}`);if(!el)return;const offsets=saved.positions.map(p=>Y.createAbsolutePositionFromRelativePosition(p,item.doc)?.index||0);el.focus({preventScroll:true});if(el instanceof HTMLTextAreaElement){el.setSelectionRange(...offsets);return;}const point=index=>{const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let leaf,last;while(leaf=walker.nextNode()){last=leaf;if(index<=leaf.length)return [leaf,index];index-=leaf.length;}return last?[last,last.length]:[el,0];};getSelection().setBaseAndExtent(...point(offsets[0]),...point(offsets[1]));}
+function restoreCaret(saved){if(!saved)return;const item=docs.get(saved.key);if(!item)return;const el=document.querySelector(`[data-node="${saved.key}"] ${saved.field==='draft'?'[data-prompt]':`[data-edit="${saved.field}"]`}`);if(!el)return;const offsets=saved.positions.map(p=>Y.createAbsolutePositionFromRelativePosition(p,item.doc)?.index||0);el.focus({preventScroll:true});if(el instanceof HTMLTextAreaElement){el.setSelectionRange(...offsets);return;}const point=index=>{const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let leaf,last;while(leaf=walker.nextNode()){last=leaf;if(index<=leaf.length)return [leaf,index];index-=leaf.length;}return last?[last,last.length]:[el,0];};getSelection().setBaseAndExtent(...point(offsets[0]),...point(offsets[1]));}
 function receive(snapshot){
   if(!snapshot)return;writable=snapshot.role!=='viewer';document.body.classList.toggle('board-viewer',!writable);const caret=caretSnapshot();applying=true;
   try{
@@ -151,6 +170,8 @@ function receive(snapshot){
       nodes.push(data);
     }
     for(const [key,overlay]of overlays)if(!seen.has(key)&&overlay.create)nodes.push(copy(overlay.create));
+    // Retire deleted documents before undo can restore their canonical text.
+    for (const key of docs.keys()) if (!seen.has(key) && !overlays.get(key)?.create) forgetDeletedNode(key);
     host.receive({title:snapshot.title,nodes});lastState=copy(host.getState());restoreCaret(caret);updateLocks();
   }finally{applying=false;}
 }
@@ -171,7 +192,7 @@ function updateLocks(){
     let badge=el.querySelector('.editing-presence');if(people.size){if(!badge){badge=document.createElement('span');badge.className='editing-presence';el.querySelector('.composer-controls')?.prepend(badge);}badge.replaceChildren(...[...people].map(([id,name])=>{const person=editors.find(r=>r.userId===id);const img=document.createElement('img');img.src=avatarURL(name,person?.color);img.alt=name;img.width=22;img.height=22;return img;}));badge.removeAttribute('title');badge.dataset.tooltip=[...people.values()].join(', ');badge.setAttribute('aria-label',badge.dataset.tooltip);}else badge?.remove();
   }
 }
-function focusEditor(el){const field=fieldOf(el),key=el?.closest?.('.card')?.dataset.node;if(!ready||!writable||!key||!fields.includes(field)||applying)return;if(active?.key===key&&active.field===field)return;const next={key,field,expiresAt:0};active=next;updateLocks();focusTask=focusTask.catch(()=>{}).then(async()=>{if(!docs.has(key)){const node=copy(host.getState().nodes.find(n=>n.id===key));await client.mutation('boards:patchNodes',args({changes:[{id:key,create:node}]}));receive(await client.query('boards:read',args()));}await client.mutation('collaboration:focus',args({nodeKey:key,field,tabId})).then(r=>{next.expiresAt=r.expiresAt;});}).catch(error=>{failure=error;host.notify(error.message);updateLocks();});}
+function focusEditor(el){const field=fieldOf(el),key=el?.closest?.('.card')?.dataset.node;if(!ready||!writable||!key||!fields.includes(field)||applying)return;if(active?.key===key&&active.field===field)return;const next={key,field,expiresAt:0};active=next;updateLocks();focusTask=focusTask.catch(()=>{}).then(async()=>{if(active!==next)return;if(!docs.has(key)){const current=host.getState().nodes.find(n=>n.id===key);if(!current){if(active===next)active=null;return;}const node=copy(current);await client.mutation('boards:patchNodes',args({changes:[{id:key,create:node}]}));receive(await client.query('boards:read',args()));}await client.mutation('collaboration:focus',args({nodeKey:key,field,tabId})).then(r=>{if(r.deleted){if(active===next)active=null;}else next.expiresAt=r.expiresAt;});}).catch(error=>{failure=error;host.notify(error.message);updateLocks();});}
 async function blurEditor(el){if(applying||!active)return;const field=fieldOf(el),key=el?.closest?.('.card')?.dataset.node;if(active.key!==key||active.field!==field)return;const old=active;try{await flush();await focusTask;await client.mutation('collaboration:release',args({tabId,nodeKey:old.key,field:old.field}));if(active===old)active=null;updateLocks();}catch{updateLocks();}}
 async function send(key){
   if(!ready||!writable||sending.has(key))return;sending.add(key);updateLocks();try{await flush();updateLocks();if(otherPersonEditing(key))return host.notify('Someone else is editing this node. Send when they finish.');if(!connected||failure)throw Error('Reconnect and sync before sending');sending.add(key);updateLocks();const snapshot=await client.query('boards:read',args());const node=snapshot.nodes.find(n=>n.id===key);if(!node)throw Error('Chat not found');const videoTranscripts=await host.prepareVideoTranscripts(node.contexts||[]);const localFiles=await prepareLocalFiles(node.contexts||[],snapshot.nodes,{cache:uploadedFiles,read:host.readLocalFile,upload:file=>window.BoardShared.uploadFile(file)});await client.mutation('chat:send',args({nodeKey:key,requestId:crypto.randomUUID(),expectedVersion:node.sharedVersion,localFiles,videoTranscripts}));}catch(error){host.notify(typeof error.data==='string'?error.data:error.message);}finally{sending.delete(key);updateLocks();}
@@ -194,7 +215,7 @@ window.BoardShared={connect:start,async disconnect(){await deletionQueue;if(read
 document.addEventListener('keydown',e=>{if(ready&&(e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'&&fields.includes(fieldOf(e.target))){e.preventDefault();e.stopImmediatePropagation();window.BoardShared.undo(e.shiftKey);}},true);
 document.addEventListener('focusin',e=>focusEditor(e.target));
 document.addEventListener('focusout',e=>blurEditor(e.target));
-setInterval(()=>{updateLocks();if(active&&connected){const current=active;focusTask=focusTask.catch(()=>{}).then(async()=>{if(active!==current)return;const result=await client.mutation('collaboration:focus',args({nodeKey:current.key,field:current.field,tabId}));current.expiresAt=result.expiresAt;}).catch(error=>{failure=error;updateLocks();});}},4000);
+setInterval(()=>{updateLocks();if(active&&connected){const current=active;focusTask=focusTask.catch(()=>{}).then(async()=>{if(active!==current)return;const result=await client.mutation('collaboration:focus',args({nodeKey:current.key,field:current.field,tabId}));if(result.deleted){if(active===current)active=null;}else current.expiresAt=result.expiresAt;}).catch(error=>{failure=error;updateLocks();});}},4000);
 document.addEventListener('click',e=>{if(ready&&!writable&&e.target.closest('#cards,#chat-panel')&&!e.target.closest('[data-source-info],[data-context],[data-play-video],.resource,[data-media-credit],.collapse-card,.chat-preview-toggle,.open-chat-panel,[data-close-chat-panel]')){e.preventDefault();e.stopImmediatePropagation();}},true);
 document.addEventListener('submit',e=>{if(ready&&!writable&&e.target.closest('#cards,#chat-panel')){e.preventDefault();e.stopImmediatePropagation();}},true);
 document.addEventListener('click',async e=>{const link=e.target.closest('a[href]');if(!ready||!link||e.defaultPrevented||e.metaKey||e.ctrlKey)return;const target=new URL(link.href,location.href);if(target.origin!==location.origin||target.pathname!=='/')return;e.preventDefault();await window.BoardShared.disconnect();location.assign(target.href);});

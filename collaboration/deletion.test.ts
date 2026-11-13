@@ -58,3 +58,31 @@ it('finishes an in-flight response on the tombstone so restoration does not leav
  const node=(await t.query(api.boards.read,auth)).nodes.find(n=>n.id==='source')!;
  expect(node.messages.at(-1).text).toBe('Completed while deleted');expect(node.activeRun).toBeUndefined();expect(node.activity).toBeUndefined();
 });
+it('ignores late text and focus on a deleted branch without changing its undo snapshot',async()=>{
+ const {t,auth}=await setup();
+ const before=(await t.query(api.boards.read,auth)).nodes.find(n=>n.id==='source')!;
+ const action={...auth,nodeKey:'source',operationId:'late-edit'};
+ await t.mutation(api.boards.deleteNode,action);
+ expect(await t.mutation(api.collaboration.updateText,{...auth,nodeKey:'source',tabId:'late-tab',epoch:0,update:before.sharedTextState})).toEqual({deleted:true,version:before.sharedVersion});
+ expect(await t.mutation(api.collaboration.focus,{...auth,nodeKey:'source',tabId:'late-tab',field:'draft'})).toMatchObject({deleted:true,expiresAt:0});
+ expect(await t.query(api.collaboration.editors,auth)).toHaveLength(0);
+ await t.mutation(api.boards.restoreNode,action);
+ const restored=(await t.query(api.boards.read,auth)).nodes.find(n=>n.id==='source')!;
+ expect(restored.sharedTextState).toEqual(before.sharedTextState);
+ expect(restored.sharedVersion).toBe(before.sharedVersion);
+ await expect(t.mutation(api.collaboration.updateText,{...auth,nodeKey:'missing',tabId:'late-tab',epoch:0,update:before.sharedTextState})).rejects.toThrow('Node not found');
+});
+it('deletes a running agent, stops late research writes, and restores it ready for another goal',async()=>{
+ vi.useFakeTimers();const {t,auth}=await setup();
+ await t.mutation(api.boards.patchNodes,{...auth,changes:[{id:'source',patch:{agent:true,agentName:'Milo'}}]});
+ const runId=await t.mutation(api.chat.send,{...auth,nodeKey:'source',requestId:'agent-run',expectedVersion:0});
+ const action={...auth,nodeKey:'source',operationId:'agent-delete'};
+ await t.mutation(api.boards.deleteNode,action);
+ expect((await t.query(api.boards.read,auth)).nodes.some(n=>n.id==='source')).toBe(false);
+ expect((await t.run(ctx=>ctx.db.get(runId)))!.status).toBe('cancelled');
+ await t.mutation(internal.chat.append,{runId,text:'Late result',done:true,finalText:'Late result'});
+ await t.mutation(api.boards.restoreNode,action);
+ const node=(await t.query(api.boards.read,auth)).nodes.find(n=>n.id==='source')!;
+ expect(node.agent).toBe(true);expect(node.activeRun).toBeUndefined();expect(node.activity).toBeUndefined();expect(node.agentStage).toBe('Stopped');
+ expect(node.messages.at(-1).text).not.toBe('Late result');
+});

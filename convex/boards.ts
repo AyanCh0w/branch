@@ -80,7 +80,16 @@ export const deleteNode = mutation({
       connections.push({ target: target.key, entries: removed });
       await ctx.db.patch(target._id, { data: { ...target.data, contexts: contexts.filter((c: any) => c.source !== node.key) } });
     }
-    await ctx.db.patch(node._id, { deleted: true, updatedBy: userId, deletion: { operationId: args.operationId, userId, connections } });
+    // Stop research atomically with deletion; undo must not revive a cancelled run.
+    const data = { ...node.data };
+    if (data.agent && data.activeRun) {
+      const run = await ctx.db.get(data.activeRun);
+      if (run) await ctx.db.patch(run._id, { status: 'cancelled' });
+      delete data.activeRun;
+      delete data.activity;
+      data.agentStage = 'Stopped';
+    }
+    await ctx.db.patch(node._id, { data, deleted: true, updatedBy: userId, deletion: { operationId: args.operationId, userId, connections } });
     await ctx.db.patch(args.boardId, { updatedAt: Date.now() });
   },
 });

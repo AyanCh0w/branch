@@ -19,7 +19,9 @@ export const focus = mutation({
     const { userId } = await access(ctx, args.token, args.boardId, true);
     if (!['body','draft','title'].includes(args.field)) throw Error('Invalid editor');
     const node = await ctx.db.query('nodes').withIndex('board_key', q => q.eq('boardId', args.boardId).eq('key', args.nodeKey)).unique();
-    if (!node || node.deleted) throw Error('Node not found');
+    if (!node) throw Error('Node not found');
+    // Deletion wins over editor activity already in flight from another tab.
+    if (node.deleted) return { deleted: true, expiresAt: 0, epoch: node.data.draftEpoch || 0 };
     const rows = await ctx.db.query('editors').withIndex('board', q => q.eq('boardId', args.boardId)).collect();
     for (const row of rows) if (row.tabId === args.tabId && row.userId === userId && row.nodeKey === args.nodeKey && row.field === args.field) await ctx.db.delete(row._id);
     const expiresAt = Date.now() + LEASE_MS;
@@ -42,7 +44,9 @@ export const updateText = mutation({
     const { userId } = await access(ctx, args.token, args.boardId, true);
     if (args.update.byteLength > 500000) throw Error('Text update too large');
     const node = await ctx.db.query('nodes').withIndex('board_key', q => q.eq('boardId', args.boardId).eq('key', args.nodeKey)).unique();
-    if (!node || node.deleted) throw Error('Node not found');
+    if (!node) throw Error('Node not found');
+    // A late edit must neither revive the tombstone nor pause the whole board.
+    if (node.deleted) return { deleted: true, version: node.textVersion };
     const doc = loadDocument(node.textState);
     const oldDraft = doc.getText('draft').toString();
     Y.applyUpdate(doc, new Uint8Array(args.update));
