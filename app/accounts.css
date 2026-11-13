@@ -255,3 +255,6 @@ body.account-mode #account-app{background:var(--theme-surface, #fff)}
 .a-board-presence li>span{min-width:0;overflow-wrap:anywhere}
 .a-board-presence small{margin-left:auto;color:var(--theme-muted,#7b8290);font-size:10px;flex:none}
 @media(max-width:600px){.a-board-presence{right:12px;top:64px;width:158px}}
+
+.a-field select{width:100%;padding:10px 12px;border:1px solid var(--theme-line,#e3e4e6);border-radius:6px;background:var(--theme-surface,#fff);color:inherit;font:inherit}
+.a-field select:focus-visible{outline:2px solid var(--theme-accent,#4879f5);outline-offset:2px}

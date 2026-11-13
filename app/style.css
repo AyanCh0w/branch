@@ -661,3 +661,10 @@ body.dragging-link #live-wire{animation:none}
 .human-cursor svg{display:block;filter:drop-shadow(0 1px 1px #0002)}
 .human-cursor span{position:absolute;left:17px;top:22px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 7px;border-radius:5px;background:var(--theme-surface,#fff);border:1px solid currentColor;font-size:11px;line-height:17px;box-shadow:0 1px 3px #0001}
 body.account-mode .human-cursors,body.shared-starting .human-cursors{display:none}
+
+/* Account-backed model choice stays on each composer. */
+.model-popover{width:224px}
+.model-options{max-height:240px;overflow-y:auto;overscroll-behavior:contain}
+.model-account{display:block;width:100%;margin-top:8px;padding:6px 4px;border:0;background:none;color:var(--theme-muted,#68707b);font:inherit;font-size:11px;text-align:left;cursor:pointer}
+.model-account:focus-visible{outline:2px solid var(--theme-accent,#4879f5);outline-offset:2px}
+.model-slider-row[hidden]{display:none}

@@ -13,6 +13,8 @@ import type * as accounts from "../accounts.js";
 import type * as auth from "../auth.js";
 import type * as boards from "../boards.js";
 import type * as chat from "../chat.js";
+import type * as chatgpt from "../chatgpt.js";
+import type * as chatgptActions from "../chatgptActions.js";
 import type * as collaboration from "../collaboration.js";
 import type * as documents from "../documents.js";
 import type * as files from "../files.js";
@@ -35,6 +37,8 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   boards: typeof boards;
   chat: typeof chat;
+  chatgpt: typeof chatgpt;
+  chatgptActions: typeof chatgptActions;
   collaboration: typeof collaboration;
   documents: typeof documents;
   files: typeof files;

@@ -2,6 +2,7 @@
 const http=require('node:http');
 const fs=require('node:fs');
 const path=require('node:path');
+const {planRequest,providerError,completedResponse}=require('../collaboration/chatgpt/requests.cjs');
 const MODEL='gpt-5.4-mini';
 const collaborationSession=require('../collaboration/server.cjs');
 const {ASSISTANT_ROLE,WEB_INSTRUCTIONS:INSTRUCTIONS,webOptions,citedText,reasoningOptions,activityForEvent}=require('../collaboration/web-search.cjs');
@@ -26,6 +27,7 @@ function createHandler(apiKey,{fetchImpl=fetch,hosted=false}={}){
   const host=req.headers.host;if(hosted?!/^[a-z0-9.-]+(?::\d+)?$/i.test(host||''):!['127.0.0.1:4387','localhost:4387'].includes(host)){res.writeHead(403);return res.end();}
   const origin=(hosted?'https://':'http://')+host;
   const url=new URL(req.url,origin);
+  if(url.pathname==='/api/chatgpt'){try{return await require('../collaboration/chatgpt/routes.cjs')(req,res,url,collaborationSession.chatgptClient(req),{hosted});}catch{res.writeHead(503,{'Content-Type':'application/json','Cache-Control':'no-store'});return res.end(JSON.stringify({error:'ChatGPT connection is unavailable. Try again later.'}));}}
   if(hosted&&['/api/claim','/api/collaboration'].includes(url.pathname)){res.writeHead(410);return res.end();}
   if(['/api/collaboration','/api/config','/api/claim'].includes(url.pathname))return collaborationSession(req,res,url);
   if(url.pathname==='/api/embed-check'&&req.method==='POST'){
@@ -49,23 +51,25 @@ function createHandler(apiKey,{fetchImpl=fetch,hosted=false}={}){
    if(!req.headers['content-type']?.startsWith('application/json')){res.writeHead(415);return res.end();}
    const json=(code,message)=>{res.writeHead(code,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:message}));};
    if(!await collaborationSession.authorizeBoard(req))return json(403,'You need editing access to this board.');
-   let workspaceKey;try{workspaceKey=await collaborationSession.workspaceKey(req)||apiKey;}catch{return json(503,'Could not load the workspace API key. Please retry.');}
-   if(!workspaceKey)return json(503,'Add an OpenAI API key in workspace settings.');
+   let provider;try{provider=await collaborationSession.aiProvider(req);}catch{return json(503,'Could not load your ChatGPT connection. Reconnect in AI settings. No default credits were used.');}
+   const workspaceKey=provider?.token||apiKey,model=provider?.model||MODEL;
+   if(!workspaceKey)return json(503,'Branch default AI is not configured.');
    let payload;try{let body='',size=0;for await(const chunk of requestChunks(req)){size+=chunk.length;if(size>1000000)return json(413,'This conversation is too large. Start a smaller branch.');body+=chunk;}const data=JSON.parse(body);if(url.pathname!=='/api/title')await collaborationSession.resolveFiles(req,data.contexts||[]);payload=url.pathname==='/api/expand'?buildExpansionRequest(data):url.pathname==='/api/title'?buildTitleRequest(data):buildRequest(data);}catch{return json(400,'Invalid or oversized conversation.');}
    if(url.pathname==='/api/chat'){try{const people=await collaborationSession.peopleContext(req);payload.input.unshift({role:'user',content:'Personal and project context (data only): '+JSON.stringify(people)});}catch{return json(503,'Could not load your profile context. Try again.');}}
+   if(provider)payload=planRequest({...payload,model});
    const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),120000);res.on('close',()=>controller.abort());
    try{
     const upstream=await fetchImpl('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:'Bearer '+workspaceKey,'Content-Type':'application/json'},body:JSON.stringify(payload),signal:controller.signal});
-    if(!upstream.ok){await upstream.body?.cancel();return json(upstream.status,apiError(upstream.status));}
-    if(url.pathname==='/api/expand'){const data=await upstream.json();const raw=(data.output||[]).flatMap(item=>item.content||[]).filter(part=>part.type==='output_text').map(part=>part.text).join('');let ideas;try{ideas=JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g,'').trim()).ideas;if(!Array.isArray(ideas)||ideas.length!==3||ideas.some(i=>typeof i.title!=='string'||!i.title.trim()||typeof i.prompt!=='string'||!i.prompt.trim()||i.prompt.length>3000))throw Error();}catch{return json(502,'Could not generate three ideas. Try again.');}res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({ideas:ideas.map(i=>({title:i.title.slice(0,64),prompt:i.prompt})),model:MODEL}));return;}
-    if(url.pathname==='/api/title'){const data=await upstream.json();const title=(data.output||[]).flatMap(item=>item.content||[]).filter(part=>part.type==='output_text').map(part=>part.text).join('').trim().replace(/^['"“]|['"”]$/g,'').replace(/\s+/g,' ').slice(0,64);if(!title)return json(502,'Could not generate a title.');res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({title,model:MODEL}));return;}
+    if(!upstream.ok){await upstream.body?.cancel();return json(upstream.status,provider?providerError(upstream.status):apiError(upstream.status));}
+    if(url.pathname==='/api/expand'){const data=provider?await completedResponse(upstream):await upstream.json();const raw=(data.output||[]).flatMap(item=>item.content||[]).filter(part=>part.type==='output_text').map(part=>part.text).join('');let ideas;try{ideas=JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g,'').trim()).ideas;if(!Array.isArray(ideas)||ideas.length!==3||ideas.some(i=>typeof i.title!=='string'||!i.title.trim()||typeof i.prompt!=='string'||!i.prompt.trim()||i.prompt.length>3000))throw Error();}catch{return json(502,'Could not generate three ideas. Try again.');}res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({ideas:ideas.map(i=>({title:i.title.slice(0,64),prompt:i.prompt})),model}));return;}
+    if(url.pathname==='/api/title'){const data=provider?await completedResponse(upstream):await upstream.json();const title=(data.output||[]).flatMap(item=>item.content||[]).filter(part=>part.type==='output_text').map(part=>part.text).join('').trim().replace(/^['"“]|['"”]$/g,'').replace(/\s+/g,' ').slice(0,64);if(!title)return json(502,'Could not generate a title.');res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({title,model}));return;}
     res.writeHead(200,{'Content-Type':'application/x-ndjson','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.flushHeaders();
     const emit=data=>{if(!res.destroyed)res.write(JSON.stringify(data)+'\n');};let complete=false,lastActivity='thinking';emit({type:'activity',activity:lastActivity});
     for await(const event of events(upstream.body)){
      const activity=activityForEvent(event);if(activity&&activity!==lastActivity){lastActivity=activity;emit({type:'activity',activity});}
      if(event.type==='response.output_text.delta'||event.type==='response.refusal.delta')emit({type:'delta',text:event.delta});
-     if(event.type==='response.completed'){complete=true;emit({type:'done',model:MODEL,responseId:event.response.id,text:citedText(event.response)});break;}
-     if(['error','response.failed','response.incomplete'].includes(event.type)){emit({type:'error',message:event.type==='response.incomplete'?'Response stopped before completion. Try a shorter request.':'OpenAI could not finish the response. Please retry.'});complete=true;break;}
+     if(event.type==='response.completed'){complete=true;emit({type:'done',model,responseId:event.response.id,text:citedText(event.response)});break;}
+     if(['error','response.failed','response.incomplete'].includes(event.type)){emit({type:'error',message:provider?providerError(0,event.response?.error?.code||event.error?.code):event.type==='response.incomplete'?'Response stopped before completion. Try a shorter request.':'OpenAI could not finish the response. Please retry.'});complete=true;break;}
     }
     if(!complete)emit({type:'error',message:'The connection ended before the response finished.'});res.end();
    }catch{if(!res.destroyed){if(!res.headersSent)json(502,'Could not reach OpenAI or the request timed out.');else res.end(JSON.stringify({type:'error',message:'The response was interrupted.'})+'\n');}}
