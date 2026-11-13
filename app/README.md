@@ -5,7 +5,7 @@ Shared boards now use Convex and Yjs. See [collaboration setup and boundaries](.
 ## Run
 
 ```sh
-node ux-prototype/server.cjs
+node app/server.cjs
 ```
 
 Open http://127.0.0.1:4387. Run from the repository root. Node 22+ is required. The server reads `OPENAI_API_KEY` from the environment or the root `.env.local` file (excluded from Git). Keep that file private. The static server exposes only the app's explicitly allowed browser assets.
@@ -34,9 +34,9 @@ Verified with a real model request using an attached project code, plus a browse
 ## Validation
 
 ```sh
-node --check ux-prototype/app.js
-node --check ux-prototype/server.cjs
-node --test ux-prototype/tests/*.test.cjs
+node --check app/app.js
+node --check app/server.cjs
+node --test app/tests/*.test.cjs
 ```
 
 Tests cover immutable upstream context, sibling isolation, message cutoffs, excerpt/prompt branching, safe URL parsing, hidden-port geometry, fixed-model request construction, and streaming event parsing.

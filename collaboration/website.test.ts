@@ -5,7 +5,7 @@ import * as Y from 'yjs';
 import schema from '../convex/schema';
 import {api,internal} from '../convex/_generated/api';
 import {loadDocument} from '../convex/documents';
-const {snapshotNode}=createRequire(import.meta.url)('../ux-prototype/context.js');
+const {snapshotNode}=createRequire(import.meta.url)('../app/context.js');
 const modules=import.meta.glob('../convex/**/*.ts');
 afterEach(()=>{vi.unstubAllEnvs();vi.useRealTimers();});
 it('perspective notes persist through shared editing and enter a frozen AI run',async()=>{

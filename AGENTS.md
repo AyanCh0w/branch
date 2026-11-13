@@ -40,7 +40,7 @@
 
 - Context-source entries inside chats are inspection-only. No branching nibs or drag gestures in that list; branch from the source node or message itself.
 
-- OpenAI integration: only gpt-5.4-mini, server-side Responses API. Never expose or print credentials. Root .env.local is private and ignored by Git. Start with node ux-prototype/server.cjs on 127.0.0.1:4387. No model fallback.
+- OpenAI integration: only gpt-5.4-mini, server-side Responses API. Never expose or print credentials. Root .env.local is private and ignored by Git. Start with node app/server.cjs on 127.0.0.1:4387. No model fallback.
 
 - Incoming context lines terminate at a blue nib outside the left edge of the destination node. Show the input nib while targeting a node and persist it while context is attached.
 

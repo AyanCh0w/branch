@@ -18,5 +18,5 @@ export function initialDocument(data: any) {
   const state = encodeDocument(doc); doc.destroy(); return state;
 }
 // One resolver for local and shared sends: preserve distinct excerpts and frozen attachments.
-import { resolveContext } from '../ux-prototype/context.js';
+import { resolveContext } from '../app/context.js';
 export function contextForChat(contexts: any[]) { return resolveContext(contexts); }

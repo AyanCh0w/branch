@@ -31,9 +31,9 @@ The tests include local HTTP server checks, which require permission to listen o
 
 ## Project layout
 
-- `ux-prototype/`: canvas, landing page, local server, media viewers, assets, and browser-oriented tests.
+- `app/`: canvas, landing page, local server, media viewers, assets, and browser-oriented tests.
 - `accounts/`: React accounts, board library, sharing, and workspace UI.
 - `convex/`: authenticated backend, storage, shared documents, and AI runs.
 - `collaboration/`: Yjs client integration, context processing, research helpers, and backend tests.
 
-See [shared-board architecture and limitations](collaboration/README.md) and [canvas interactions](ux-prototype/README.md) for details. Email recovery and billing are not implemented.
+See [shared-board architecture and limitations](collaboration/README.md) and [canvas interactions](app/README.md) for details. Email recovery and billing are not implemented.

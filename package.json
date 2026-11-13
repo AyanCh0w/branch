@@ -4,10 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "esbuild accounts/app.jsx --bundle --format=iife --define:process.env.NODE_ENV='\"production\"' --outfile=ux-prototype/accounts.bundle.js && esbuild ux-prototype/markdown-entry.js --bundle --format=iife --outfile=ux-prototype/markdown.bundle.js && node ux-prototype/build-math.cjs && node ux-prototype/build-pdf.cjs",
-    "dev": "node ux-prototype/server.cjs",
+    "build": "esbuild accounts/app.jsx --bundle --format=iife --define:process.env.NODE_ENV='\"production\"' --outfile=app/accounts.bundle.js && esbuild app/markdown-entry.js --bundle --format=iife --outfile=app/markdown.bundle.js && node app/build-math.cjs && node app/build-pdf.cjs",
+    "dev": "node app/server.cjs",
     "convex:dev": "convex dev",
-    "test": "node --test ux-prototype/tests/*.test.cjs && vitest run",
+    "test": "node --test app/tests/*.test.cjs && vitest run",
     "typecheck": "tsc --noEmit -p convex"
   },
   "keywords": [],

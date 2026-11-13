@@ -5,15 +5,15 @@
 
 node_modules/
 .convex/
-ux-prototype/collaboration.bundle.js
+app/collaboration.bundle.js
 
-ux-prototype/accounts.bundle.js
+app/accounts.bundle.js
 
-ux-prototype/pdfjs/
+app/pdfjs/
 
 # Reproducible browser assets from npm run build
-ux-prototype/markdown.bundle.js
-ux-prototype/katex/
+app/markdown.bundle.js
+app/katex/
 
 .DS_Store
 coverage/

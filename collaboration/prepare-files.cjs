@@ -1,4 +1,4 @@
-const {resolveContext}=require('../ux-prototype/context.js');
+const {resolveContext}=require('../app/context.js');
 
 // Upload only the bytes named by the frozen snapshot. A newer source may have
 // different content, so its storage ID is reusable only for the same asset.
