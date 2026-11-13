@@ -16,6 +16,18 @@ window.createReactiveGrid = function createReactiveGrid(board) {
   let camera = { x: 0, y: 0, z: 1 }, bounds = board.getBoundingClientRect();
   let pointer = null, origin = { x: 0, y: 0 }, dots = new Map();
   let frame = 0, last = 0, dpr = 0;
+  let background, dotColor, dotOpacity;
+  function readPalette() {
+    background = getComputedStyle(board).backgroundColor;
+    const style = getComputedStyle(board.querySelector('#grid-dot'));
+    dotColor = style.fill;
+    dotOpacity = Number(style.fillOpacity);
+  }
+  readPalette();
+  window.addEventListener('branch-appearance', () => {
+    readPalette();
+    if (!canvas.hidden) wake();
+  });
 
   function reset() {
     cancelAnimationFrame(frame);
@@ -40,7 +52,8 @@ window.createReactiveGrid = function createReactiveGrid(board) {
     const ox = camera.x % step + step / 2, oy = camera.y % step + step / 2;
     const next = new Map();
     let moving = false;
-    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(0, 0, size, size);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = background; ctx.fillRect(0, 0, size, size);
     ctx.beginPath();
     // Include edge dots, so the patch meets the underlying SVG without seams.
     for (let col = Math.floor((origin.x - ox - 8) / step); col <= Math.ceil((origin.x + size - ox + 8) / step); col++) {
@@ -72,7 +85,8 @@ window.createReactiveGrid = function createReactiveGrid(board) {
       }
     }
     dots = next;
-    ctx.fillStyle = 'rgba(152,155,159,.5)'; ctx.fill();
+    ctx.globalAlpha = dotOpacity;
+    ctx.fillStyle = dotColor; ctx.fill();
     canvas.hidden = false;
     if (moving) frame = requestAnimationFrame(draw);
     else if (!pointer) reset();
