@@ -454,16 +454,16 @@ test('late blocked results cannot replace a retried frame',async()=>{
  }finally{w.close();}
 });
 
-test('zoom overview uses the 40% threshold and whole-card movement preserves chat content',()=>{
+test('zoom overview uses the 25% threshold and whole-card movement preserves chat content',()=>{
  const dom=boot(),w=dom.window,d=w.document;
  try{
   w.HTMLElement.prototype.setPointerCapture=()=>{};
   const card=d.querySelector('[data-node="chat"]'),before=JSON.parse(JSON.stringify(w.BranchHost.getState().nodes[0]));
-  const pinch=factor=>d.querySelector('#board').dispatchEvent(new w.WheelEvent('wheel',{bubbles:true,cancelable:true,ctrlKey:true,deltaY:-Math.log(factor)/.008,clientX:300,clientY:250}));pinch(.41);assert.equal(d.querySelector('#world').classList.contains('zoomed-out'),false);
-  pinch(.3/.41);assert.equal(d.querySelector('#world').classList.contains('zoomed-out'),true);
+  const pinch=factor=>d.querySelector('#board').dispatchEvent(new w.WheelEvent('wheel',{bubbles:true,cancelable:true,ctrlKey:true,deltaY:-Math.log(factor)/.008,clientX:300,clientY:250}));pinch(.25);assert.equal(d.querySelector('#world').classList.contains('zoomed-out'),false);
+  pinch(.2/.25);assert.equal(d.querySelector('#world').classList.contains('zoomed-out'),true);
   assert.equal(card.querySelector('.overview-type').textContent,'Chat');assert.equal(card.querySelector('.overview-label strong').textContent,'Test chat');
   const pointer=(target,type,x,y)=>target.dispatchEvent(new w.MouseEvent(type,{bubbles:true,cancelable:true,button:0,clientX:x,clientY:y}));
-  pointer(card,'pointerdown',100,100);pointer(card,'pointermove',130,115);pointer(card,'pointerup',130,115);
+  pointer(card,'pointerdown',100,100);pointer(card,'pointermove',120,110);pointer(card,'pointerup',120,110);
   let moved=w.BranchHost.getState().nodes[0];assert.ok(Math.abs(moved.x-before.x-100)<.001);assert.ok(Math.abs(moved.y-before.y-50)<.001);
   card.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));assert.ok(Math.abs(w.BranchHost.getState().nodes[0].x-before.x-120)<.001);
   d.querySelector('#zoom').click();assert.equal(d.querySelector('#world').classList.contains('zoomed-out'),false);
