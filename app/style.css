@@ -588,7 +588,7 @@ body.dragging-link #live-wire{animation:none}
 /* Top-edge move target: generous hit area, compact visible grip. */
 .card>.title-grip{position:absolute;left:50%;top:-26px;transform:translateX(-50%);z-index:12;width:112px;height:44px;margin:0;padding:0;border:0;border-radius:12px;background:transparent;box-shadow:none;backdrop-filter:none;color:var(--theme-muted, #858b94);cursor:grab;touch-action:none;user-select:none}
 .card>.title-grip:hover,.card>.title-grip:active{background:transparent}
-.card>.title-grip>.grip-dots{width:76px;height:28px;border:1px solid var(--theme-line, #dce0e5);border-radius:999px;background:color-mix(in srgb, var(--theme-surface, #ffffff) 85.88%, transparent);box-shadow:inset 0 1px 0 var(--theme-shine, #fff),0 2px 4px var(--theme-shadow, #25304712);backdrop-filter:blur(8px);opacity:0;transition:opacity 120ms ease-out;pointer-events:none}
+.card>.title-grip>.grip-dots{width:76px;height:28px;border:1px solid var(--theme-line, #dce0e5);border-radius:999px;background:color-mix(in srgb, var(--theme-surface, #ffffff) 85.88%, transparent);box-shadow:inset 0 1px 0 var(--theme-shine, #fff),0 2px 4px var(--theme-shadow, #25304712);backdrop-filter:blur(8px);opacity:0;transition:opacity 120ms ease-out,transform 90ms cubic-bezier(.2,.8,.2,1);pointer-events:none}
 .card>.title-grip:hover>.grip-dots,.card>.title-grip:focus-visible>.grip-dots,.card.dragging>.title-grip>.grip-dots{opacity:1}
 .card>.title-grip:active,.card.dragging>.title-grip{cursor:grabbing}
 @media(hover:none){.card>.title-grip>.grip-dots{opacity:1}}

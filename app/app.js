@@ -462,6 +462,28 @@ $('#board').addEventListener('drop',e=>{if(window.BoardShared?.enabled&&!window.
 
 function addContextNode(chat){const note=newCard('plan',freePosition(chat.x-440,chat.y,380));note.title='Context';note.contextFor=chat.id;chat.contexts.push(contextSnapshot(note));refreshCard(note);refreshCard(chat);const rect=cardEl(note.id).getBoundingClientRect();if(rect.left<20)camera.x+=20-rect.left;else if(rect.right>innerWidth-20)camera.x-=rect.right-innerWidth+20;if(rect.top<115)camera.y+=115-rect.top;else if(rect.bottom>innerHeight-90)camera.y-=Math.min(rect.top-115,rect.bottom-innerHeight+90);applyCamera();save();cardEl(note.id).querySelector('.plan-body').focus({preventScroll:true});}
 function syncDraftContext(note){if(!note.contextFor)return;const chat=nodeById(note.contextFor),binding=chat?.contexts?.find(c=>c.source===note.id);if(!binding)return;const bindingId=binding.id,enabled=binding.enabled;Object.assign(binding,contextSnapshot(note),{id:bindingId,enabled});chat.revision++;refreshCard(chat);}
+// Move only the visible capsule; its hitbox stays stationary and reliable.
+let hoveredMoveGrip=null;
+function resetMoveGrip(){hoveredMoveGrip?.querySelector('.grip-dots')?.style.removeProperty('transform');hoveredMoveGrip=null;}
+function followMoveGrip(e){
+ if(gesture)return;
+ const grip=e.target.closest?.('#cards .card>.title-grip');
+ if(hoveredMoveGrip!==grip)resetMoveGrip();
+ if(!grip||e.pointerType==='touch'||reduced.matches)return;
+ const rect=grip.getBoundingClientRect();
+ if(!rect.width||!rect.height)return;
+ if(e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom){resetMoveGrip();return;}
+ hoveredMoveGrip=grip;
+ const x=(e.clientX-rect.left-rect.width/2)/camera.z,y=(e.clientY-rect.top-rect.height/2)/camera.z;
+ grip.querySelector('.grip-dots').style.transform=`translate3d(${x}px,${y}px,0)`;
+}
+document.addEventListener('pointerover',followMoveGrip);
+document.addEventListener('pointermove',followMoveGrip);
+document.addEventListener('pointerup',followMoveGrip);
+document.addEventListener('pointerout',e=>{if(!gesture&&hoveredMoveGrip&&!hoveredMoveGrip.contains(e.relatedTarget))resetMoveGrip();});
+document.addEventListener('pointercancel',resetMoveGrip);
+window.addEventListener('blur',resetMoveGrip);
+reduced.addEventListener('change',resetMoveGrip);
 const branchHint=document.createElement('div');branchHint.id='branch-hint';branchHint.textContent='Create branch';branchHint.hidden=true;branchHint.setAttribute('aria-hidden','true');document.body.append(branchHint);
 document.addEventListener('pointermove',e=>{const nib=e.target.closest('.nib,[data-branch-point],[data-context-port]');branchHint.hidden=!nib||!!gesture;if(!branchHint.hidden){branchHint.style.left=Math.min(innerWidth-110,e.clientX+15)+'px';branchHint.style.top=Math.min(innerHeight-35,e.clientY+18)+'px';}const selected=getSelection();$$('.selection-draggable').forEach(el=>el.classList.remove('selection-draggable'));if(!gesture&&selection&&selected.rangeCount){const inside=[...selected.getRangeAt(0).getClientRects()].some(r=>e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom);if(inside)e.target.closest('p,li,pre,[contenteditable],[data-message-text],.file-text')?.classList.add('selection-draggable');}});
 document.addEventListener('pointerdown',()=>{branchHint.hidden=true;});
