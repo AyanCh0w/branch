@@ -4,6 +4,29 @@ import { v } from 'convex/values';
 export default defineSchema({
   chatgptConnections: defineTable({userId:v.id('users'),ciphertext:v.string(),subject:v.string(),clientId:v.string(),label:v.string(),models:v.array(v.object({slug:v.string(),name:v.string()})),selectedModel:v.string(),expiresAt:v.number(),revision:v.number(),refreshLease:v.optional(v.string()),refreshUntil:v.optional(v.number())}).index('user',['userId']),
   chatgptTransactions: defineTable({userId:v.id('users'),consumed:v.optional(v.boolean()),stateHash:v.string(),browserHash:v.string(),ciphertext:v.string(),expiresAt:v.number(),connectionId:v.optional(v.id('chatgptConnections'))}).index('state',['stateHash']).index('user',['userId']),
+  chatgptCodes: defineTable({
+    userId: v.id('users'), boardId: v.id('boards'), codeHash: v.string(), challenge: v.string(), resource: v.string(), expiresAt: v.number(),
+  }).index('code', ['codeHash']).index('user_board', ['userId', 'boardId']),
+  chatgptGrants: defineTable({
+    userId: v.id('users'), boardId: v.id('boards'), resource: v.string(), accessHash: v.string(), refreshHash: v.string(),
+    accessUntil: v.number(), refreshUntil: v.number(),
+  }).index('access', ['accessHash']).index('refresh', ['refreshHash']).index('user_board', ['userId', 'boardId']),
+  chatgptThreads: defineTable({
+    boardId: v.id('boards'), userId: v.id('users'), conversationId: v.string(), nodeKey: v.string(),
+  }).index('conversation', ['boardId', 'userId', 'conversationId']).index('card', ['boardId', 'nodeKey']),
+  chatgptUpdates: defineTable({
+    threadId: v.id('chatgptThreads'), updateId: v.string(), prompt: v.optional(v.string()), result: v.string(),
+  }).index('thread', ['threadId']).index('update', ['threadId', 'updateId']),
+  codingConnections: defineTable({ boardId: v.id('boards'), userId: v.id('users'), keyHash: v.string() })
+    .index('board_user', ['boardId', 'userId']).index('key', ['keyHash']),
+  codingHandoffs: defineTable({
+    boardId: v.id('boards'), userId: v.id('users'), nodeId: v.id('nodes'), nodeKey: v.string(), expiresAt: v.number(),
+    content: v.object({
+      title: v.string(), text: v.string(), fileOmitted: v.boolean(),
+      sources: v.array(v.object({ title: v.string(), text: v.string(), quote: v.string(), fileOmitted: v.boolean() })),
+    }),
+    result: v.optional(v.string()),
+  }).index('board_user', ['boardId', 'userId']).index('node_user', ['nodeId', 'userId']),
   workspaceKeys: defineTable({scope:v.string(),ciphertext:v.string(),suffix:v.string()}).index('scope',['scope']),
   fileUploads: defineTable({boardId:v.id('boards'),userId:v.id('users'),storageId:v.optional(v.id('_storage'))}).index('storage',['storageId']),
   users: defineTable({ identityKey: v.optional(v.string()), name: v.string(), color: v.optional(v.string()), background: v.optional(v.string()), githubLogin: v.optional(v.string()), kind: v.union(v.literal('development'), v.literal('account'), v.literal('guest')) }).index('identity', ['identityKey']),
@@ -14,7 +37,7 @@ export default defineSchema({
   boardMembers: defineTable({ boardId: v.id('boards'), userId: v.id('users'), role: v.union(v.literal('owner'), v.literal('editor'), v.literal('viewer')), responsibility: v.optional(v.string()) }).index('board_user', ['boardId', 'userId']).index('user',['userId']),
   projectResponsibilities: defineTable({boardId:v.id('boards'),userId:v.id('users'),responsibility:v.string()}).index('board_user',['boardId','userId']),
   sessions: defineTable({ tokenHash: v.string(), userId: v.id('users'), expiresAt: v.number() }).index('token', ['tokenHash']),
-  nodes: defineTable({ boardId: v.id('boards'), key: v.string(), data: v.any(), textState: v.bytes(), textVersion: v.number(), createdBy: v.id('users'), updatedBy: v.id('users'), deleted: v.boolean(), deletion: v.optional(v.object({ operationId: v.string(), userId: v.id('users'), connections: v.array(v.any()) })) }).index('board_key', ['boardId', 'key']),
+  nodes: defineTable({ boardId: v.id('boards'), key: v.string(), data: v.any(), textState: v.bytes(), textVersion: v.number(), createdBy: v.id('users'), updatedBy: v.id('users'), deleted: v.boolean(), chatgptSynced: v.optional(v.boolean()), chatgptLatestUpdate: v.optional(v.number()), codingResult: v.optional(v.object({ handoffId: v.id('codingHandoffs'), text: v.string() })), deletion: v.optional(v.object({ operationId: v.string(), userId: v.id('users'), connections: v.array(v.any()) })) }).index('board_key', ['boardId', 'key']),
   boardPresence: defineTable({boardId:v.id('boards'),userId:v.id('users'),tabId:v.string(),expiresAt:v.number()}).index('board',['boardId']),
   cursors: defineTable({boardId:v.id('boards'),userId:v.id('users'),tabId:v.string(),x:v.number(),y:v.number(),expiresAt:v.number()}).index('board',['boardId']),
   editors: defineTable({ boardId: v.id('boards'), nodeKey: v.string(), field: v.string(), tabId: v.string(), userId: v.id('users'), expiresAt: v.number() }).index('board', ['boardId']).index('node', ['boardId', 'nodeKey']),
