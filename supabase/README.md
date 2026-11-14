@@ -18,10 +18,19 @@ editor leases and presence were intentionally omitted; sign in again or reopen
 an invitation on the new host. The old Convex deployment remains intact and is
 not continuously synchronized with Supabase.
 
-The deployed runtime passed 204 automated tests plus hosted Auth, access control,
+The deployed runtime passed 211 automated tests plus hosted Auth, access control,
 Storage, Realtime, concurrent editing, queue, share-preview and browser persistence
-checks. Real AI generation still requires a configured provider; importing old
-messages does not configure an API key.
+checks. The existing Convex OpenAI key was transferred, with explicit owner
+approval, into the Cloudflare Worker's encrypted secrets. A real GPT-5.4 mini
+response completed through the hosted queue and remained after a browser reload.
+The temporary credential transfer file was deleted. No provider secret is in Git.
+
+The final audit also corrected sign-in for imported usernames containing an email
+address or space, while preserving the stricter new-account naming policy, and
+fixed the external MCP launcher's remaining Convex client reference. Hosted
+ChatGPT-plan connections remain deliberately disabled pending their separate
+provider approval/configuration. Billing and email account recovery are not
+implemented features; this migration does not enable them.
 
 ## Configure and run
 
@@ -29,7 +38,7 @@ messages does not configure an API key.
 2. In the ignored root `.env.local`, configure `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, and `SUPABASE_DB_URL`. Legacy anon/service-role key variable names are also accepted. Use the session pooler connection URL for IPv4-only environments. Keep TLS verification enabled with `sslmode=verify-full` and `sslrootcert` pointing to the official Supabase certificate in `backend/certs/supabase-ca.crt` (downloaded from the database settings link). Use the correct deployment-local certificate path.
 3. Preserve `OPENAI_API_KEY` and any existing `CHATGPT_*` server settings. Preserve the exact encryption key for imported personal ChatGPT connections; a new key cannot decrypt existing tokens.
 4. Run `npm ci`, `npm run build`, then `npm run dev` and `npm run worker` in separate terminals. The app defaults to `http://127.0.0.1:4387`.
-5. Keep the worker running for shared AI generation. A frontend-only deployment does not run background jobs. Vercel hosts the API, but the worker requires a persistent Node process with the same server environment. Hosting for that process must be established before production cutover.
+5. For local development, keep `npm run worker` running for shared AI generation. The hosted Cloudflare deployment runs jobs through Queues and a recovery cron; it does not depend on this local process. A frontend-only or Vercel-only deployment needs its own persistent worker before cutover.
 
 Only the project URL and publishable key reach the browser. Database credentials, secret keys, provider keys, and personal connection tokens stay on the server. Application records are in `branch_private`, which browser roles cannot access. The public revision table exposes only the signed-in user's own counter under RLS. Private file access uses signed URLs valid for one hour; previously issued URLs remain valid until expiry even if membership changes.
 
@@ -110,8 +119,8 @@ The build explicitly selects the `workerd` package condition for PostgreSQL's
 Cloudflare socket adapter. Static output is an allowlist; backups and `.env.local`
 never enter the deployment. Set `SUPABASE_SECRET_KEY` and
 `SUPABASE_PUBLISHABLE_KEY` using Wrangler secrets. The URL is a public variable.
-Never put the secret key in client code. `OPENAI_API_KEY` is still required for
-actual default-provider generation. Hosted ChatGPT connections remain disabled
+Never put the secret key in client code. `OPENAI_API_KEY` is configured as a
+Worker secret for default-provider generation. Hosted ChatGPT connections remain disabled
 unless their separate approval and OAuth configuration have been completed.
 
 Each API request/queue invocation owns its own PostgreSQL pool and closes it on
@@ -153,11 +162,18 @@ Do not upload them, commit them, or print credentials. Historical completed-run
 inputs retain their original source URLs for fidelity; active file reads resolve
 preserved storage IDs to private Supabase URLs. No old jobs are replayed.
 
-Cloudflare validation: 204 automated tests passed (125 Node, 54 legacy parity,
-25 Supabase/request-scope tests), plus hosted signup/signin, wrong-password
+Cloudflare validation: 211 automated tests passed (126 Node, 54 legacy parity,
+31 Supabase/auth/request-scope tests), plus hosted signup/signin, wrong-password
 rejection, member isolation/revocation, concurrent Yjs writes, private Storage
 upload/download, Realtime/RLS, idempotent Send, and a queue-consumed failure
 when no AI provider is configured. A browser edit survived reload. Share-link
 HTML and WebAssembly-rendered PNG previews also passed; board IDs alone
 returned 404. Disposable hosted QA accounts/board/file were cleaned afterward.
-Actual paid AI generation was not tested because no provider is configured.
+The final audit then configured the approved existing OpenAI key and verified a
+real response, one completed job attempt, cleared generation state, and persistence
+after reload. The MCP launcher regression covers actual process startup,
+HTTP authentication, token refresh, and tool execution rather than only an
+in-memory protocol server. The actual MCP process also authenticated against the
+live Cloudflare app and listed/read its test board. A disposable QA identity
+verified correct- and wrong-password handling for email-style and spaced legacy
+usernames against hosted Supabase Auth; its original username was restored.

@@ -19,7 +19,7 @@ function createServer(client, baseUrl='http://127.0.0.1:4387') {
 async function main(){
  const {BRANCH_USERNAME,BRANCH_PASSWORD,BRANCH_AUTH_TOKEN,BRANCH_APP_URL}=process.env;
  if(!BRANCH_APP_URL||(!BRANCH_AUTH_TOKEN&&(!BRANCH_USERNAME||!BRANCH_PASSWORD)))throw Error('Configure BRANCH_APP_URL and BRANCH_USERNAME/BRANCH_PASSWORD (or BRANCH_AUTH_TOKEN).');
- const client=new ConvexHttpClient({logger:false});
+ const client=new BranchHttpClient(BRANCH_APP_URL);
  if(BRANCH_AUTH_TOKEN)client.setAuth(BRANCH_AUTH_TOKEN);
  else {
   const result=await client.mutation('auth:signInWithUsernamePassword',{username:BRANCH_USERNAME,password:BRANCH_PASSWORD});

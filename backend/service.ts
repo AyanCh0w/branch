@@ -30,7 +30,15 @@ export async function identity(token=''){
 }
 export const tokenFrom=(req:any)=>/^Bearer (\S+)$/.exec(req.headers.authorization||'')?.[1]||'';
 export function requestClient(req:any){const verified=identity(tokenFrom(req));return Object.fromEntries(['query','mutation','action'].map(kind=>[kind,async(name:string,args:any={})=>engine.call(name,args,await verified,kind)])) as any;}
-const username=(s:any)=>{if(typeof s!=='string')throw Error('Use a username');const u=s.trim().normalize('NFKC').toLowerCase();if(!/^[a-z0-9_-]{3,64}$/.test(u))throw Error('Use 3–64 letters, numbers, underscores or dashes');return u;};
+const username=(s:any,creating:boolean)=>{
+ if(typeof s!=='string')throw Error('Use a username');
+ const u=s.trim().normalize('NFKC').toLowerCase();
+ // Existing Convex usernames include email addresses and internal spaces.
+ // Keep the new-account policy without locking migrated accounts out of sign-in.
+ if(creating&&!/^[a-z0-9_-]{3,64}$/.test(u))throw Error('Use 3–64 letters, numbers, underscores or dashes');
+ if(!u||u.length>256||/[\u0000-\u001f\u007f]/.test(u))throw Error('Check your username and password');
+ return u;
+};
 export const loginEmail=(u:string)=>createHash('sha256').update(u).digest('hex')+'@accounts.branch.invalid';
 export async function rateLimit(bucket:string,limit:number,windowSeconds:number){
  const {rows}=await pool.query(`insert into branch_private.rate_limits(bucket,window_start,count) values($1,now(),1)
@@ -43,7 +51,7 @@ export async function authenticate(action:string,a:any,ip:string){
  await rateLimit('auth:'+createHash('sha256').update(ip).digest('hex'),30,900);
  const auth=createClient(config.url!,config.key!,{auth:{persistSession:false,autoRefreshToken:false}}).auth;
  if(action==='refresh'){const {data,error}=await auth.refreshSession({refresh_token:a.refreshToken});if(error||!data.session)throw Error('Session expired');return {kind:'rotated',tokens:{accessToken:data.session.access_token,refreshToken:data.session.refresh_token}};}
- const u=username(a.username),email=loginEmail(u);if(typeof a.password!=='string'||a.password.length>512)throw Error('Check your password');
+ const u=username(a.username,action==='signup'),email=loginEmail(u);if(typeof a.password!=='string'||a.password.length>512)throw Error('Check your password');
  if(action==='signup'){
   if(a.password.length<12)throw Error('Use at least 12 characters for your password');
   const {rows}=await pool.query('select 1 from branch_private.accounts where username=$1',[u]);if(rows.length)throw Error('That username is taken');
