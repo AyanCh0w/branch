@@ -514,16 +514,17 @@ body.board-viewer .idea-preview{display:none!important}
 #create-menu button:disabled{opacity:.35}
 #create-menu .menu-divider{height:1px;background:var(--theme-raised, #eceef0);margin:5px 7px}
 
-/* Below 40%, simplify content without changing the card's layout footprint. */
+/* Below 25%, counter-scale summaries so organizing labels remain readable.
+   Absolute positioning preserves the underlying node and wire layout. */
 .node-overview{display:none}
 #world.zoomed-out .card{cursor:grab;touch-action:none;user-select:none}
 #world.zoomed-out .card>:not(.node-overview):not(.nib):not(.socket){visibility:hidden!important;pointer-events:none!important}
-#world.zoomed-out .card>.node-overview{position:absolute;inset:0;display:flex;align-items:center;gap:24px;padding:16px 24px;overflow:hidden;border-radius:inherit;background:var(--theme-surface, #fff);pointer-events:none}
-.overview-icon{display:grid;place-items:center;width:64px;height:64px;flex:none;color:var(--theme-muted, #626973);background:var(--theme-raised, #f3f4f5);border:1px solid var(--theme-line, #e8eaed);border-radius:16px}
-.overview-icon svg{width:38px;height:38px;stroke-width:1.5}
-.overview-label{min-width:0;display:flex;flex-direction:column;gap:8px}
-.overview-type{font-size:22px;line-height:1.2;color:var(--theme-muted, #858b94)}
-.overview-label strong{font-size:32px;line-height:1.2;font-weight:500;letter-spacing:-.6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;color:var(--theme-ink, #30353c)}
+#world.zoomed-out .card>.node-overview{position:absolute;left:50%;top:50%;width:max(100%,calc(144px * var(--overview-scale, 1)));min-height:calc(56px * var(--overview-scale, 1));transform:translate(-50%,-50%);display:flex;align-items:center;gap:calc(8px * var(--overview-scale, 1));padding:calc(8px * var(--overview-scale, 1));overflow:hidden;border-radius:calc(8px * var(--overview-scale, 1));background:var(--theme-surface, #fff);box-shadow:0 0 0 calc(1px * var(--overview-scale, 1)) var(--theme-line, #e8eaed);pointer-events:auto}
+.overview-icon{display:grid;place-items:center;width:calc(24px * var(--overview-scale, 1));height:calc(24px * var(--overview-scale, 1));flex:none;color:var(--theme-muted, #626973);background:var(--theme-raised, #f3f4f5);border:1px solid var(--theme-line, #e8eaed);border-radius:calc(6px * var(--overview-scale, 1))}
+.overview-icon svg{width:calc(16px * var(--overview-scale, 1));height:calc(16px * var(--overview-scale, 1));stroke-width:1.5}
+.overview-label{min-width:0;display:flex;flex-direction:column;gap:calc(3px * var(--overview-scale, 1))}
+.overview-type{font-size:calc(10px * var(--overview-scale, 1));line-height:1.2;color:var(--theme-muted, #858b94)}
+.overview-label strong{font-size:calc(14px * var(--overview-scale, 1));line-height:1.2;font-weight:500;letter-spacing:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;color:var(--theme-ink, #30353c)}
 #world.zoomed-out .card:is(:active,.dragging){cursor:grabbing}
 #world.zoomed-out .card:focus-visible{outline:3px solid var(--theme-accent, #4879f5);outline-offset:6px}
 #world.zoomed-out .card>.nib,#world.zoomed-out .card>.socket{pointer-events:none!important}
