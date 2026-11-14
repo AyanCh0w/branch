@@ -4,14 +4,16 @@
   "buildCommand": "npm run build:vercel",
   "outputDirectory": "public",
   "functions": {
-    "api/*.js": {
-      "maxDuration": 180
-    },
     "api/share.js": {
+      "maxDuration": 180,
       "includeFiles": "app/{index.html,pdfjs/standard_fonts/LiberationSans-Regular.ttf}"
     },
     "api/share-image.js": {
+      "maxDuration": 180,
       "includeFiles": "app/pdfjs/standard_fonts/LiberationSans-Regular.ttf"
+    },
+    "api/*.js": {
+      "maxDuration": 180
     }
   },
   "rewrites": [
