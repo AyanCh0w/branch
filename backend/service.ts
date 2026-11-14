@@ -5,6 +5,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {Engine} from './engine';
 import {Store} from './store';
 import config from './config.cjs';
+import {guardConnection} from './connection';
 // Socket pools must never cross Cloudflare request/event lifetimes.
 const runtime=new AsyncLocalStorage<{pool:Pool,notify?:()=>Promise<void>}>();
 let localPool:Pool|undefined;
@@ -67,9 +68,10 @@ export async function authenticate(action:string,a:any,ip:string){
   const {data,error}=await admin.auth.admin.createUser({email,password:a.password,email_confirm:true});
   if(error||!data.user)throw Error('Could not create account. Check your details or try signing in.');
   const sql=await pool.connect();
+  const connection=guardConnection(sql);
   try{await sql.query('begin');await sql.query('select id from branch_private.runtime_lock where id=1 for update');const db=new Store(sql,true);const id=await db.insert('users',{name:'',kind:'account'});await sql.query('insert into branch_private.accounts(auth_id,user_id,username) values($1,$2,$3)',[data.user.id,id,u]);await sql.query('insert into public.branch_revisions(user_id) values($1)',[data.user.id]);await sql.query('commit');}
-  catch(error){await sql.query('rollback');await admin.auth.admin.deleteUser(data.user.id);throw Error('Could not finish account creation. Try again.');}
-  finally{sql.release();}
+  catch(error){await connection.rollback();await admin.auth.admin.deleteUser(data.user.id);throw Error('Could not finish account creation. Try again.');}
+  finally{connection.release();}
  }else if(action!=='signin')throw Error('Unknown authentication action');
  const {data,error}=await auth.signInWithPassword({email,password:a.password});if(error||!data.session)throw Error('Check your username and password');
  return {status:'complete',session:data.session,tokens:{accessToken:data.session.access_token,refreshToken:data.session.refresh_token}};

@@ -1,11 +1,13 @@
 import {decode} from './codec';
 import {Store} from './store';
 import type {Engine} from './engine';
+import {guardConnection} from './connection';
 
 // The job and its visible run must fail in the same transaction. Otherwise a
 // worker crash between writes could leave the canvas generating forever.
 export async function failJobs(engine:Engine, where:string, values:any[], message:string) {
  const sql=await engine.pool.connect();
+ const connection=guardConnection(sql);
  try {
   await sql.query('begin');
   await sql.query('select id from branch_private.runtime_lock where id=1 for update');
@@ -16,10 +18,11 @@ export async function failJobs(engine:Engine, where:string, values:any[], messag
    if(args.runId)await engine.call('chat:append',{runId:args.runId,text:'',error:message},{},'mutation',true,ctx);
   }
   await engine.invalidate(db);
+  connection.assertHealthy();
   await sql.query('commit');
   return rows.length;
- } catch(error) { await sql.query('rollback'); throw error; }
- finally { sql.release(); }
+ } catch(error) { await connection.rollback(); throw connection.failure||error; }
+ finally { connection.release(); }
 }
 export const expireJobs=(engine:Engine)=>failJobs(engine,
  "status='running' and lease_until<now()",[],

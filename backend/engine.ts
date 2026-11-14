@@ -4,6 +4,7 @@ import {validateReferences} from './validation';
 import {registry} from './registry';
 import {encode,decode} from './codec';
 import type {Definition} from './definitions';
+import {guardConnection} from './connection';
 export class Engine {
  constructor(public pool:any,public storage?:any,public functions:any=registry,public notifyJobs?:()=>Promise<void>){}
  resolve(name:string,kind?:string,internal=false):Definition {
@@ -22,6 +23,7 @@ export class Engine {
   if(fn.kind==='action'){await validateReferences(this.pool,fn.args,args);return fn.handler(this.context(null,identity),args);}
   for(let attempt=0;attempt<4;attempt++){
    const sql=await this.pool.connect();
+   const connection=guardConnection(sql);
    try{
     await sql.query(fn.kind==='query'?'begin isolation level repeatable read read only':'begin');
     // Coarse lock intentionally preserves existing cross-table atomic Send invariants.
@@ -31,11 +33,12 @@ export class Engine {
     await validateReferences(sql,fn.args,args);
     const value=await fn.handler(ctx,args);
     if(fn.kind==='mutation')await this.invalidate(ctx.db);
+    connection.assertHealthy();
     await sql.query('commit');
     if(ctx.scheduledJobs.length&&this.notifyJobs){try{await this.notifyJobs();}catch{console.error('Job wake-up deferred to recovery scan');}}
     return value;
-   }catch(error:any){await sql.query('rollback');if(error.code==='40001'&&attempt<3)continue;throw error;}
-   finally{sql.release();}
+   }catch(error:any){await connection.rollback();if(!connection.failure&&error.code==='40001'&&attempt<3)continue;throw connection.failure||error;}
+   finally{connection.release();}
   }
  }
  context(db:any,identity:any){
