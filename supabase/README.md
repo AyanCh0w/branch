@@ -73,3 +73,52 @@ npm run build:vercel
 Supabase migration tests use PGlite's actual Postgres engine with RLS, the SQL schema, and the active business handlers. PGlite serializes test transactions; it does not substitute for hosted Auth/Storage/Realtime or real concurrent-connection testing. The older collaboration tests exercise the preserved Convex baseline separately. Do not report them as hosted Supabase integration tests.
 
 Live verification scripts are opt-in and create temporary fixtures in the configured project. `verify-supabase-live.cjs` records exact IDs in ignored `backups/live-qa.json`; use `node scripts/cleanup-supabase-qa.cjs` to preview cleanup and append `--apply` to remove only those fixtures. Archive the cleaned manifest before a new run. `verify-supabase-runtime.cjs` tests the missing-provider error path only and refuses to run with a configured provider. Never use either test to claim real model generation has been verified.
+
+## Cloudflare hosting
+
+The full app is hosted at **https://branch.eshteremberg.workers.dev**. It uses
+Cloudflare Workers + Static Assets for the frontend/API, the `branch-jobs` Queue
+for background generation, and Hyperdrive `branch-supabase` for PostgreSQL.
+The Hyperdrive origin verifies the Supabase CA and hostname (`verify-full`);
+SQL response caching is disabled so permissions and edits never use stale cache.
+The existing Vercel/Convex deployment is untouched.
+
+Deploy with `npm ci && npm run deploy:cloudflare` after authenticating Wrangler.
+The config is `wrangler.jsonc`; the bundle is generated in ignored `.worker-build/`.
+The build explicitly selects the `workerd` package condition for PostgreSQL's
+Cloudflare socket adapter. Static output is an allowlist; backups and `.env.local`
+never enter the deployment. Set `SUPABASE_SECRET_KEY` and
+`SUPABASE_PUBLISHABLE_KEY` using Wrangler secrets. The URL is a public variable.
+Never put the secret key in client code. `OPENAI_API_KEY` is still required for
+actual default-provider generation. Hosted ChatGPT connections remain disabled
+unless their separate approval and OAuth configuration have been completed.
+
+Each API request/queue invocation owns its own PostgreSQL pool and closes it on
+completion; sockets do not cross Worker lifetimes. Jobs are first committed to
+PostgreSQL, then signaled through the queue. A once-per-minute recovery scan
+requeues pending work if delivery failed. SQL claims and leases prevent duplicate
+execution; an expired running job is failed rather than replaying an uncertain
+paid AI request. No Mac process is required for the hosted backend.
+
+Opt-in verification (creates named disposable QA fixtures):
+
+```sh
+BRANCH_APP_URL=https://branch.eshteremberg.workers.dev node scripts/verify-supabase-live.cjs
+# Only while /api/status confirms no default AI key and the QA user has no connection:
+BRANCH_APP_URL=https://branch.eshteremberg.workers.dev node scripts/verify-supabase-runtime.cjs
+node scripts/cleanup-supabase-qa.cjs --apply
+```
+
+The source import currently contains the earlier local Convex snapshot. The live
+`expert-mallard-315` deployment was located in the browser (16 boards), but its
+live import remains deferred as requested. It must be reconciled with existing
+Supabase accounts before importing; never replace populated destination data.
+
+Cloudflare validation: 204 automated tests passed (125 Node, 54 legacy parity,
+25 Supabase/request-scope tests), plus hosted signup/signin, wrong-password
+rejection, member isolation/revocation, concurrent Yjs writes, private Storage
+upload/download, Realtime/RLS, idempotent Send, and a queue-consumed failure
+when no AI provider is configured. A browser edit survived reload. Share-link
+HTML and WebAssembly-rendered PNG previews also passed; board IDs alone
+returned 404. Disposable hosted QA accounts/board/file were cleaned afterward.
+Actual paid AI generation was not tested because no provider is configured.

@@ -14,7 +14,9 @@
     "build:backend": "esbuild --tsconfig=tsconfig.json backend/http.ts --bundle --platform=node --packages=external --outfile=backend/server.bundle.cjs && esbuild --tsconfig=tsconfig.json backend/worker.ts --bundle --platform=node --packages=external --outfile=backend/worker.bundle.cjs && esbuild --tsconfig=tsconfig.json backend/schema.ts --bundle --platform=node --outfile=backend/schema.bundle.cjs",
     "worker": "node backend/worker.bundle.cjs",
     "test:supabase": "vitest run --config vitest.supabase.config.ts",
-    "typecheck:legacy": "tsc --noEmit -p convex"
+    "typecheck:legacy": "tsc --noEmit -p convex",
+    "build:cloudflare": "npm run build && node scripts/build-public.cjs && node scripts/build-cloudflare.cjs",
+    "deploy:cloudflare": "npm run build:cloudflare && wrangler deploy"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +26,7 @@
     "@blobz/avatar-core": "^0.1.2",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@resvg/resvg-js": "^2.6.2",
+    "@resvg/resvg-wasm": "^2.6.2",
     "@supabase/supabase-js": "^2.119.0",
     "dompurify": "^3.4.17",
     "jose": "^6.2.17",
@@ -38,16 +41,17 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@convex-dev/auth": "^2.0.0",
     "@electric-sql/pglite": "^0.5.16",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
+    "convex": "^1.49.0",
     "convex-test": "^0.0.71",
     "esbuild": "^0.28.2",
     "jsdom": "^29.1.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.12",
-    "convex": "^1.49.0",
-    "@convex-dev/auth": "^2.0.0"
+    "wrangler": "^4.160.1"
   },
   "private": true,
   "engines": {

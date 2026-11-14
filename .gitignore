@@ -25,3 +25,7 @@ public/
 backend/*.bundle.cjs
 supabase/.temp/
 backups/
+
+.wrangler/
+.worker-build/
+.dev.vars*

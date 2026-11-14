@@ -1,13 +1,23 @@
 import {Pool} from 'pg';
+import {AsyncLocalStorage} from 'node:async_hooks';
 import {createClient} from '@supabase/supabase-js';
 import {createHash,randomUUID} from 'node:crypto';
 import {Engine} from './engine';
 import {Store} from './store';
 import config from './config.cjs';
-export const configured=()=>!!(config.url&&config.key&&config.secret&&config.database);
-export const pool=new Pool({connectionString:config.database,max:8,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});
+// Socket pools must never cross Cloudflare request/event lifetimes.
+const runtime=new AsyncLocalStorage<{pool:Pool,notify?:()=>Promise<void>}>();
+let localPool:Pool|undefined;
+const currentPool=()=>runtime.getStore()?.pool||(localPool??=new Pool({connectionString:config.database,max:8,connectionTimeoutMillis:10000,idleTimeoutMillis:30000}));
+export const pool=new Proxy({} as Pool,{get(_target,key){const active=currentPool(),value=Reflect.get(active,key);return typeof value==='function'?value.bind(active):value;}});
+export const configured=()=>!!(config.url&&config.key&&config.secret&&(runtime.getStore()||config.database));
+export async function withDatabase<T>(connectionString:string,fn:()=>Promise<T>,notify?:()=>Promise<void>):Promise<T>{
+ const scoped=new Pool({connectionString,max:5,connectionTimeoutMillis:10000,idleTimeoutMillis:1000});
+ scoped.on('error',()=>console.error('Database connection interrupted'));
+ return runtime.run({pool:scoped,notify},async()=>{try{return await fn();}finally{await scoped.end();}});
+}
 export const admin=config.url&&config.secret?createClient(config.url,config.secret,{auth:{persistSession:false,autoRefreshToken:false}}):null;
-export const engine=new Engine(pool,admin?.storage);
+export const engine=new Engine(pool,admin?.storage,undefined,async()=>{await runtime.getStore()?.notify?.();});
 export const publicConfig=()=>({provider:'supabase',url:config.url,publishableKey:config.key,legacy:[]});
 export async function identity(token=''){
  if(!token)return {};

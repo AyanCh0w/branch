@@ -5,7 +5,7 @@ import {registry} from './registry';
 import {encode,decode} from './codec';
 import type {Definition} from './definitions';
 export class Engine {
- constructor(public pool:any,public storage?:any,public functions:any=registry){}
+ constructor(public pool:any,public storage?:any,public functions:any=registry,public notifyJobs?:()=>Promise<void>){}
  resolve(name:string,kind?:string,internal=false):Definition {
   const [module,key,...rest]=name.split(':');
   const fn=Object.hasOwn(this.functions,module)&&Object.hasOwn(this.functions[module],key)?this.functions[module][key]:null;
@@ -31,13 +31,15 @@ export class Engine {
     await validateReferences(sql,fn.args,args);
     const value=await fn.handler(ctx,args);
     if(fn.kind==='mutation')await this.invalidate(ctx.db);
-    await sql.query('commit');return value;
+    await sql.query('commit');
+    if(ctx.scheduledJobs.length&&this.notifyJobs){try{await this.notifyJobs();}catch{console.error('Job wake-up deferred to recovery scan');}}
+    return value;
    }catch(error:any){await sql.query('rollback');if(error.code==='40001'&&attempt<3)continue;throw error;}
    finally{sql.release();}
   }
  }
  context(db:any,identity:any){
-  const ctx:any={db,userId:identity.userId||null,authId:identity.authId||null};
+  const ctx:any={db,userId:identity.userId||null,authId:identity.authId||null,scheduledJobs:[]};
   const run=(kind:string)=>(ref:any,args:any)=>{
    const name=String(ref);
    if(name.startsWith('components:authUsername:public:'))return this.username(name.split(':').at(-1)!,args,db);
@@ -47,7 +49,7 @@ export class Engine {
   ctx.scheduler={runAfter:async(delay:number,ref:any,args:any)=>{
    if(!db?.writable)throw Error('Scheduler requires transaction');
    const name=String(ref);this.resolve(name,'action',true);
-   const id=randomUUID();await db.sql.query('insert into branch_private.jobs(id,function_name,args,due_at) values($1,$2,$3,$4)',[id,name,JSON.stringify(encode(args)),new Date(Date.now()+delay)]);return id;
+   const id=randomUUID();await db.sql.query('insert into branch_private.jobs(id,function_name,args,due_at) values($1,$2,$3,$4)',[id,name,JSON.stringify(encode(args)),new Date(Date.now()+delay)]);ctx.scheduledJobs.push(id);return id;
   }};
   ctx.storage={getUrl:async(id:string)=>{const meta=await db.get(id);if(!meta?.path||!this.storage)return null;const {data,error}=await this.storage.from('branch-files').createSignedUrl(meta.path,3600);if(error)throw Error('File service unavailable');return data.signedUrl;}};
   return ctx;

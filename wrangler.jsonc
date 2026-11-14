@@ -1,0 +1,66 @@
+{
+  "name": "branch",
+  "account_id": "7463e61beec84f503e6edab2ed2bdc5d",
+  "main": ".worker-build/index.mjs",
+  "compatibility_date": "2026-11-13",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": true,
+  "no_bundle": true,
+  "find_additional_modules": true,
+  "rules": [
+    {
+      "type": "CompiledWasm",
+      "globs": [
+        "**/*.wasm"
+      ],
+      "fallthrough": true
+    }
+  ],
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api/*",
+      "/app",
+      "/app/",
+      "/"
+    ],
+    "html_handling": "none",
+    "not_found_handling": "none"
+  },
+  "vars": {
+    "CLOUDFLARE_WORKER": "true",
+    "SUPABASE_URL": "https://gwjjsbyljfdguaehixin.supabase.co"
+  },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "c50bd7ccbff344b58cbae93a20461758"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "JOBS",
+        "queue": "branch-jobs"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "branch-jobs",
+        "max_batch_size": 1,
+        "max_batch_timeout": 1,
+        "max_retries": 3,
+        "max_concurrency": 4
+      }
+    ]
+  },
+  "triggers": {
+    "crons": [
+      "* * * * *"
+    ]
+  },
+  "preview_urls": false
+}
