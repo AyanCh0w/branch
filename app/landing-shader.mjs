@@ -1,122 +1,179 @@
-// Sparse canvas connectors, using the same horizontal Bezier routing and
-// rounded dashes/ports as the chat connections. SVG needs no WebGL.
+// Visual reference: Unicorn Studio's public “Art Vortex” preview.
+// Original procedural implementation: a soft graphite loop and connected points.
+// No third-party runtime, remote assets, tracking, or API calls.
 (() => {
-const host = document.getElementById('paper-background');
-const toggle = document.getElementById('paper-background-on');
-const strength = document.getElementById('paper-background-strength');
-const output = document.getElementById('paper-background-value');
-const contrast = matchMedia('(prefers-contrast: more)');
-const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-const finePointer = matchMedia('(hover: hover) and (pointer: fine)');
-const key = 'branch.paper-background.v1';
-let enabled = true, amount = 45;
-try {
-  const saved = JSON.parse(localStorage.getItem(key));
-  if (typeof saved?.enabled === 'boolean') enabled = saved.enabled;
-  if (Number.isFinite(saved?.amount)) amount = Math.max(0, Math.min(100, saved.amount));
-} catch {}
-const edges = [
-  [[-24,125],[150,255]], [[150,255],[300,185]],
-  [[150,255],[260,430]],
-  [[1464,145],[1290,285]], [[1290,285],[1165,405]],
-  [[-30,775],[165,660]], [[165,660],[285,825]],
-  [[1470,800],[1295,670]], [[1295,670],[1160,825]],
-  [[-35,460],[105,530]], [[105,530],[260,430]],
-  [[1465,465],[1340,525]], [[1340,525],[1295,670]],
-  [[165,660],[105,530]],
-  [[-20,960],[150,890]], [[150,890],[285,825]],
-  [[1455,980],[1315,910]], [[1315,910],[1160,825]],
-];
-// Shared junctions have one position so connected paths never separate.
-const points = new Map();
-function point(x,y) {
-  const key = `${x},${y}`;
-  if (!points.has(key)) points.set(key,{x,y,dx:0,dy:0,vx:0,vy:0});
-  return points.get(key);
-}
-const wires = edges.map(([a,b])=>{
-  const bend = Math.max(48, Math.abs(b[0]-a[0]) * .48);
-  const dir = Math.sign(b[0]-a[0]);
-  return {a:point(...a),b:point(...b),
-    c: {x:a[0]+bend*dir,y:a[1],dx:0,dy:0,vx:0,vy:0},
-    d: {x:b[0]-bend*dir,y:b[1],dx:0,dy:0,vx:0,vy:0}};
-});
-const position = p => `${(p.x+p.dx).toFixed(2)} ${(p.y+p.dy).toFixed(2)}`;
-const curve = w => `M${position(w.a)} C${position(w.c)},${position(w.d)},${position(w.b)}`;
-host.innerHTML = `<svg viewBox="0 0 1440 1000" preserveAspectRatio="none" focusable="false" aria-hidden="true">
-  <g class="canvas-connection-lines">${wires.map(w=>`<path d="${curve(w)}"/>`).join('')}</g>
-  <g class="canvas-connection-ports">${[...points.values()].map(p=>`<rect x="${p.x-5}" y="${p.y-2}" width="10" height="4" rx="2"/>`).join('')}</g>
-</svg>`;
-const paths = [...host.querySelectorAll('path')];
-const ports = [...host.querySelectorAll('rect')];
-const joints = [...points.values()];
-const particles = [...joints, ...wires.flatMap(w=>[w.c,w.d])];
-let pointer = null, frame = 0, previousTime = 0;
-let width = innerWidth, height = innerHeight;
-function canMove() {
-  return enabled && amount > 0 && !contrast.matches && !reducedMotion.matches && finePointer.matches && !document.hidden;
-}
-function render() {
-  wires.forEach((w,i)=>paths[i].setAttribute('d',curve(w)));
-  joints.forEach((p,i)=>ports[i].setAttribute('transform',`translate(${p.dx.toFixed(2)} ${p.dy.toFixed(2)})`));
-}
-function reset() {
-  cancelAnimationFrame(frame); frame = 0; previousTime = 0; pointer = null;
-  particles.forEach(p=>{p.dx=p.dy=p.vx=p.vy=0;});
-  render();
-}
-function tick(time) {
-  frame = 0;
-  if (!canMove()) {reset();return;}
-  const dt = Math.min((time-previousTime)/1000 || 1/60,1/30);
-  previousTime = time;
-  let moving = false;
-  particles.forEach(p=>{
-    let tx=0,ty=0;
-    if (pointer) {
-      const x=p.x*width/1440,y=p.y*height/1000;
-      const distance=Math.hypot(pointer.x-x,pointer.y-y);
-      const influence=Math.pow(Math.max(0,1-distance/260),2);
-      // Bounded local attraction: no whole-page parallax or moving text.
-      tx=Math.tanh((pointer.x-x)/85)*14*influence*1440/width;
-      ty=Math.tanh((pointer.y-y)/85)*14*influence*1000/height;
-    }
-    p.vx+=(150*(tx-p.dx)-25*p.vx)*dt;
-    p.vy+=(150*(ty-p.dy)-25*p.vy)*dt;
-    p.dx+=p.vx*dt;p.dy+=p.vy*dt;
-    if (Math.abs(tx-p.dx)+Math.abs(ty-p.dy)+Math.abs(p.vx)+Math.abs(p.vy)>.035) moving=true;
-    else {p.dx=tx;p.dy=ty;p.vx=p.vy=0;}
+  const host = document.getElementById('paper-background');
+  if (!host) return;
+  const toggle = document.getElementById('paper-background-on');
+  const strength = document.getElementById('paper-background-strength');
+  const output = document.getElementById('paper-background-value');
+  const status = document.getElementById('paper-background-status');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  const contrast = matchMedia('(prefers-contrast: more)');
+  const fine = matchMedia('(hover: hover) and (pointer: fine)');
+  const key = 'branch.paper-background.v1';
+  let enabled = true, amount = 45;
+  try {
+    const saved = JSON.parse(localStorage.getItem(key));
+    if (typeof saved?.enabled === 'boolean') enabled = saved.enabled;
+    if (Number.isFinite(saved?.amount)) amount = Math.max(0, Math.min(100, saved.amount));
+  } catch {}
+  const canvas = document.createElement('canvas');
+  canvas.className = 'vortex-material';
+  host.append(canvas);
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.classList.add('vortex-network');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  host.append(svg);
+  const vertices = Array.from({length: 14}, (_, i) => ({angle: i * Math.PI * 2 / 14, x: 0, y: 0}));
+  const edges = vertices.flatMap((_, i) => [3, 5].map(step => [i, (i + step) % vertices.length]));
+  const paths = edges.map(() => {
+    const path = document.createElementNS(ns, 'path');
+    svg.append(path); return path;
   });
-  render();
-  if (moving) frame=requestAnimationFrame(tick);
-  else previousTime=0;
-}
-function wake() {if (!frame && canMove()) frame=requestAnimationFrame(tick);}
-function release() {pointer=null;wake();}
-window.addEventListener('pointermove',event=>{
-  if (event.pointerType !== 'mouse' || !canMove()) return;
-  pointer={x:event.clientX,y:event.clientY};wake();
-},{passive:true});
-document.documentElement.addEventListener('pointerleave',release);
-window.addEventListener('blur',release);
-window.addEventListener('resize',()=>{width=innerWidth;height=innerHeight;release();},{passive:true});
-document.addEventListener('visibilitychange',()=>{if(document.hidden) reset();});
-window.addEventListener('pagehide',reset);
-reducedMotion.addEventListener('change',reset);
-finePointer.addEventListener('change',reset);
-host.dataset.ready = 'true';
-function save() {try {localStorage.setItem(key,JSON.stringify({enabled,amount}));} catch {}}
-function sync() {
-  toggle.checked = enabled; strength.value = amount; strength.disabled = !enabled;
-  output.value = `${amount}%`;
-  // Even maximum intensity stays quiet behind the product itself.
-  host.style.opacity = enabled && !contrast.matches ? String(amount * .0028) : '0';
-  if (!canMove()) reset();
-}
-toggle.addEventListener('change',()=>{enabled=toggle.checked;sync();save();});
-strength.addEventListener('input',()=>{amount=Number(strength.value);sync();});
-strength.addEventListener('change',save);
-contrast.addEventListener('change',sync);
-window.addEventListener('pageshow',sync);
-sync();
+  const dots = vertices.map(() => {
+    const dot = document.createElementNS(ns, 'circle');
+    dot.setAttribute('r', '2'); svg.append(dot); return dot;
+  });
+  let gl, program, buffer, uniforms;
+  let width = 1, height = 1, radiusX = 1, radiusY = 1, centerY = 1;
+  let frame = 0, last = 0, phase = 0, disposed = false, visible = true;
+  const pointer = {x: 0, y: 0, tx: 0, ty: 0};
+  const vertex = `attribute vec2 position; void main(){gl_Position=vec4(position,0.,1.);}`;
+  const fragment = `
+    precision highp float;
+    uniform vec2 resolution, center, radius, pointer;
+    uniform float phase, dark;
+    float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+    void main(){
+      vec2 pixel=vec2(gl_FragCoord.x,resolution.y-gl_FragCoord.y);
+      vec2 q=(pixel-center-pointer)/radius;
+      float a=atan(q.y,q.x);
+      // Asymmetric folds travel around the loop, rather than translating the page.
+      float r=length(q);
+      float ripple=.026*sin(a*3.+phase)+.012*sin(a*5.-phase*.7);
+      float thickness=.095+.029*sin(a*3.+phase+.8);
+      float crossSection=(r-(.86+ripple))/thickness;
+      float edge=1.-smoothstep(.76,1.24,abs(crossSection));
+      float normal=sqrt(max(0.,1.-crossSection*crossSection));
+      float fold=sin(a*6.+crossSection*2.7+phase);
+      float sheen=pow(max(0.,normal*.64+fold*.36),3.);
+      float graphite=.19+.56*sheen+.15*sin(a*2.-phase*.25);
+      float grain=(hash(gl_FragCoord.xy)-.5)*.055;
+      float tone=mix(graphite,.45+.5*sheen,dark)+grain;
+      // The soft skirt is the reference's defocused edge, without a CSS blur pass.
+      float skirt=exp(-pow((r-.86-ripple)/(.14+thickness*.5),2.))* .09;
+      float alpha=max(edge*.66,skirt);
+      gl_FragColor=vec4(vec3(clamp(tone,0.,1.)),alpha);
+    }`;
+  function compile(type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source); gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {gl.deleteShader(shader); throw new Error('Shader compilation failed');}
+    return shader;
+  }
+  function initialize() {
+    try {
+      gl = canvas.getContext('webgl', {alpha: true, antialias: false, depth: false, stencil: false, premultipliedAlpha: false, powerPreference: 'low-power'});
+      if (!gl) throw new Error('WebGL unavailable');
+      const vs = compile(gl.VERTEX_SHADER, vertex), fs = compile(gl.FRAGMENT_SHADER, fragment);
+      program = gl.createProgram(); gl.attachShader(program, vs); gl.attachShader(program, fs); gl.linkProgram(program);
+      gl.deleteShader(vs); gl.deleteShader(fs);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error('Shader linking failed');
+      gl.useProgram(program);
+      buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]), gl.STATIC_DRAW);
+      const position = gl.getAttribLocation(program, 'position');
+      gl.enableVertexAttribArray(position); gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+      uniforms = Object.fromEntries(['resolution','center','radius','pointer','phase','dark'].map(name=>[name,gl.getUniformLocation(program,name)]));
+      host.dataset.renderer = 'webgl';
+    } catch {
+      gl = null; host.dataset.renderer = 'fallback';
+    }
+  }
+  function resize() {
+    const rect = host.getBoundingClientRect(); width = rect.width; height = rect.height;
+    radiusX = Math.min(width * .55, 670); radiusY = width < 600 ? 280 : 330;
+    centerY = width < 600 ? 245 : 235;
+    // Cap fill rate independently of device pixel ratio (including 3x phones).
+    const scale = Math.min(devicePixelRatio || 1, 1.5, Math.sqrt(1400000/(width*height)));
+    canvas.width = Math.max(1,Math.round(width*scale)); canvas.height = Math.max(1,Math.round(height*scale));
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    host.style.setProperty('--vortex-x', `${radiusX*1.72}px`);
+    host.style.setProperty('--vortex-y', `${radiusY*1.72}px`);
+    host.style.setProperty('--vortex-center', `${centerY}px`);
+    draw();
+  }
+  function draw() {
+    if (disposed) return;
+    const dark = document.documentElement.dataset.theme === 'dark';
+    if (gl && !gl.isContextLost()) {
+      const scale = canvas.width / width;
+      gl.viewport(0,0,canvas.width,canvas.height);
+      gl.uniform2f(uniforms.resolution,canvas.width,canvas.height);
+      gl.uniform2f(uniforms.center,width*.5*scale,centerY*scale);
+      gl.uniform2f(uniforms.radius,radiusX*scale,radiusY*scale);
+      gl.uniform2f(uniforms.pointer,pointer.x*scale,pointer.y*scale);
+      gl.uniform1f(uniforms.phase,phase); gl.uniform1f(uniforms.dark,dark ? 1 : 0);
+      gl.drawArrays(gl.TRIANGLES,0,6);
+    }
+    vertices.forEach((p,i)=>{
+      const a=p.angle+phase*.13, r=.82+.03*Math.sin(a*3+phase);
+      p.x=width*.5+Math.cos(a)*radiusX*r+pointer.x;
+      p.y=centerY+Math.sin(a)*radiusY*r+pointer.y;
+      dots[i].setAttribute('cx',p.x.toFixed(2)); dots[i].setAttribute('cy',p.y.toFixed(2));
+    });
+    edges.forEach(([a,b],i)=>paths[i].setAttribute('d',`M${vertices[a].x.toFixed(2)},${vertices[a].y.toFixed(2)}L${vertices[b].x.toFixed(2)},${vertices[b].y.toFixed(2)}`));
+  }
+  function canAnimate() {return !disposed && enabled && amount>0 && visible && !document.hidden && !reduced.matches && !contrast.matches && host.dataset.renderer==='webgl';}
+  function stop() {cancelAnimationFrame(frame); frame=0; last=0;}
+  function tick(time) {
+    frame=0;
+    if (!canAnimate()) return;
+    if (!last || time-last >= 1000/30-1) {
+      const dt=last ? Math.min((time-last)/1000,.06) : 0;
+      last=time; phase+=dt*.12;
+      const ease=1-Math.exp(-dt*7);
+      pointer.x+=(pointer.tx-pointer.x)*ease; pointer.y+=(pointer.ty-pointer.y)*ease;
+      draw();
+    }
+    frame=requestAnimationFrame(tick);
+  }
+  function wake() {if (!frame && canAnimate()) frame=requestAnimationFrame(tick);}
+  function save() {try {localStorage.setItem(key,JSON.stringify({enabled,amount}));} catch {}}
+  function sync() {
+    toggle.checked=enabled; strength.value=amount; strength.disabled=!enabled; output.value=`${amount}%`;
+    host.style.opacity=enabled && !contrast.matches ? String(amount/100) : '0';
+    host.dataset.motion=reduced.matches ? 'static' : 'animated';
+    status.textContent=reduced.matches ? 'Monochrome · Still vortex' : 'Monochrome · Connected vortex';
+    stop(); draw(); wake();
+  }
+  initialize(); resize(); host.dataset.ready='true'; sync();
+  const observer=new IntersectionObserver(([entry])=>{visible=entry.isIntersecting; if(visible) wake(); else stop();});
+  observer.observe(host);
+  const themeObserver=new MutationObserver(draw);
+  themeObserver.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+  new ResizeObserver(resize).observe(host);
+  window.addEventListener('pointermove',event=>{
+    if (event.pointerType!=='mouse' || !fine.matches || reduced.matches) return;
+    const rect=host.getBoundingClientRect();
+    pointer.tx=Math.max(-1,Math.min(1,(event.clientX-width/2)/(width/2)))*12;
+    pointer.ty=Math.max(-1,Math.min(1,(event.clientY-rect.top-centerY)/radiusY))*8;
+  },{passive:true});
+  function release() {pointer.tx=pointer.ty=0;}
+  document.documentElement.addEventListener('pointerleave',release);
+  window.addEventListener('blur',release);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden) stop(); else wake();});
+  window.addEventListener('pagehide',stop);
+  window.addEventListener('pageshow',wake);
+  reduced.addEventListener('change',()=>{pointer.x=pointer.y=pointer.tx=pointer.ty=0;sync();});
+  contrast.addEventListener('change',sync);
+  canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();stop();host.dataset.renderer='fallback';});
+  canvas.addEventListener('webglcontextrestored',()=>{initialize();resize();sync();});
+  toggle.addEventListener('change',()=>{enabled=toggle.checked;sync();save();});
+  strength.addEventListener('input',()=>{amount=Number(strength.value);sync();});
+  strength.addEventListener('change',save);
+  document.getElementById('nav-appearance-reset')?.addEventListener('click',()=>{enabled=true;amount=45;sync();save();});
 })();
