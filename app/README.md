@@ -22,10 +22,10 @@ Verified with a real model request using an attached project code, plus a browse
 
 ## Board interactions
 
-- Notes are the default: the empty canvas, first dock action, right-click menu and N shortcut open a plain text editor. Notes grow with their text, have no composer or preview truncation, and never request automatic AI titles. Chat (C) and agents are explicit additional tools; existing content and manually edited titles are preserved.
+- Notes are the default: the empty canvas, first dock action, right-click menu and N shortcut open a plain text editor. Notes grow with their text, have no composer or preview truncation, and never request automatic AI titles. The dock puts notes, images, files and links first; Chat (C) and agents sit at the end as additional tools; existing content and manually edited titles are preserved.
 - Drag empty space to marquee-select. Shift-click grips to add/remove cards. Drag any selected grip to move the selection together; Escape cancels the gesture. Two-finger scrolling still pans, pinch stays pointer-anchored, and Space-drag or H selects hand panning (V returns to selection).
-- The compact selection toolbar tidies cards into a grid, aligns edges/centers, distributes equal gaps, duplicates cards and zooms to selection. Command/Ctrl+A selects visible cards, Command/Ctrl+D duplicates, Shift+F fits the selection, and arrow keys nudge 1px (Shift: 10px). Shortcuts leave text editors alone.
-- Selection stays local. Shared geometry uses existing per-node patches; copied contexts keep frozen snapshots and remap sources copied in the same operation. Copies never inherit active run IDs. Shared canvas undo retains its existing deletion-only scope; local canvas undo covers arrangement and duplication.
+- Selection stays on the canvas without a floating toolbar. Command/Ctrl+A selects visible cards, Command/Ctrl+D duplicates, Shift+F fits the selection, and arrow keys nudge 1px (Shift: 10px). Shortcuts leave text editors alone.
+- Selection stays local. Shared geometry uses existing per-node patches; copied contexts keep frozen snapshots and remap sources copied in the same operation. Copies never inherit active run IDs. Shared canvas undo retains its existing deletion-only scope; local canvas undo covers movement and duplication.
 - Drag titles/grips to move; resize from the diagonal handle. Cards stop where released.
 - Two-finger scroll pans; pinch zooms. Right-click opens the compact creation menu. N/C/S create plan/chat/search; F fits the board.
 - Chat plus opens note/upload/link options. Added sources become connected nodes. Source labels inside chats are inspection-only; use node/message nibs to branch.

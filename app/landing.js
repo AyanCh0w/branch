@@ -6,9 +6,9 @@ if (new URLSearchParams(location.hash.slice(1)).has('join')) {
 const demo = document.querySelector('.branch-demo');
 const choices = [...document.querySelectorAll('[data-pick]')];
 const explanations = [
-  'Alex scopes a first version, with the team’s brief and brainstorm already in context.',
-  'Maya explores the experience from the same brainstorm, without changing Alex’s direction.',
-  'Sam shapes the pitch from the shared idea. Connect another branch when its thinking is useful.'
+  'Sam builds the React interface with the shared brief and API contract already in context.',
+  'Maya writes the Convex API against the same contract while Sam builds the frontend.',
+  'Alex writes contract tests in a separate branch with the shared architecture already attached.'
 ];
 function selectBranch(index, keyboard = false) {
   demo.classList.toggle('keyboard-change', keyboard);
@@ -60,13 +60,14 @@ for (const el of [answerHeading, answerBody]) {
   }));
 }
 const flowCaptions = [
-  'Maya brings the brief and interviews onto the team’s board.',
-  'Alex asks in their shared chat, with both sources already connected.',
-  'The answer appears for everyone in the same conversation.',
-  'Sam drags out a branch. The brief, interviews, and conversation come along.'
+  'Maya adds the project brief and shared API contract.',
+  'Alex plans the architecture with both sources already connected.',
+  'The team agrees on one contract before splitting the implementation.',
+  'Frontend, backend, and tests move forward in parallel with the same shared context.'
 ];
-const checkpoints = [0, 3900, 7400, 10600];
-const loopDuration = 13700; // Includes a 3.1-second hold on the completed board.
+const checkpoints = [0, 3900, 7400, 13000];
+const codeSamples=[...flow.querySelectorAll('[data-demo-code]')].map(el=>({el,text:el.textContent,count:-1}));
+const loopDuration = 15500; // Includes a 3.1-second hold on the completed board.
 let flowStage = -1, flowPlaying = false, flowVisible = false, flowStarted = false;
 let playhead = 0, frame = null, lastFrame = null, points = {}, lastTyped = -1, lastWords = -1;
 function curve(a,b) {
@@ -81,7 +82,7 @@ function drawFlowWires() {
     const r=port.getBoundingClientRect();
     points[port.dataset.port]={x:r.left+r.width/2-rect.left,y:r.top+r.height/2-rect.top};
   });
-  for (const [name,from,to] of [['source','source','input'],['interviews','interviews','input'],['branch','answer','branch'],['second','answer','second']])
+  for (const [name,from,to] of [['source','source','input'],['interviews','interviews','input'],['branch','answer','branch'],['second','answer','second'],['third','answer','third']])
     flow.querySelector(`[data-wire="${name}"]`).setAttribute('d',curve(points[from],points[to]));
   renderFlow(playhead);
 }
@@ -100,18 +101,21 @@ function renderFlow(time) {
   flow.classList.toggle('is-typing',typing);
   flow.classList.toggle('is-generating',time>=4400 && time<7000);
   const count=typing?Math.min(questionText.length,Math.floor((time-1300)/2100*questionText.length)):-1;
-  if(count!==lastTyped){draft.textContent=typing?questionText.slice(0,count):'Keep thinking together…';lastTyped=count;}
+  if(count!==lastTyped){draft.textContent=typing?questionText.slice(0,count):'Keep building together…';lastTyped=count;}
   reveal(question,time>=3700);
   reveal(answer,time>=4400);
   const wordCount=Math.max(0,Math.min(answerWords.length,Math.floor((time-4400)/2300*answerWords.length)));
   if(wordCount!==lastWords){answerWords.forEach((word,i)=>word.classList.toggle('word-visible',i<wordCount));lastWords=wordCount;}
   reveal(flow.querySelector('.teammate-reply'),time>=10000);
   reveal(flow.querySelector('.plan-node'),time>=9300);
-  reveal(flow.querySelector('.design-node'),time>=10000);
+  reveal(flow.querySelector('.design-node'),time>=9700);
+  reveal(flow.querySelector('.qa-node'),time>=10000);
+  codeSamples.forEach((sample,i)=>{const count=Math.max(0,Math.min(sample.text.length,Math.floor((time-(9300+i*350))/2200*sample.text.length)));if(count!==sample.count){sample.el.textContent=sample.text.slice(0,count);sample.count=count;}});
   reveal(flow.querySelector('.flow-composer>div'),time>=800);
   for(const name of ['source','interviews']) reveal(flow.querySelector(`[data-wire="${name}"]`),time>=800);
   reveal(flow.querySelector('[data-wire="branch"]'),time>=9300);
-  reveal(flow.querySelector('[data-wire="second"]'),time>=10000);
+  reveal(flow.querySelector('[data-wire="second"]'),time>=9700);
+  reveal(flow.querySelector('[data-wire="third"]'),time>=10000);
   const dragging=time>=7900 && time<9300;
   flow.classList.toggle('is-branch-dragging',dragging);
   pointer.hidden=!dragging;
@@ -146,7 +150,7 @@ function syncPlayback() {
   updatePlayback();
 }
 flow.classList.add('is-ready','app-like-flow');
-playhead=reducedMotion.matches?10600:0;
+playhead=reducedMotion.matches?13000:0;
 renderFlow(playhead);
 flowButtons.forEach((button,index)=>button.addEventListener('click',()=>{
   flowStarted=true;flowPlaying=false;playhead=checkpoints[index];
@@ -154,7 +158,7 @@ flowButtons.forEach((button,index)=>button.addEventListener('click',()=>{
 }));
 playButton.addEventListener('click',()=>{
   flowStarted=true;
-  if(reducedMotion.matches){playhead=playhead>=10600?0:10600;renderFlow(playhead);return;}
+  if(reducedMotion.matches){playhead=playhead>=13000?0:13000;renderFlow(playhead);return;}
   flow.classList.remove('keyboard-change');flowPlaying=!flowPlaying;syncPlayback();
 });
 const flowObserver=new IntersectionObserver(entries=>{
@@ -167,10 +171,116 @@ new ResizeObserver(drawFlowWires).observe(flow.querySelector('.flow-canvas'));
 document.fonts.ready.then(drawFlowWires);
 document.addEventListener('visibilitychange',syncPlayback);
 reducedMotion.addEventListener('change',event=>{
-  if(event.matches){flowPlaying=false;playhead=10600;renderFlow(playhead);syncPlayback();}
+  if(event.matches){flowPlaying=false;playhead=13000;renderFlow(playhead);syncPlayback();}
 });
 updatePlayback();
 choices.forEach(button=>button.addEventListener('click',event=>{
   demo.classList.remove('user-play');
   if(event.detail&&!reducedMotion.matches)requestAnimationFrame(()=>demo.classList.add('user-play'));
 }));
+
+// A critically damped spring retains momentum when scrolling changes direction.
+const siteHeader = document.querySelector('.site-header');
+let navFrame = null, navTime = null, navVelocity = 0;
+let navDock = reducedMotion.matches ? 1 : navTarget();
+let navShoulder = 40;
+function navTarget() {
+  const progress = Math.max(0, Math.min(1, window.scrollY / 180));
+  return progress * progress * (3 - 2 * progress);
+}
+function renderNavDock() {
+  siteHeader.style.setProperty('--dock', String(navDock));
+  // One silhouette keeps the wider, concave shoulders seamless with the glass body.
+  const inset = navShoulder, width = siteHeader.offsetWidth + inset * 2;
+  const height = siteHeader.offsetHeight, radius = 28 + 4 * navDock;
+  const topX = (inset + radius) * (1 - navDock);
+  const topY = 28 + 4 * navDock;
+  const right = width - inset;
+  const outline = `M ${topX} 0 H ${width-topX} Q ${right} 0 ${right} ${topY} V ${height-radius} Q ${right} ${height} ${right-radius} ${height} H ${inset+radius} Q ${inset} ${height} ${inset} ${height-radius} V ${topY} Q ${inset} 0 ${topX} 0 Z`;
+  siteHeader.style.setProperty('--nav-silhouette', `path("${outline}")`);
+}
+function animateNavDock(now) {
+  const target = navTarget();
+  const dt = navTime === null ? 1 / 60 : Math.min((now - navTime) / 1000, .05);
+  navTime = now;
+  const omega = 22, delta = navDock - target;
+  const impulse = navVelocity + omega * delta, decay = Math.exp(-omega * dt);
+  navDock = target + (delta + impulse * dt) * decay;
+  navVelocity = (navVelocity - omega * impulse * dt) * decay;
+  if (Math.abs(navDock-target) < .0001 && Math.abs(navVelocity) < .001) {
+    navDock = target; navVelocity = 0; navFrame = null; navTime = null;
+  } else {
+    navFrame = requestAnimationFrame(animateNavDock);
+  }
+  renderNavDock();
+}
+function updateNavDock() {
+  if (reducedMotion.matches) {
+    if (navFrame !== null) cancelAnimationFrame(navFrame);
+    navFrame = null; navTime = null; navVelocity = 0; navDock = 1;
+    renderNavDock();
+  } else if (navFrame === null) {
+    navFrame = requestAnimationFrame(animateNavDock);
+  }
+}
+function measureNavDock() {
+  navShoulder = parseFloat(getComputedStyle(siteHeader).getPropertyValue('--shoulder')) || 40;
+  renderNavDock(); updateNavDock();
+}
+window.addEventListener('scroll', updateNavDock, {passive:true});
+window.addEventListener('pageshow', measureNavDock);
+window.addEventListener('resize', measureNavDock);
+document.fonts.ready.then(measureNavDock);
+reducedMotion.addEventListener('change', updateNavDock);
+measureNavDock();
+
+// Live, browser-local material preferences. Malformed or blocked storage is harmless.
+(() => {
+  const key = 'branch.nav-appearance.v1';
+  const defaults = {tint:25, glass:70, tintOn:true, glassOn:true};
+  let settings = {...defaults};
+  try {
+    const saved = JSON.parse(localStorage.getItem(key));
+    for (const name of ['tint','glass']) if (Number.isFinite(saved?.[name])) settings[name] = Math.max(0,Math.min(100,saved[name]));
+    for (const name of ['tintOn','glassOn']) if (typeof saved?.[name] === 'boolean') settings[name] = saved[name];
+  } catch {}
+  const tint = document.getElementById('nav-tint');
+  const glass = document.getElementById('nav-glass');
+  const tintOn = document.getElementById('nav-tint-on');
+  const glassOn = document.getElementById('nav-glass-on');
+  function render() {
+    tint.value = settings.tint; glass.value = settings.glass;
+    tintOn.checked = settings.tintOn; glassOn.checked = settings.glassOn;
+    tint.disabled = !settings.tintOn; glass.disabled = !settings.glassOn;
+    document.getElementById('nav-tint-value').value = settings.tint + '%';
+    document.getElementById('nav-glass-value').value = settings.glass + '%';
+    const shade = 255 - Math.round((settings.tintOn ? settings.tint : 0) * .8);
+    siteHeader.style.setProperty('--nav-tone', `${shade},${Math.min(255,shade+1)},${Math.min(255,shade+2)}`);
+    siteHeader.style.setProperty('--nav-dark-tone', String(34 - Math.round((settings.tintOn ? settings.tint : 0) * .18)));
+    siteHeader.style.setProperty('--nav-glass', settings.glassOn ? settings.glass / 100 : 0);
+  }
+  function save() { try { localStorage.setItem(key,JSON.stringify(settings)); } catch {} }
+  for (const [input,name] of [[tint,'tint'],[glass,'glass']]) {
+    input.addEventListener('input',() => {settings[name] = Number(input.value); render();});
+    input.addEventListener('change',save);
+  }
+  for (const [input,name] of [[tintOn,'tintOn'],[glassOn,'glassOn']]) input.addEventListener('change',() => {settings[name] = input.checked; render(); save();});
+  document.getElementById('nav-appearance-reset').addEventListener('click',() => {settings = {...defaults}; render(); save();});
+  render();
+})();
+
+// Use the app's shared appearance preference for the landing's footer toggle.
+(() => {
+ const sync = () => document.querySelectorAll('[data-theme-toggle]').forEach(button => {
+  const dark = document.documentElement.dataset.theme === 'dark';
+  button.textContent = dark ? 'Light mode' : 'Dark mode';
+  button.setAttribute('aria-label', 'Switch to ' + (dark ? 'light' : 'dark') + ' mode');
+ });
+ document.addEventListener('click', event => {
+  if (event.target.closest('[data-theme-toggle]')) {
+   window.BranchTheme.set(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+  }
+ });
+ window.addEventListener('branch-appearance', sync);
+ sync();
+})();

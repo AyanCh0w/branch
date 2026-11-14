@@ -21,11 +21,13 @@ test('notes are the default creation action and use a single plaintext editor wi
  const dom=boot(),w=dom.window,d=w.document;
  try{
   assert.equal(d.querySelector('[data-create]').dataset.create,'plan');assert.equal(d.querySelector('[data-dock]').dataset.dock,'plan');
+  assert.deepEqual(Array.from(d.querySelectorAll('[data-dock]'),el=>el.dataset.dock),['plan','image','file','website','video','search','github','thread','agent']);
   assert.equal(d.querySelector('#empty-note').hidden,false);d.querySelector('#empty-note').click();
   const n=w.BranchHost.getState().nodes[0];assert.equal(n.type,'plan');assert.equal(n.body,'');assert.equal(d.activeElement.getAttribute('aria-label'),'Note text');
   assert.equal(d.querySelector('.plan-body').getAttribute('contenteditable'),'plaintext-only');
   assert.equal(d.querySelector('.plain-note .composer,.plain-note .card-footer,.plain-note .node-controls,.plain-note .note-preview-toggle'),null);
   assert.equal(d.querySelector('#empty-note').hidden,true);
+  assert.equal(d.querySelector('#selection-tools,[data-selection-action]'),null);
  }finally{w.dispatchEvent(new w.Event('pagehide'));w.close();}
 });
 test('marquee selects intersecting cards, shift adds, and cancellation restores the previous selection',()=>{
@@ -33,6 +35,7 @@ test('marquee selects intersecting cards, shift adds, and cancellation restores 
  try{
   geometry(w);pointer(w,b,'pointerdown',70,60);pointer(w,b,'pointermove',810,220);pointer(w,b,'pointerup',810,220);
   assert.equal(d.querySelectorAll('.board-selected').length,2);assert.equal(d.querySelector('#selection-marquee').hidden,true);
+  assert.equal(d.querySelector('#selection-tools,[data-selection-action]'),null);
   pointer(w,b,'pointerdown',850,60,{shiftKey:true});pointer(w,b,'pointermove',1220,220);key(w,'Escape');
   assert.equal(d.querySelectorAll('.board-selected').length,2);
  }finally{w.dispatchEvent(new w.Event('pagehide'));w.close();}
@@ -55,21 +58,6 @@ test('group movement patches current nodes and shared subscription updates retai
   selectAll(w);const grip=d.querySelector('[data-node="a"] .title-grip');pointer(w,grip,'pointerdown',100,80);pointer(w,d.body,'pointermove',140,110);
   const remote=JSON.parse(JSON.stringify(w.BranchHost.getState()));remote.nodes[0].x=100;remote.nodes[0].body='Remote collaborator edit';w.BranchHost.receive(remote);
   pointer(w,d.body,'pointerup',140,110);assert.equal(w.BranchHost.getState().nodes[0].body,'Remote collaborator edit');assert.equal(moves[0][0].x,140);assert.equal(moves[0].length,2);
- }finally{w.dispatchEvent(new w.Event('pagehide'));w.close();}
-});
-test('arrangement uses actual sizes and keeps endpoints fixed while distributing equal gaps',()=>{
- const dom=boot([note('a',100,100,200),note('b',500,300,300),note('c',1100,500,100)]),w=dom.window,d=w.document;
- try{
-  geometry(w);selectAll(w);d.querySelector('[data-selection-action="top"]').click();assert.deepEqual(Array.from(w.BranchHost.getState().nodes,n=>n.y),[100,100,100]);
-  d.querySelector('[data-selection-action="spaceX"]').click();assert.deepEqual(Array.from(w.BranchHost.getState().nodes,n=>n.x),[100,550,1100]);
-  key(w,'z',{ctrlKey:true});assert.deepEqual(Array.from(w.BranchHost.getState().nodes,n=>n.x),[100,500,1100]);
- }finally{w.dispatchEvent(new w.Event('pagehide'));w.close();}
-});
-test('tidy separates overlapping cards into rows with room for their different sizes',()=>{
- const dom=boot([note('a',100,100,200),note('b',100,100,300),note('c',100,100,100)]),w=dom.window,d=w.document;
- try{
-  geometry(w);selectAll(w);d.querySelector('[data-selection-action="tidy"]').click();
-  assert.deepEqual(Array.from(w.BranchHost.getState().nodes,n=>[n.x,n.y]),[[100,100],[364,100],[100,280]]);
  }finally{w.dispatchEvent(new w.Event('pagehide'));w.close();}
 });
 test('plain note editing never schedules automatic AI titles and does not add AI expansion controls',async()=>{

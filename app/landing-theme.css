@@ -1,0 +1,44 @@
+/* Dark surfaces use their own palette; images and media retain their colors. */
+:root[data-theme=dark]{color-scheme:dark;--canvas:#101010;--line:#303030;--muted:#a2a2a2;--blue:#7c9bff;background:#101010;color:#e8e8e8}
+html[data-theme=dark] body{background:#101010;color:#e8e8e8;--canvas:#101010;--line:#303030;--muted:#a2a2a2}
+html[data-theme=dark] body::before{opacity:.025}
+html[data-theme=dark] #board{background-color:#101010}
+html[data-theme=dark] :is(.topbar,.a-home-header,.flow-top,.board-top){background:#151515;border-color:#303030;color:#b9b9b9}
+html[data-theme=dark] :is(.card:not([data-kind=thread]),.chat-surface,.chat-composer,#chat-panel,.a-dialog,.a-menu,.a-home,.a-auth-page,.a-loading,.a-board-tile,.a-board,.a-empty,.a-personal-overview,.a-workspace-menu,.model-popover,.model-options,#creation-dock,#create-menu,#toolbar,.node-label,.panel-placeholder,.flow-card,.flow-composer,.reference-node,.comparison-card,.branch-demo,.closing-note,.board-visual){background:#1b1b1b;border-color:#353535;color:#e8e8e8;box-shadow:0 4px 18px #0002}
+html[data-theme=dark] :is(.node-label,.a-share-trigger,.a-secondary,.a-search,.a-field input,.a-field textarea,.a-field select,#board-title,.a-board-title,.a-board-actions,.theme-toggle){background:#202020;color:#e3e3e3;border-color:#3a3a3a;box-shadow:none}
+html[data-theme=dark] :is(.message,.message [data-message-text] h2,.message [data-message-text] h3,.chat-composer textarea,.plan-body,.website-notes,.a-brand,.brand,.a-dialog h2,.a-menu strong,.a-library h1,.a-library h2,.a-library h3,.a-board-name,.flow-card h3,.flow-answer h3,.model-effort-heading strong){color:#e8e8e8}
+html[data-theme=dark] :is(.message.user>[data-message-text],.flow-question,.mode-chip,.composer-controls .mode-chip,.branch-controls button[aria-pressed=true]){background:#292929;color:#e4e4e4;border-color:#3b3b3b}
+html[data-theme=dark] #chat-panel .chat-composer{background:#202020;border-color:#353535}
+html[data-theme=dark] :is(.model-select>summary,.model-picker>summary,.model-effort-heading,.model-effort-scale,.node-byline,.context-chip,.lede,.flow-card p,.flow-answer p,.feature-grid p,.faq details p,.comparison-card p,.a-muted,.a-form-note,.a-team-description){color:#adadad}
+html[data-theme=dark] :is(.a-menu button:hover,.a-secondary:hover,.model-picker>summary:hover,.model-picker[open]>summary,.model-options button:hover,.model-select>summary:hover){background:#303030;color:#fff}
+html[data-theme=dark] :is(.a-primary,.send-message,.button){background:#e6e6e6;color:#171717;border-color:#e6e6e6;box-shadow:none}
+html[data-theme=dark] :is(.send-message:hover,.button:hover,.a-primary:hover){background:#fff;color:#111}
+html[data-theme=dark] .model-slider-track input{background-image:linear-gradient(to right,#c3c3c3 0%,#c3c3c3 var(--effort-position,50%),#404040 var(--effort-position,50%),#404040 100%)}
+html[data-theme=dark] .model-select{border-color:#353535}
+html[data-theme=dark] [data-message-text] :not(pre)>code{background:#2c2c2c;border-color:#414141;color:#dadada}
+html[data-theme=dark] [data-message-text] .code-block{background:#111;border-color:#343434}
+html[data-theme=dark] .code-toolbar{background:#252525}
+html[data-theme=dark] :is(.a-demo-badge,.chat-preview-toggle,.collapse-card){background:#242424;color:#bfbfbf;border-color:#3b3b3b;box-shadow:none}
+html[data-theme=dark] :is(.nib::before,.socket,.context-pill){box-shadow:0 0 0 3px #151515}
+html[data-theme=dark] #permanent-wires .wire-base{stroke:#707c91;opacity:.8}
+html[data-theme=dark] .site-header{background:transparent}
+html[data-theme=dark] .site-header::before{background:linear-gradient(160deg,rgba(38,38,38,.97),rgba(26,26,26,.82));box-shadow:inset 0 1px #ffffff12,inset 0 -1px #ffffff0a}
+html[data-theme=dark] :is(.flow-demo,.flow-canvas,.team-map,.branch-demo,.connected){background-color:#141414;border-color:#333}
+html[data-theme=dark] :is(.flow-rail>span:first-child,.flow-steps button,.flow-play,.flow-foot,.flow-top,.flow-composer>div,.inherited,.answer-label,.person-line){color:#aaa}
+html[data-theme=dark] .flow-rail>span:first-child{background:#252525;border-color:#393939}
+html[data-theme=dark] :is(.flow-steps button.active,.flow-steps button[aria-current=step]){background:#303030;color:#eee}
+html[data-theme=dark] .card{fill:#202020;stroke:#3a3a3a}
+html[data-theme=dark] .pill{fill:#262626;stroke:#444}
+html[data-theme=dark] .bubble{fill:#303030}
+html[data-theme=dark] :is(.label,.card-heading,.body-text,.chat-text,.tiny){fill:#bfbfbf}
+html[data-theme=dark] :is(.identity img,.brand img,.a-brand img,.small-notes img,.closing-note img){filter:invert(1)}
+html[data-theme=dark] :is(input,textarea){caret-color:#fff}
+html[data-theme=dark] :is(.a-dialog-heading,.a-menu-identity,.a-library-toolbar,.comparison,.branching,.closing,.faq,footer,.flow-foot,.flow-steps){border-color:#333}
+html[data-theme=dark] :is(.a-board-preview,.a-board-thumb,.a-personal-hero,.a-personal-card,.a-featured-board,.a-overview-card){background:#202020;border-color:#333;color:#eee}
+html[data-theme=dark] .a-search input{background:transparent;color:#eee}
+html[data-theme=dark] :is(.title-grip,.a-filters button[aria-selected=true],.a-blank-node,.a-empty-icon,.a-import-strip,.sketch-card,.a-link-mark,#first-use-tip,#dock-link,.a-dashboard-profile,.a-mini-card,.a-workspaces-dialog,.a-workspace-settings){background:#262626;color:#ccc;border-color:#3a3a3a;box-shadow:none}
+html[data-theme=dark] body.account-mode #account-app{background:#101010;color:#e8e8e8}
+html[data-theme=dark] :is(.a-invite-row input,.a-profile-form input,.a-profile-form textarea){background:#222;color:#eee;border-color:#3a3a3a}
+html[data-theme=dark] :is(.site-header .nav-links,.site-header .nav-links a,.site-header .nav-actions,.workspace-mark){color:#c4c4c4}
+html[data-theme=dark] :is(.flow-rail svg,.flow-rail img){opacity:.7}
+html[data-theme=dark] .flow-canvas{background-image:radial-gradient(#383838 .7px,transparent .7px)}

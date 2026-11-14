@@ -339,3 +339,50 @@ body:not(.board-context-mode) .topbar .a-context-connection{display:none}
 .context-zoom .icon{width:15px;height:15px}
 .context-wires circle{fill:var(--blue)}
 .a-gh-header .a-gh-switch{min-height:30px;padding:5px 10px;font-size:12px;margin-left:auto}.a-gh-header h2+.a-gh-switch{margin-left:0}
+
+/* Quiet canvas chrome: inline title and text actions, no nested control cards. */
+html body .topbar{inset:0 0 auto;height:56px;min-height:56px;padding:0 22px;gap:16px;flex-wrap:nowrap;align-content:normal;align-items:center;background:var(--theme-canvas,#f8f9fa);border:0;border-bottom:1px solid color-mix(in srgb,var(--theme-line,#dce0e6) 45%,transparent);box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;pointer-events:auto}
+html body .topbar :is(.board-home-button,.identity,.top-meta){height:auto;min-height:0;background:transparent;border:0;border-radius:0;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+html body .topbar .board-home-button{display:flex;align-items:center;gap:8px;width:auto;padding:0;margin:0;flex:0 0 auto;order:0;color:var(--theme-ink,#31343a);text-decoration:none}
+html body .topbar .board-home-button>svg{width:14px;height:14px;color:var(--theme-muted,#8a8f97);margin-right:4px}
+html body .topbar .board-home-button img{width:21px;height:21px}
+html body .topbar .board-home-button b{font-size:18px;font-weight:500;letter-spacing:-.65px}
+html body .topbar .identity{flex:1 1 auto;min-width:0;max-width:none;margin:0;padding:0;gap:0;order:0}
+html body .topbar .identity:before{content:'';width:1px;height:15px;flex:none;margin-right:16px;background:var(--theme-line,#dce0e6)}
+html body .topbar .identity>:is(svg,b,.slash){display:none}
+html body .topbar #board-title{display:block;width:fit-content;min-width:32px;max-width:min(100%,420px);padding:5px 0;border:0;border-radius:3px;outline:none;background:transparent;box-shadow:none;font-size:14px;font-weight:400;line-height:22px;letter-spacing:-.2px;color:var(--theme-ink,#555b64);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html body .topbar #board-title[contenteditable="plaintext-only"]:hover{color:var(--theme-ink,#292d33);background:transparent;border:0}
+html body .topbar #board-title:focus-visible{outline:2px solid var(--theme-accent,#7694ec);outline-offset:4px;box-shadow:none}
+html body .topbar .top-meta{display:flex;align-items:center;gap:15px;flex:0 0 auto;margin:0;padding:0;order:0}
+html body .topbar .a-board-account-actions{gap:8px}
+html body .topbar .top-meta .a-share-trigger{width:auto;height:32px;min-height:32px;padding:5px 8px;border:0;border-radius:5px;background:transparent;box-shadow:none;font-size:13px;font-weight:400;letter-spacing:-.15px;color:var(--theme-muted,#626873);transition:background 120ms ease,color 120ms ease;transform:none}
+html body .topbar .top-meta .a-share-trigger:hover{background:color-mix(in srgb,var(--theme-ink,#30343b) 5%,transparent);color:var(--theme-ink,#30343b)}
+html body .topbar .a-avatar{width:26px;height:26px;min-height:26px;box-shadow:none}
+html body .topbar #save-state{font-size:11px;font-weight:400;color:var(--theme-muted,#9297a0)}
+html body .topbar #undo{width:28px;height:28px;border:0;background:transparent;box-shadow:none;color:var(--theme-muted,#8b929c)}
+html body .topbar #undo:disabled{opacity:.35}
+@media(max-width:1100px){html body .topbar #save-state{display:none}}
+@media(max-width:700px){html body .topbar{padding:0 12px;gap:10px}html body .topbar .board-home-button b{display:none}html body .topbar .identity:before{margin-right:10px}html body .topbar .top-meta{gap:7px}html body .topbar .a-board-account-actions{gap:2px}html body .topbar #board-title{font-size:13px}html body .topbar .top-meta .a-share-trigger{padding:5px 6px;font-size:12px}}
+@media(prefers-reduced-motion:reduce){html body .topbar .top-meta .a-share-trigger{transition:none}}
+
+/* Card rails stay typographic; actions gain emphasis only when approached. */
+html body #cards .card>.card-header{gap:8px}
+html body #cards .card-header .node-label{flex:1 1 auto;min-width:45px;max-width:none;padding:5px 2px;border:0;border-radius:3px;background:transparent;box-shadow:none;font-size:12px;font-weight:400;line-height:20px;letter-spacing:0;color:var(--theme-muted,#727882)}
+html body #cards .card-header .node-label:focus-visible{color:var(--theme-ink,#353a42);outline:2px solid var(--theme-accent,#7694ec);outline-offset:2px}
+html body #cards .card-header .header-actions{gap:3px}
+html body #cards .card-header .header-actions button{width:26px;height:28px;min-height:28px;padding:4px;margin:0;border:0;border-radius:4px;background:transparent;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;color:var(--theme-muted,#737b86);opacity:.4;transition:opacity 130ms ease,background 130ms ease,color 130ms ease}
+html body #cards .card-header .header-actions .icon{width:15px;height:15px}
+html body #cards .card:is(:hover,:focus-within)>.card-header .header-actions button{opacity:.8}
+html body #cards .card .card-header .header-actions button:is(:hover,:focus-visible){opacity:1;background:color-mix(in srgb,var(--theme-ink,#30343b) 5%,transparent);color:var(--theme-ink,#30343b)}
+html body #cards .card-header .header-actions button:focus-visible{outline:2px solid var(--theme-accent,#7694ec);outline-offset:2px}
+html body #cards .card-header .header-actions [data-source-info][aria-expanded=true]{opacity:1;color:var(--theme-accent,#4879f5);background:color-mix(in srgb,var(--theme-accent,#4879f5) 8%,transparent)}
+html body #cards .card>.title-grip>.grip-dots{width:38px;height:22px;border:0;background:transparent;box-shadow:none;backdrop-filter:none;opacity:.35}
+html body #cards .card>.title-grip:is(:hover,:focus-visible)>.grip-dots,html body #cards .card.dragging>.title-grip>.grip-dots{opacity:.85}
+@media(hover:none),(prefers-contrast:more){html body #cards .card-header .header-actions button{opacity:1}html body #cards .card>.title-grip>.grip-dots{opacity:1}}
+@media(prefers-reduced-motion:reduce){html body #cards .card-header .header-actions button{transition:none}}
+
+/* Align standalone canvas icons without changing their hit areas. */
+html body #cards :is(.resize-handle,.add-file){display:grid;place-items:center}
+html body #cards .resize-handle{padding:0}
+html body #cards :is(.resize-handle,.add-file) .icon{display:block}
+html body :is(#fit,#zoom,#zoomin,#zoomout){display:inline-flex;align-items:center;justify-content:center}

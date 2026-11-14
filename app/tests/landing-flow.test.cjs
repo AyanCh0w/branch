@@ -27,7 +27,8 @@ test('hero types before sending, reveals an answer, drags before creating branch
   advance(3200);assert.equal(flow.dataset.phase,'dragging');assert.equal(d.querySelector('.plan-node').getAttribute('aria-hidden'),'true');assert.equal(d.querySelector('.demo-pointer').hidden,false);
   advance(2300);assert.equal(flow.dataset.phase,'holding');assert.equal(d.querySelector('.plan-node').getAttribute('aria-hidden'),'false');
   advance(2000);assert.equal(flow.dataset.phase,'holding');
-  advance(1300);assert.equal(flow.dataset.stage,'0');
+  // The technical demo holds its generated code before restarting.
+  advance(3000);assert.equal(flow.dataset.stage,'0');
  }finally{dom.window.close();}
 });
 test('pause and offscreen suspension preserve progress instead of skipping the typing',()=>{
