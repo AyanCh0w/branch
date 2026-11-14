@@ -64,7 +64,7 @@ export function ChatGPTBoardSettings({ boardId, Dialog, onClose }) {
   const disconnect = useMutation(api.chatgptOAuth.disconnect);
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
-  return <Dialog title="ChatGPT connection" onClose={onClose}>
+  return <Dialog title="ChatGPT sync" onClose={onClose}>
     {config && <>
       <p>Use this URL when adding Branch as a custom MCP server in ChatGPT. During setup, choose the board that should receive updates.</p>
       <label className="a-field">Connector URL<input readOnly value={config.endpoint} onFocus={event => event.target.select()} /></label>

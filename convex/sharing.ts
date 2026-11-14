@@ -5,6 +5,7 @@ import { v } from 'convex/values';
 import { getAuthUserId } from '@convex-dev/auth/server';
 import { components } from './_generated/api';
 import { access, tokenHash } from './access';
+import { loadDocument, readText } from './documents';
 const role=v.union(v.literal('viewer'),v.literal('editor'));
 async function liveLink(ctx:QueryCtx|MutationCtx,token:string){if(!/^[a-f0-9]{64}$/.test(token))throw Error('This link is not valid');const hash=await tokenHash(token);const link=await ctx.db.query('boardLinks').withIndex('token',q=>q.eq('tokenHash',hash)).unique();if(!link||link.revoked||(link.expiresAt&&link.expiresAt<=Date.now()))throw Error('This link has expired or been turned off');const board=await ctx.db.get(link.boardId);if(!board||board.archived)throw Error('This board is unavailable');return {link,board};}
 export const preview=query({args:{linkToken:v.string()},handler:async(ctx,args)=>{
@@ -96,4 +97,17 @@ export const changeMemberRole=mutation({args:{memberId:v.id('boardMembers'),role
  const {board,membership}=await access(ctx,'',member.boardId);
  if(membership.role!=='owner'||member.userId===board.ownerId)throw Error('Only the owner can change member access');
  await ctx.db.patch(member._id,{role:args.role});
+}});
+
+// A live invite is the capability: board IDs alone never expose preview data.
+export const socialPreview=query({args:{linkToken:v.string()},handler:async(ctx,args)=>{
+ const {board}=await liveLink(ctx,args.linkToken);
+ const rows=await ctx.db.query('nodes').withIndex('board_key',q=>q.eq('boardId',board._id)).collect();
+ const live=rows.filter(n=>!n.deleted);
+ const nodes=live.slice(0,100).map(n=>{
+  const doc=loadDocument(n.textState),text=readText(doc);doc.destroy();
+  const d=n.data;
+  return {key:n.key,type:String(d.type||'note'),x:Number(d.x)||0,y:Number(d.y)||0,width:Number(d.width)||380,height:Number(d.layoutHeight||d.minHeight)||240,title:String(text.title||d.title||'Untitled').slice(0,100),body:String(text.body||d.messages?.at(-1)?.text||d.messages?.at(-1)?.content||'').slice(0,400),connections:(d.contexts||[]).slice(0,30).map((c:any)=>String(c.source))};
+ });
+ return {title:board.title,count:live.length,nodes};
 }});

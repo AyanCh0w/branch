@@ -212,7 +212,7 @@ body.account-mode #account-app{background:var(--theme-surface, #fff)}
 @media(max-width:480px){.a-workspace-settings .a-dialog-heading{padding:16px}.a-settings-body{padding:20px 16px}.a-workspace-settings .a-responsibility{padding-left:0}}
 
 /* Separate canvas control pills share the dock's restrained glass surface. */
-.topbar .board-home-button,.topbar .identity,.topbar .top-meta,#creation-dock{
+.topbar .board-home-button,.topbar .identity,.topbar .top-meta,.board-view-switch,.context-zoom,#creation-dock{
  background:color-mix(in srgb, var(--theme-surface, #fff) 78%, transparent);
  border:1px solid color-mix(in srgb, var(--theme-line, #d2d8e0) 78%, transparent);
  border-radius:14px;
@@ -229,7 +229,7 @@ body.account-mode #account-app{background:var(--theme-surface, #fff)}
 .topbar .top-meta .a-share-trigger{background:transparent;border-color:transparent;box-shadow:none}
 @media(max-width:850px){.topbar .identity{margin:0}.topbar #board-title{max-width:220px}}
 @media(max-width:600px){.topbar{inset:8px 10px auto;height:96px;row-gap:6px;align-content:start}.topbar .identity{order:2;flex:0 1 auto;max-width:100%;height:41px;margin:0}.topbar #board-title{width:auto;max-width:calc(100vw - 88px);padding:4px}.topbar .top-meta{order:1}.topbar .board-home-button{order:0}}
-@media(prefers-reduced-transparency:reduce){.topbar .board-home-button,.topbar .identity,.topbar .top-meta,#creation-dock{background:var(--theme-surface, #fff);-webkit-backdrop-filter:none;backdrop-filter:none}}
+@media(prefers-reduced-transparency:reduce){.topbar .board-home-button,.topbar .identity,.topbar .top-meta,.board-view-switch,.context-zoom,#creation-dock{background:var(--theme-surface, #fff);-webkit-backdrop-filter:none;backdrop-filter:none}}
 
 /* The canvas continues behind the floating controls, with no header strip. */
 #board{top:0}
@@ -256,23 +256,35 @@ body.account-mode #account-app{background:var(--theme-surface, #fff)}
 .a-board-presence small{margin-left:auto;color:var(--theme-muted,#7b8290);font-size:10px;flex:none}
 @media(max-width:600px){.a-board-presence{right:12px;top:64px;width:158px}}
 
+.a-field select{width:100%;padding:10px 12px;border:1px solid var(--theme-line,#e3e4e6);border-radius:6px;background:var(--theme-surface,#fff);color:inherit;font:inherit}
+.a-field select:focus-visible{outline:2px solid var(--theme-accent,#4879f5);outline-offset:2px}
+
+.a-username-field{position:relative;min-width:0}
+.a-username-popup{position:absolute;z-index:5;top:100%;left:0;right:0;margin-top:-12px;padding:5px;border:1px solid var(--theme-line,#e1e4e8);border-radius:10px;background:var(--theme-surface,#fff);box-shadow:0 4px 12px #20253016}
+.a-username-popup .a-share-person[aria-selected=true]{background:var(--theme-raised,#f3f4f5)}
+.a-username-popup .a-member-details{display:flex;flex-direction:column;gap:3px;overflow-wrap:anywhere}
+.a-username-popup strong{font-size:13px;font-weight:500}
+.a-username-popup small,.a-username-status{font-size:11px;color:var(--theme-muted,#777d86)}
+.a-username-status{margin:7px 8px;line-height:1.5}
+
 .a-context-prompt{background:var(--theme-canvas,#f8f9fa);border-radius:7px;padding:8px 10px;white-space:pre-wrap}
 .a-context-result pre{overflow:auto}
 .a-context-result > :last-child{margin-bottom:0}
 .a-chatgpt-consent form{text-align:left;max-width:380px;margin:24px auto 0}
-.a-chatgpt-consent select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--theme-surface,#fff);color:inherit;font:inherit}
 .a-chatgpt-consent form .a-secondary{margin-left:8px}
 
 /* The board keeps its canvas position while the shared context is open. */
 .board-view-controls{display:flex;flex:0 1 auto;align-items:center;gap:8px;min-width:0}
 .topbar .board-view-controls .identity{order:0;min-width:0}
 #board-view-slot:empty{display:none}
-.board-view-switch{display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--line);border-radius:11px;background:var(--theme-surface,#fff)}
+.board-view-switch{display:inline-flex;align-items:center;gap:2px;padding:3px;border-radius:14px}
 .board-view-switch button{display:grid;place-items:center;width:34px;height:34px;padding:0;border:1px solid transparent;border-radius:8px;color:var(--muted)}
 .board-view-switch .icon{width:19px;height:19px;stroke-width:1.6;stroke-linecap:round}
 .board-view-switch button:hover{color:var(--theme-ink,#171717)}
 .board-view-switch button[aria-selected=true]{color:var(--theme-ink,#171717);background:var(--theme-raised,#f0f1f3);border-color:var(--line);box-shadow:inset 0 1px 0 var(--theme-shine,transparent)}
 .board-view-switch button:focus-visible{outline-offset:1px}
+.topbar .top-meta .a-context-connection{width:auto;padding:0 8px}
+body:not(.board-context-mode) .topbar .a-context-connection{display:none}
 .board-context-mode :is(#board,#chat-panel){visibility:hidden}
 .board-context-mode :is(#creation-dock,footer,#undo,.a-board-presence){display:none}
 #board-context{position:fixed;inset:0;overflow:hidden;background:var(--theme-canvas,#f8f9fa);z-index:9}
@@ -280,6 +292,8 @@ body.account-mode #account-app{background:var(--theme-surface, #fff)}
 @media(max-width:600px){
  .topbar .board-view-controls{order:2;flex:0 0 100%}
  .topbar .board-view-controls .identity{flex:0 1 auto}
+ .board-context-mode .a-board-account-actions{gap:4px}
+ .board-context-mode .topbar .top-meta .a-share-trigger{width:auto;padding:0 6px}
 }
 
 .context-canvas{position:absolute;inset:0;overflow:hidden;touch-action:none;cursor:grab;background-image:radial-gradient(circle,color-mix(in srgb,var(--theme-control,#989b9f) 44%,transparent) .7px,transparent .9px);background-size:var(--context-grid) var(--context-grid)}
@@ -299,7 +313,7 @@ body.account-mode #account-app{background:var(--theme-surface, #fff)}
 .context-reader.card{position:absolute;min-height:0;z-index:2;right:16px;bottom:70px;width:min(520px,calc(100vw - 32px));max-height:calc(100% - 200px);overflow:auto;overscroll-behavior:contain;touch-action:pan-y;cursor:auto;padding:17px 19px;overflow-wrap:anywhere}
 .context-reader header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .context-reader header button{font-size:20px;line-height:1}
-.context-zoom{position:absolute;right:24px;bottom:20px;display:flex;align-items:center;gap:10px;padding:3px 7px;border:1px solid var(--line);border-radius:9px;background:var(--theme-surface,#fff);color:var(--muted);font-size:11px}
+.context-zoom{position:absolute;right:24px;bottom:20px;display:flex;align-items:center;gap:10px;padding:3px 7px;border-radius:9px;color:var(--muted);font-size:11px}
 .context-zoom button{display:grid;place-items:center;width:24px;height:24px;padding:0;border-radius:5px;font-size:17px}
 .context-zoom .icon{width:15px;height:15px}
 .context-wires circle{fill:var(--blue)}

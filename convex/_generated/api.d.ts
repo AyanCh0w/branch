@@ -10,9 +10,12 @@
 
 import type * as access from "../access.js";
 import type * as accounts from "../accounts.js";
+import type * as agentCanvas from "../agentCanvas.js";
 import type * as auth from "../auth.js";
 import type * as boards from "../boards.js";
 import type * as chat from "../chat.js";
+import type * as chatgpt from "../chatgpt.js";
+import type * as chatgptActions from "../chatgptActions.js";
 import type * as chatgptHttp from "../chatgptHttp.js";
 import type * as chatgptOAuth from "../chatgptOAuth.js";
 import type * as chatgptSync from "../chatgptSync.js";
@@ -21,10 +24,12 @@ import type * as collaboration from "../collaboration.js";
 import type * as documents from "../documents.js";
 import type * as files from "../files.js";
 import type * as http from "../http.js";
+import type * as invitations from "../invitations.js";
 import type * as library from "../library.js";
 import type * as people from "../people.js";
 import type * as sharing from "../sharing.js";
 import type * as teams from "../teams.js";
+import type * as visualPlan from "../visualPlan.js";
 import type * as workspaceKeyActions from "../workspaceKeyActions.js";
 import type * as workspaceKeys from "../workspaceKeys.js";
 
@@ -37,9 +42,12 @@ import type {
 declare const fullApi: ApiFromModules<{
   access: typeof access;
   accounts: typeof accounts;
+  agentCanvas: typeof agentCanvas;
   auth: typeof auth;
   boards: typeof boards;
   chat: typeof chat;
+  chatgpt: typeof chatgpt;
+  chatgptActions: typeof chatgptActions;
   chatgptHttp: typeof chatgptHttp;
   chatgptOAuth: typeof chatgptOAuth;
   chatgptSync: typeof chatgptSync;
@@ -48,10 +56,12 @@ declare const fullApi: ApiFromModules<{
   documents: typeof documents;
   files: typeof files;
   http: typeof http;
+  invitations: typeof invitations;
   library: typeof library;
   people: typeof people;
   sharing: typeof sharing;
   teams: typeof teams;
+  visualPlan: typeof visualPlan;
   workspaceKeyActions: typeof workspaceKeyActions;
   workspaceKeys: typeof workspaceKeys;
 }>;

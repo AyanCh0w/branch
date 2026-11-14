@@ -1,6 +1,6 @@
 # Branch
 
-A collaborative canvas for branching conversations, research, notes, and media. Built with a local Node.js frontend server, React account/workspace UI, Convex, and Yjs. AI responses use server-side OpenAI Responses API calls with `gpt-5.4-mini`.
+A collaborative canvas for branching conversations, research, notes, and media. Built with a local Node.js frontend server, React account/workspace UI, Convex, and Yjs. AI responses use server-side OpenAI Responses API calls with `gpt-5.4-mini` by default. An approval-gated Sign in with ChatGPT integration lets connected users choose models available to their own plan.
 
 ## Local setup
 
@@ -44,6 +44,10 @@ Vercel uses `npm run build:vercel` to copy an explicit set of browser assets int
 
 The Vercel project should connect to `AyanCh0w/branch` with `main` as its production branch. The landing page is `/`, accounts and boards are `/app`, and existing `/?board=…` URLs still open the canvas. Local startup remains `npm run dev`. Development identity migration routes are disabled in hosted mode; do not configure the development bridge secret on Vercel.
 
+## ChatGPT plan connections
+
+AI settings replaces custom workspace API keys with personal ChatGPT connections and account-specific model choices. Hosted plan usage requires an approved OpenAI client; the feature stays unavailable until configured. The existing default model remains available. See [setup, security, and rollout requirements](collaboration/README.md#chatgpt-connections-and-model-choice).
+
 ## Use a card in Codex or Claude Code
 
 1. Run or update your Convex development deployment with `npx convex dev`, then build and open Branch. Sign in and open a board you can edit.
@@ -57,7 +61,7 @@ Branch connection keys are separate from your coding provider credentials. Keep 
 ## Sync work from ChatGPT
 
 1. Deploy this branch's frontend and Convex functions to a test environment. Set `BRANCH_APP_URL` in Convex to the frontend origin, with no path. The connector URL is the Convex HTTP site URL plus `/chatgpt/mcp`. If testing behind an HTTPS proxy, set `BRANCH_CONNECTOR_URL` in Convex to that proxy's origin and forward the MCP, OAuth and discovery routes there.
-2. Open a board you can edit and use **ChatGPT** in the board header to copy the connector URL. In [ChatGPT Plugins](https://chatgpt.com/plugins), add a custom MCP server with that URL and OAuth. Use client metadata discovery when prompted. Sign in to Branch and choose an editable test board.
+2. Open a board you can edit and switch to **Context**, then use **ChatGPT sync** in the board header to copy the connector URL. In [ChatGPT Plugins](https://chatgpt.com/plugins), add a custom MCP server with that URL and OAuth. Use client metadata discovery when prompted. Sign in to Branch and choose an editable test board.
 3. In a ChatGPT chat with the plugin selected, ask “Sync this chat's completed work to Branch as we go.” After the first save, switch from **Visualization** to **Context** next to the board title. The returned link and the card’s **Shared context** button open that conversation directly. Ask for a follow-up in the same chat to verify it adds to the same card.
 
 The Visualization canvas shows the card title and the Shared context button. The Context canvas shows connected conversations as cards, with updates linked to the selected conversation. Multiple editors can sync their own chats to the same board at once. Board members with viewing access can open the updates. ChatGPT calls the connector during the conversation, subject to its tool selection and confirmation settings. The plugin does not independently monitor chats, import past transcripts, or receive assistant messages without a tool call. **Disconnect** in the board's ChatGPT settings revokes future access and keeps previously shared updates. The existing Codex and Claude Code handoff endpoint remains at `/mcp`.

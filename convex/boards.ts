@@ -1,3 +1,6 @@
+import { nodeArgs } from '../collaboration/agent.cjs';
+import { place } from '../app/auto-layout.js';
+import { stepsValidator, writePlan } from './visualPlan';
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 import { access, requireDevelopmentSecret, tokenHash } from './access';
@@ -138,4 +141,37 @@ export const patchNodes = mutation({
     }
     await ctx.db.patch(args.boardId, {updatedAt:Date.now(),...(args.title !== undefined?{title: args.title.slice(0, 200)}:{})});
   },
+});
+
+// External agents can maintain only plans they created, with optimistic concurrency.
+export const updatePlan = mutation({
+ args:{token:v.string(),boardId:v.id('boards'),planId:v.string(),goal:v.string(),steps:stepsValidator,expectedVersion:v.number()},
+ handler:async(ctx,args)=>{
+  const {userId}=await access(ctx,args.token,args.boardId,true);
+  if(!/^[a-zA-Z0-9_-]{1,100}$/.test(args.planId))throw Error('Invalid plan ID');
+  return writePlan(ctx,args.boardId,userId,'plan-'+args.planId,args.goal,args.steps,args.expectedVersion);
+ }
+});
+
+export const addAgentCard = mutation({
+ args:{token:v.string(),boardId:v.id('boards'),cardId:v.string(),kind:v.string(),title:v.string(),content:v.string(),url:v.string(),sourceIds:v.array(v.string())},
+ handler:async(ctx,args)=>{
+  const {userId}=await access(ctx,args.token,args.boardId,true);
+  const a=nodeArgs(args);if(!/^[a-zA-Z0-9_-]{1,100}$/.test(args.cardId)||args.sourceIds.length>12)throw Error('Invalid card or sources');
+  const key='mcp-'+args.cardId;
+  const rows=await ctx.db.query('nodes').withIndex('board_key',q=>q.eq('boardId',args.boardId)).collect();
+  const existing=rows.find(n=>n.key===key);
+  if(existing){if(existing.deleted||existing.createdBy!==userId)throw Error('Card ID unavailable');return {id:key};}
+  const contexts=args.sourceIds.map(source=>{
+   const row=rows.find(n=>n.key===source&&!n.deleted);if(!row)throw Error('Source card not found');
+   const doc=loadDocument(row.textState),text=readText(doc);doc.destroy();
+   // External plan/finding links are frozen text snapshots, never fabricated page retrieval.
+   if(!['plan','web'].includes(row.data.type))throw Error('Connect a note or website source');
+   return {id:key+'-'+source,source,title:text.title,body:(row.data.url?'Website URL: '+row.data.url+'\nCollaborator notes:\n':'')+text.body,revision:row.textVersion+1,enabled:true};
+  });
+  const location=place(rows.filter(n=>!n.deleted).map(n=>n.data),{x:600,y:80},440,420);
+  const data={id:key,type:a.kind==='note'?'plan':a.kind==='chat'?'thread':'web',title:a.title,...location,width:440,revision:1,contexts,...(a.kind==='chat'?{draft:a.content,messages:[]}: {body:a.content}),...(a.kind==='website'?{url:a.url}:{})};
+  await ctx.db.insert('nodes',{boardId:args.boardId,key,data,textState:initialDocument(data),textVersion:0,createdBy:userId,updatedBy:userId,deleted:false});
+  await ctx.db.patch(args.boardId,{updatedAt:Date.now()});return {id:key};
+ }
 });

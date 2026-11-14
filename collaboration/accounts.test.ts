@@ -58,3 +58,17 @@ it('member permission changes protect ownership and take effect immediately',asy
  expect((await owner.query(api.sharing.settings,{boardId})).members.find(m=>m.id===member.id)?.responsibility).toBe('Design');
  expect(await owner.query(api.sharing.teammates,{boardId})).toEqual([]);
 });
+
+it('social thumbnails require a live invite and omit deleted cards and private fields',async()=>{
+ const {t,owner,boardId,auth}=await setup();
+ await owner.mutation(api.boards.patchNodes,{...auth,changes:[{id:'preview-note',create:{id:'preview-note',type:'upload',title:'Public note',body:'Board content',x:10,y:20,draft:'Private draft'}}]});
+ const linkToken='f'.repeat(64);
+ const linkId=await owner.mutation(api.sharing.createLink,{boardId,role:'viewer',label:'Preview',linkToken});
+ const preview=await t.query(api.sharing.socialPreview,{linkToken});
+ expect(preview.title).toBe('Private board');expect(preview.nodes).toHaveLength(1);expect(preview.nodes[0].title).toBe('Public note');expect(JSON.stringify(preview)).not.toContain('Private draft');
+ await owner.mutation(api.boards.patchNodes,{...auth,changes:[{id:'preview-note',remove:true}]});
+ expect((await t.query(api.sharing.socialPreview,{linkToken})).nodes).toHaveLength(0);
+ await owner.mutation(api.sharing.revokeLink,{linkId});
+ await expect(t.query(api.sharing.socialPreview,{linkToken})).rejects.toThrow();
+ await expect(t.query(api.sharing.socialPreview,{linkToken:'invalid'})).rejects.toThrow();
+});
