@@ -7,7 +7,7 @@ const demo = document.querySelector('.branch-demo');
 const choices = [...document.querySelectorAll('[data-pick]')];
 const explanations = [
   'Sam builds the React interface with the shared brief and API contract already in context.',
-  'Maya writes the Convex API against the same contract while Sam builds the frontend.',
+  'Maya writes the Supabase API against the same contract while Sam builds the frontend.',
   'Alex writes contract tests in a separate branch with the shared architecture already attached.'
 ];
 function selectBranch(index, keyboard = false) {

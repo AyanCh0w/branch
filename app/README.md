@@ -14,7 +14,7 @@ Open http://127.0.0.1:4387. Run from the repository root. Node 22+ is required. 
 
 All new chat responses use **gpt-5.4-mini only**, through the OpenAI Responses API. The model is fixed server-side; there is no fallback. The browser sends the active conversation and its resolved inherited context to the local server, which keeps the key out of browser JavaScript and storage. Local chat requests use `store: false`, a 12,000-token output limit, and a two-minute timeout. Output streams into the card; incoming blue flow ends when generation completes or fails. Errors appear in the card with Retry. Undo/delete abort in-flight requests.
 
-Earlier demo responses remain in existing boards; new responses record their actual model and response ID. Accounts and shared boards use Convex Auth and Yjs; the frontend is still served locally.
+Earlier demo responses remain in existing boards; new responses record their actual model and response ID. Accounts and shared boards use Supabase Auth, Postgres, and Yjs. The full app is hosted on Cloudflare; see `supabase/README.md` for deployment details.
 
 Text notes contribute their contents. Supported images and PDFs contribute typed API inputs; YouTube cards can provide public captions. Website URLs trigger hosted web search at send time, with collaborator notes labeled separately. See the shared-board guide for access limits and frozen context behavior.
 
@@ -33,7 +33,7 @@ Verified with a real model request using an attached project code, plus a browse
 - Select text for a rounded highlight. Hover the selection handle to open a dark prompt; Enter runs it in a new chat. Blue nibs are visible on hover/focus and remain visible when connected.
 - Paste YouTube URLs, website URLs, text, or images directly onto blank canvas. Drop local files to import. Text fields retain native paste.
 - Wikimedia image search is live; drag results onto the board with a faded preview. YouTube uses pasted links, thumbnail cards, and click-to-play embedded players. Websites use embedded previews with a browser fallback when framing is blocked.
-- Shared uploads use board-scoped Convex storage (25 MB per file) with an IndexedDB preview cache. Shared board state persists in Convex and Yjs documents. Undo is session-local.
+- Shared uploads use board-scoped Supabase Storage (25 MB per file) with an IndexedDB preview cache. Shared board state persists in Supabase Postgres and Yjs documents. Undo is session-local.
 
 ## Validation
 

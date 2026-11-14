@@ -15,8 +15,9 @@
     "worker": "node backend/worker.bundle.cjs",
     "test:supabase": "vitest run --config vitest.supabase.config.ts",
     "typecheck:legacy": "tsc --noEmit -p convex",
-    "build:cloudflare": "npm run build && node scripts/build-public.cjs && node scripts/build-cloudflare.cjs",
-    "deploy:cloudflare": "npm run build:cloudflare && wrangler deploy"
+    "build:cloudflare": "npm run build && node scripts/build-public.cjs && node scripts/build-cloudflare.cjs && npm run audit:runtime",
+    "deploy:cloudflare": "npm run build:cloudflare && wrangler deploy",
+    "audit:runtime": "node scripts/audit-runtime.cjs"
   },
   "keywords": [],
   "author": "",

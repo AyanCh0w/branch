@@ -102,6 +102,15 @@ Live verification scripts are opt-in and create temporary fixtures in the config
 
 ## Cloudflare hosting
 
+The Cloudflare build runs `npm run audit:runtime` against its generated browser,
+API, worker, and static artifacts. It fails on Convex SDK imports, bundled clients,
+or `.convex.cloud` / `.convex.site` endpoints. Retained `convex/` sources and dev
+dependencies serve only legacy parity tests/rollback; active code uses `backend/`.
+The live routing audit found no Convex URLs on active cards/files/boards or pending
+runs. Completed imported run snapshots retain historical file URLs for provenance;
+they are not replayed or used to display active files. The old Vercel deployment
+is a separate preserved legacy site, not a fallback from Cloudflare.
+
 The full app is hosted at **https://branch.eshteremberg.workers.dev**. It uses
 Cloudflare Workers + Static Assets for the frontend/API, the `branch-jobs` Queue
 for background generation, and Hyperdrive `branch-supabase` for PostgreSQL.
