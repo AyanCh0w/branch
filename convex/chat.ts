@@ -1,3 +1,4 @@
+import { stepsValidator, writePlan } from './visualPlan';
 import { connectionForUser } from './chatgpt';
 import { planRequest, providerError, completedResponse } from '../collaboration/chatgpt/requests.cjs';
 import { mutation, internalMutation, internalQuery, internalAction } from './_generated/server';
@@ -6,7 +7,7 @@ import { v, ConvexError } from 'convex/values';
 import { ASSISTANT_ROLE, WEB_INSTRUCTIONS, webOptions, citedText, reasoningOptions, activityForEvent } from '../collaboration/web-search.cjs';
 import { contextInput } from '../collaboration/context-input.cjs';
 import { hydrateVideos } from '../app/video-context.js';
-import { CANVAS_TOOL, CANVAS_INSTRUCTIONS, PASSES, nodeArgs, researchSources } from '../collaboration/agent.cjs';
+import { PLAN_TOOL, CANVAS_TOOL, CANVAS_INSTRUCTIONS, PASSES, nodeArgs, researchSources } from '../collaboration/agent.cjs';
 import { place } from '../app/auto-layout.js';
 import { fileForBoard } from './files';
 import { peopleContext } from './people';
@@ -162,8 +163,8 @@ export const generate = internalAction({
       const research=!!run.input.agent&&phase<2;
       if(run.input.agent&&!saved.continuing)input.push({role:'developer',content:PASSES[phase]});
       const options=webOptions(run.input.messages,run.input.contexts);
-      const tools=research?[{type:'web_search'}]:saved.turn>=5?[{type:'web_search'}]:[...options.tools,CANVAS_TOOL];
-      const request:any={ model:run.model, instructions:WEB_INSTRUCTIONS+CANVAS_INSTRUCTIONS, tools, tool_choice:saved.turn===0&&options.tool_choice==='required'?{type:'web_search'}:'auto', include:['reasoning.encrypted_content','web_search_call.action.sources'], reasoning:reasoningOptions(run.input.modelStage), input, stream:true, store:false, max_output_tokens:12000, max_tool_calls:research?12:8 };
+      const tools=saved.turn>=8?[{type:'web_search'}]:[...options.tools,CANVAS_TOOL,PLAN_TOOL];
+      const request:any={ model:run.model, instructions:WEB_INSTRUCTIONS+CANVAS_INSTRUCTIONS, tools, tool_choice:run.input.agent&&saved.turn===0?{type:'function',name:'update_plan'}:saved.turn===0&&options.tool_choice==='required'?{type:'web_search'}:'auto', include:['reasoning.encrypted_content','web_search_call.action.sources'], reasoning:reasoningOptions(run.input.modelStage), input, stream:true, store:false, max_output_tokens:12000, max_tool_calls:research?12:8 };
       const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' }, body: JSON.stringify(connected?planRequest(request):request), signal: AbortSignal.timeout(150000) });
       if (!response.ok) throw Error(connected?providerError(response.status):'OpenAI request failed (' + response.status + ')');
       const reader = response.body!.getReader(); const decoder = new TextDecoder(); let buffer = ''; let complete = false;let sourceEvent=0;
@@ -185,11 +186,12 @@ export const generate = internalAction({
             const usage={input_tokens:(run.usage?.input_tokens||0)+(response.usage?.input_tokens||0),output_tokens:(run.usage?.output_tokens||0)+(response.usage?.output_tokens||0),total_tokens:(run.usage?.total_tokens||0)+(response.usage?.total_tokens||0)};
             const calls=(response.output||[]).filter((item:any)=>item.type==='function_call');
             const nextInput=[...input,...(response.output||[])];
-            for(const call of calls){let result;try{if(call.name!=='create_node')throw Error('Unknown tool');result=await ctx.runMutation(internal.chat.createNode,{runId:run._id,callId:call.call_id,node:nodeArgs(call.arguments)});}catch(error:any){result={error:error.message};}nextInput.push({type:'function_call_output',call_id:call.call_id,output:JSON.stringify(result)});}
-            if((research||calls.length)&&saved.turn<6){
+            for(const call of calls){let result;try{if(call.name==='update_plan'){const plan=JSON.parse(call.arguments);result=await ctx.runMutation(internal.chat.updatePlan,{runId:run._id,...plan});}else {if(call.name!=='create_node')throw Error('Unknown tool');result=await ctx.runMutation(internal.chat.createNode,{runId:run._id,callId:call.call_id,node:nodeArgs(call.arguments)});}}catch(error:any){result={error:error.message};}nextInput.push({type:'function_call_output',call_id:call.call_id,output:JSON.stringify(result)});}
+            if((research||calls.length)&&saved.turn<9){
               await ctx.runMutation(internal.chat.checkpoint,{runId:run._id,checkpoint:{phase:calls.length?phase:phase+1,turn:saved.turn+1,input:nextInput,continuing:!!calls.length},usage});
               return;
             }
+            if(research||calls.length)throw Error('Research reached its step limit. Review the plan and continue in a new run.');
             await ctx.runMutation(internal.chat.append,{runId:run._id,text:pending,done:true,finalText:citedText(response),usage});pending='';complete=true;
           }
           if (['error','response.failed','response.incomplete'].includes(event.type)) throw Error(connected?providerError(0,event.response?.error?.code||event.error?.code):'The AI response stopped early');
@@ -206,3 +208,11 @@ export const generate = internalAction({
     } catch (error: any) { await ctx.runMutation(internal.chat.append, { runId: args.runId, text: pending, error: error.message || 'Generation failed' }); }
   },
 });
+
+export const updatePlan = internalMutation({args:{runId:v.id('runs'),goal:v.string(),steps:stepsValidator},handler:async(ctx,args)=>{
+ const run=await ctx.db.get(args.runId);if(!run||run.status!=='streaming')throw Error('Run is no longer active');
+ await accessForUser(ctx,run.initiatedBy,run.boardId,true);
+ const origin=await ctx.db.query('nodes').withIndex('board_key',q=>q.eq('boardId',run.boardId).eq('key',run.nodeKey)).unique();
+ if(!origin||origin.deleted||origin.data.activeRun!==run._id)throw Error('Source node is no longer available');
+ return writePlan(ctx,run.boardId,run.initiatedBy,String(run._id)+'-plan',args.goal,args.steps,undefined,origin.data);
+}});

@@ -9,7 +9,8 @@
     "convex:dev": "convex dev",
     "test": "node --test app/tests/*.test.cjs && vitest run",
     "typecheck": "tsc --noEmit -p convex",
-    "build:vercel": "npm run build && node scripts/build-public.cjs"
+    "build:vercel": "npm run build && node scripts/build-public.cjs",
+    "mcp": "node mcp/server.cjs"
   },
   "keywords": [],
   "author": "",

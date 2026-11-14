@@ -132,6 +132,12 @@ Before enabling a production registration, complete a real connect → model dis
 
 The top-right canvas roster shows each active person's local Blobz avatar and display name, including the current person. Attendance is independent of cursor position and editing leases, so reading or using board controls keeps people visible without blocking Send. Visible tabs renew attendance every five seconds; hidden tabs and navigation release their own session. Multiple tabs are grouped by user, revoked access is filtered, and lost connections expire after 15 seconds (also filtered locally). Deploy the additive `boardPresence` schema and `collaboration:activeUsers` / `collaboration:attend` functions with this frontend.
 
+## Visual work plans and external MCP
+
+Research agents now publish an on-canvas work plan before searching, then maintain concrete steps, statuses, evidence and blockers with `update_plan`. Canvas tools are available during discovery and verification as well as synthesis. Plan updates use Yjs, preserve manual edits and revalidate the active run and sender's access; a separate plan does not consume the five finding-card allowance. Bounded runs report an error rather than treating unfinished tool calls as completed research.
+
+The local stdio MCP server exposes `list_boards`, `create_board`, `read_board`, `update_plan` and `add_card` for external agents. See [setup and workflow](../mcp/README.md). It authenticates through existing Branch accounts and never issues development identities, starts model requests, or replaces a board snapshot. Deploy the new `boards:updatePlan` and `boards:addAgentCard` mutations along with the updated chat backend before connecting it.
+
 ## Invitation autocomplete
 
 Board Share and workspace member invitations suggest existing accounts after two username characters, ignoring case and an optional `@`. Owners alone can query suggestions; results contain only username, display name, avatar color and user ID, excluding self and existing direct/workspace members. Arrow keys and Enter select a suggestion; Escape dismisses it, and Add remains an explicit action. Lookup failure preserves manual username entry. Deploy `invitations:suggestions` with the frontend. The current lookup resolves usernames through the auth component across account rows; a dedicated indexed directory will be needed before scaling to a large account population.
