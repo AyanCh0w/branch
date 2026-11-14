@@ -132,6 +132,12 @@ Before enabling a production registration, complete a real connect → model dis
 
 The top-right canvas roster shows each active person's local Blobz avatar and display name, including the current person. Attendance is independent of cursor position and editing leases, so reading or using board controls keeps people visible without blocking Send. Visible tabs renew attendance every five seconds; hidden tabs and navigation release their own session. Multiple tabs are grouped by user, revoked access is filtered, and lost connections expire after 15 seconds (also filtered locally). Deploy the additive `boardPresence` schema and `collaboration:activeUsers` / `collaboration:attend` functions with this frontend.
 
+## Shared link thumbnails
+
+New Anyone with the link URLs use `/app?join=…` so server-side preview crawlers receive the board title, card count, and a 1200×630 PNG rendered from the saved card layout, titles, snippets, and connections. Legacy `#join` links still open invitations but cannot provide board-specific crawler previews. Restricted board URLs remain generic. Preview queries and image requests independently require a live invite; revoked, expired, and archived boards return no board details. Responses are not cached by Branch, although messaging services may retain previews they already fetched. Preview responses set a no-referrer policy. Raw files, draft prompts, and remote images are not fetched for thumbnails.
+
+Deploy `sharing:socialPreview` and the frontend/API routes together. Vercel bundles the workspace HTML and renderer font explicitly; `npm run build:vercel` prepares these assets. Local and hosted routes share the renderer. This change does not publish a deployment.
+
 ## Visual work plans and external MCP
 
 Research agents now publish an on-canvas work plan before searching, then maintain concrete steps, statuses, evidence and blockers with `update_plan`. Canvas tools are available during discovery and verification as well as synthesis. Plan updates use Yjs, preserve manual edits and revalidate the active run and sender's access; a separate plan does not consume the five finding-card allowance. Bounded runs report an error rather than treating unfinished tool calls as completed research.

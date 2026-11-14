@@ -29,3 +29,5 @@ module.exports.resolveFiles=async(req,contexts)=>{for(const c of contexts){const
 
 module.exports.chatgptClient=requestClient;
 module.exports.aiProvider=async(req)=>{const encryptionKey=process.env.CHATGPT_ENCRYPTION_KEY||env.CHATGPT_ENCRYPTION_KEY;const client=requestClient(req),args={boardId:req.headers['x-board-id'],token:req.headers['x-board-token']||''};if(!await client.query('chatgpt:boardConnection',args))return null;if(!encryptionKey)throw Error('ChatGPT server is not configured');return client.action('chatgptActions:forServer',{boardId:req.headers['x-board-id'],token:req.headers['x-board-token']||'',secret:encryptionKey});};
+
+module.exports.socialPreview=async(linkToken)=>{if(!convex)throw Error('Unavailable');return convex.query('sharing:socialPreview',{linkToken});};

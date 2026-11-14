@@ -6,9 +6,55 @@
   "functions": {
     "api/*.js": {
       "maxDuration": 180
+    },
+    "api/share.js": {
+      "includeFiles": "app/{index.html,pdfjs/standard_fonts/LiberationSans-Regular.ttf}"
+    },
+    "api/share-image.js": {
+      "includeFiles": "app/pdfjs/standard_fonts/LiberationSans-Regular.ttf"
     }
   },
   "rewrites": [
+    {
+      "source": "/app",
+      "has": [
+        {
+          "type": "query",
+          "key": "join"
+        }
+      ],
+      "destination": "/api/share"
+    },
+    {
+      "source": "/app",
+      "has": [
+        {
+          "type": "query",
+          "key": "board"
+        }
+      ],
+      "destination": "/api/share"
+    },
+    {
+      "source": "/app/",
+      "has": [
+        {
+          "type": "query",
+          "key": "join"
+        }
+      ],
+      "destination": "/api/share"
+    },
+    {
+      "source": "/app/",
+      "has": [
+        {
+          "type": "query",
+          "key": "board"
+        }
+      ],
+      "destination": "/api/share"
+    },
     {
       "source": "/app",
       "destination": "/workspace.html"
@@ -25,6 +71,17 @@
         {
           "type": "query",
           "key": "board"
+        }
+      ],
+      "destination": "/app",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "join"
         }
       ],
       "destination": "/app",
