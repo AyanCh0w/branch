@@ -10,7 +10,8 @@ async function main(){
  const manifest=JSON.parse(fs.readFileSync(path.join(root,'supabase-append-manifest.json'),'utf8'));
  assert(manifest.complete&&manifest.project===cfg.url&&manifest.fingerprint===source.fingerprint);
  const backup=JSON.parse(fs.readFileSync(manifest.backup,'utf8'));
- const db=new Client({connectionString:cfg.database});await db.connect();
+ const db=new Client({connectionString:cfg.database});let dbClosed=false,dbError;
+ db.on('error',error=>{dbError=error;});await db.connect();
  try{
   await db.query('set extra_float_digits=3');
   await verifyRecords(db,source.records);
@@ -22,6 +23,10 @@ async function main(){
   }
   assert.equal((await db.query('select count(*)::int as n from branch_private.accounts where user_id=any($1::text[])',[source.missingUsers])).rows[0].n,0);
   console.log('PASS all eight password hashes and account mappings preserved; history placeholders cannot sign in');
+  if(dbError)throw dbError;
+  // This direct connection is no longer used below. Close it before the longer
+  // permission/file checks rather than leaving it idle behind the session pooler.
+  await db.end();dbClosed=true;
   const boards=source.records.filter(r=>r.collection==='boards');
   const outsider=backup.accounts[0].user_id;
   for(let i=0;i<boards.length;i+=4)await Promise.all(boards.slice(i,i+4).map(async b=>{
@@ -50,6 +55,6 @@ async function main(){
   manifest.verifiedAt=new Date().toISOString();manifest.verification={records:source.records.length,unchanged:backup.records.length,accountHashes:source.accounts.length,boardReads:boards.length,files:source.files.length,authorization:'unrelated account rejected',hostedConfig:'supabase',passwordSignIn:'hash preservation verified; individual plaintext passwords not available'};
   fs.writeFileSync(path.join(root,'supabase-append-manifest.json'),JSON.stringify(manifest,null,2),{mode:0o600});
   console.log('PASS Cloudflare serves Supabase configuration; audit saved privately');
- }finally{await db.end();await pool.end();}
+ }finally{if(!dbClosed)await db.end();await pool.end();}
 }
 main().catch(e=>{console.error('Verification failed; private data suppressed ('+(e.code||e.name)+').');process.exitCode=1;});
