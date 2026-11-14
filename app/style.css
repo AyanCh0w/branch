@@ -752,3 +752,5 @@ body.account-mode .human-cursors,body.shared-starting .human-cursors{display:non
 .gh-reads li{display:flex;gap:8px;align-items:baseline;font-size:12px;min-width:0}
 .gh-reads a{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--theme-ink, #373940);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gh-reads li span{color:var(--theme-muted, #858b93);font-size:11px;white-space:nowrap}
+html body #cards .gh-scope-options input[type=checkbox]{width:14px;height:14px;min-width:14px;flex:none;margin:0;padding:0;display:inline-block}
+html body #cards .gh-scope-options label span{flex:1 1 auto;min-width:0}
