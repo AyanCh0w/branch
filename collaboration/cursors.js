@@ -1,9 +1,13 @@
 // Ephemeral human presence. Never writes canvas content or editing leases.
+// Positions are sent at most every 200 ms, only after a visible move, and not at
+// all while nobody else is on the board.
+const INTERVAL_MS=200,MIN_MOVE=6;
+const othersPresent=()=>(window.BranchPresenceCount??2)>1;
 export function startCursors({client,scope,tabId,host}){
  const board=document.getElementById('board');
  if(!board||!host.boardPoint||!host.screenPoint)return ()=>{};
  const layer=document.createElement('div');layer.className='human-cursors';layer.setAttribute('aria-hidden','true');board.append(layer);
- let disposed=false,online=client.connectionState().isWebSocketConnected,rows=[],pointer=null,pending,writing=false,timer,lastSent=0;
+ let disposed=false,online=client.connectionState().isWebSocketConnected,rows=[],pointer=null,pending,writing=false,timer,lastSent=0,sentPosition=null;
  const elements=new Map();
  function render(){
   const visible=new Set();
@@ -21,12 +25,18 @@ export function startCursors({client,scope,tabId,host}){
  async function flush(){
   clearTimeout(timer);timer=null;
   if(writing||pending===undefined||!online)return;
-  const position=pending;pending=undefined;writing=true;lastSent=Date.now();
+  const position=pending;pending=undefined;writing=true;lastSent=Date.now();sentPosition=position;
   try{await client.mutation('collaboration:point',{...scope,tabId,position});}catch{/* Presence failure must not disable editing. */}
   finally{writing=false;if(disposed){if(position)client.mutation('collaboration:point',{...scope,tabId,position:null}).catch(()=>{});}else if(pending!==undefined)schedule();}
  }
- function schedule(){if(!timer&&!writing)timer=setTimeout(flush,Math.max(0,80-(Date.now()-lastSent)));}
- function publish(){pending=pointer&&!document.hidden?host.boardPoint(pointer.x,pointer.y):null;schedule();}
+ function schedule(){if(!timer&&!writing)timer=setTimeout(flush,Math.max(0,INTERVAL_MS-(Date.now()-lastSent)));}
+ function publish(force=false){
+  const next=pointer&&!document.hidden&&othersPresent()?host.boardPoint(pointer.x,pointer.y):null;
+  // Skip tiny moves, and repeated "gone" updates.
+  if(!force&&next&&sentPosition&&Math.hypot(next.x-sentPosition.x,next.y-sentPosition.y)<MIN_MOVE)return;
+  if(!next&&sentPosition===null&&pending===undefined)return;
+  pending=next;schedule();
+ }
  function move(e){
   if(!e.target.closest?.('#board')||e.target.closest('iframe'))return leave();
   pointer={x:e.clientX,y:e.clientY};publish();
@@ -41,7 +51,8 @@ export function startCursors({client,scope,tabId,host}){
  document.addEventListener('pointerup',up);document.addEventListener('pointercancel',leave);
  document.addEventListener('visibilitychange',visibility);document.addEventListener('branch-camera',camera);
  document.documentElement.addEventListener('pointerleave',leave);window.addEventListener('blur',leave);window.addEventListener('pagehide',leave);
- const heartbeat=setInterval(()=>{render();if(pointer&&online)publish();},5000);
+ // Keeps a still cursor from expiring (15 s), only while someone else can see it.
+ const heartbeat=setInterval(()=>{render();if(pointer&&online&&othersPresent())publish(true);},8000);
  const expiry=setInterval(render,1000);
  return ()=>{
   disposed=true;clearTimeout(timer);clearInterval(heartbeat);clearInterval(expiry);pending=undefined;

@@ -72,7 +72,41 @@ function enqueue(work) {
   queue = next.catch(error => { failure = error; keepRecovery(); status('Sync paused · edits kept on this device'); host.notify(error.message); updateLocks(); });
   return next;
 }
+// Each card's text has its own live subscription (collaboration:text), so a
+// keystroke on one card sends only that card's text to everyone else.
+const textSubs = new Map();
+let lastSnapshot = null, rerenderQueued = false;
+function watchText(key) {
+  if (textSubs.has(key) || !client) return;
+  textSubs.set(key, client.onUpdate('collaboration:text', args({ nodeKey: key }), value => applyText(key, value), () => {}));
+}
+function unwatchText(key) { const stop = textSubs.get(key); textSubs.delete(key); try { stop?.(); } catch {} }
+// While a chat is generating, its reply streams through chat:stream instead of
+// rewriting the card (and re-sending the board) for every chunk.
+const streams = new Map();
+function rerenderSoon() { if (!rerenderQueued && lastSnapshot) { rerenderQueued = true; queueMicrotask(() => { rerenderQueued = false; if (lastSnapshot) receive(lastSnapshot); }); } }
+function watchStream(key) {
+  if (streams.has(key) || !client) return;
+  const entry = { value: null, stop: null };
+  streams.set(key, entry);
+  entry.stop = client.onUpdate('chat:stream', args({ nodeKey: key }), value => { entry.value = value; rerenderSoon(); }, () => {});
+}
+function unwatchStream(key) { const entry = streams.get(key); streams.delete(key); try { entry?.stop?.(); } catch {} }
+function liveReply(data) {
+  const live = streams.get(data.id)?.value;
+  if (!live || !data.activeRun || String(data.activeRun) !== live.runId) return data;
+  return { ...data, activity: live.activity || data.activity, messages: (data.messages || []).map(m => m.id === live.assistantId ? { ...m, text: live.text } : m) };
+}
+function applyText(key, value) {
+  const item = docs.get(key);
+  if (!value || !item) return;
+  Y.applyUpdate(item.doc, new Uint8Array(value.textState), 'remote');
+  item.version = value.version; item.loaded = true;
+  // Coalesce bursts of remote text into one re-render.
+  rerenderSoon();
+}
 function forgetDeletedNode(key) {
+  unwatchText(key);unwatchStream(key);
   if (pending.has(key)) keepRecovery();
   pending.delete(key);
   overlays.delete(key);
@@ -87,12 +121,12 @@ function makeDoc(key, state, epoch) {
   if (!item) {
     const doc = new Y.Doc();
     if (state) Y.applyUpdate(doc, new Uint8Array(state));
-    item = { doc, epoch, undo: new Y.UndoManager(fields.map(f => doc.getText(f)), { trackedOrigins: new Set([localOrigin]) }) };
+    item = { doc, epoch, loaded: !!state, undo: new Y.UndoManager(fields.map(f => doc.getText(f)), { trackedOrigins: new Set([localOrigin]) }) };
     docs.set(key, item);
     doc.on('update', (update, origin) => {
       if (origin !== localOrigin && origin !== item.undo) return;
       const list = pending.get(key) || []; list.push(update); pending.set(key, list);
-      schedule();
+      schedule(600);
     });
   }
   return item;
@@ -106,17 +140,25 @@ function changeText(text, value) {
   if(value.length-left-right)text.insert(left,value.slice(left,value.length-right));
 }
 function metadata(node) { const result = copy(node); for(const key of [...fields,'sharedVersion','sharedTextState','activeRun','activity','draftEpoch','messages','authorProfile','codingResult','chatgptSynced','chatgptSyncOwner','chatgptLatestUpdate']) delete result[key]; return result; }
-function schedule() { clearTimeout(timer);timer=setTimeout(()=>flush().catch(()=>{}),70); }
+// Typing is saved after a short pause (or at least every 1.5 s while typing),
+// not per keystroke. Blur, Send and navigation flush immediately.
+let firstScheduled = 0;
+function schedule(delay = 100) {
+  clearTimeout(timer);
+  const now = Date.now();
+  if (!firstScheduled) firstScheduled = now;
+  timer = setTimeout(() => { firstScheduled = 0; flush().catch(() => {}); }, Math.max(0, Math.min(delay, firstScheduled + 1500 - now)));
+}
 function keepRecovery(){try{localStorage.setItem('branch-unsynced-'+credentials.boardId,JSON.stringify({savedAt:new Date().toISOString(),state:host.getState()}));}catch{}}
 function edit(node, field, value) {
   if (!ready || !writable || applying || !fields.includes(field)) return;
   const item=docs.get(node.id);
-  if(item)item.doc.transact(()=>changeText(item.doc.getText(field),value),localOrigin);
-  schedule();
+  if(item){item.loaded=true;item.doc.transact(()=>changeText(item.doc.getText(field),value),localOrigin);}
+  schedule(600);
 }
 function saveState(state) { if(ready&&writable&&!applying){for(const node of state.nodes)for(const field of fields)edit(node,field,String(node[field]||''));schedule();} }
 async function flush() {
-  clearTimeout(timer);
+  clearTimeout(timer);firstScheduled=0;
   if(!ready||!writable||applying)return;
   if(failure)throw failure;
   const state=copy(host.getState()); const previous=new Map((lastState?.nodes||[]).map(n=>[n.id,n]));
@@ -132,11 +174,9 @@ async function flush() {
   if(changes.length||title!==undefined){
     await enqueue(async()=>{
       await client.mutation('boards:patchNodes',args({changes,...(title!==undefined?{title}:{})}));
+      // The server creates the canonical Yjs documents. Read them once per batch.
+      if(changes.some(change=>change.create&&!docs.has(change.id)))receive(await client.query('boards:read',args()));
       for(const change of changes){
-        if(change.create&&!docs.has(change.id)){
-          // The server creates the canonical Yjs document. Do not independently seed it.
-          const snapshot=await client.query('boards:read',args());receive(snapshot);
-        }
         const overlay=overlays.get(change.id);
         if(same(overlay,change.remove?{remove:true}:change.create?{create:change.create}:{patch:change.patch}))overlays.delete(change.id);
       }
@@ -164,14 +204,16 @@ function selectionOffset(el){if(el instanceof HTMLTextAreaElement)return [el.sel
 function caretSnapshot(){const el=document.activeElement,field=fieldOf(el),key=el?.closest?.('.card')?.dataset.node,item=docs.get(key);if(!item||!fields.includes(field))return null;const offsets=selectionOffset(el);if(!offsets)return null;return {key,field,positions:offsets.map(i=>Y.createRelativePositionFromTypeIndex(item.doc.getText(field),i))};}
 function restoreCaret(saved){if(!saved)return;const item=docs.get(saved.key);if(!item)return;const el=document.querySelector(`[data-node="${saved.key}"] ${saved.field==='draft'?'[data-prompt]':`[data-edit="${saved.field}"]`}`);if(!el)return;const offsets=saved.positions.map(p=>Y.createAbsolutePositionFromRelativePosition(p,item.doc)?.index||0);el.focus({preventScroll:true});if(el instanceof HTMLTextAreaElement){el.setSelectionRange(...offsets);return;}const point=index=>{const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let leaf,last;while(leaf=walker.nextNode()){last=leaf;if(index<=leaf.length)return [leaf,index];index-=leaf.length;}return last?[last,last.length]:[el,0];};getSelection().setBaseAndExtent(...point(offsets[0]),...point(offsets[1]));}
 function receive(snapshot){
-  if(!snapshot)return;writable=snapshot.role!=='viewer';document.body.classList.toggle('board-viewer',!writable);if(!writable){window.BranchCoding?.reset();stopCoding();}else if(ready)watchCoding();const caret=caretSnapshot();applying=true;
+  if(!snapshot)return;lastSnapshot={...snapshot,nodes:snapshot.nodes.map(({sharedTextState,...node})=>node)};writable=snapshot.role!=='viewer';document.body.classList.toggle('board-viewer',!writable);if(!writable){window.BranchCoding?.reset();stopCoding();}else if(ready)watchCoding();const caret=caretSnapshot();applying=true;
   try{
     const nodes=[];const seen=new Set();
     for(const remote of snapshot.nodes){
       seen.add(remote.id);const overlay=overlays.get(remote.id);if(overlay?.remove)continue;
-      const item=makeDoc(remote.id,remote.sharedTextState,remote.draftEpoch||0);Y.applyUpdate(item.doc,new Uint8Array(remote.sharedTextState),'remote');item.epoch=remote.draftEpoch||0;
-      const data={...remote,...overlay?.patch};delete data.sharedTextState;
-      for(const field of fields)data[field]=item.doc.getText(field).toString();
+      const item=makeDoc(remote.id,remote.sharedTextState,remote.draftEpoch||0);if(remote.sharedTextState){Y.applyUpdate(item.doc,new Uint8Array(remote.sharedTextState),'remote');item.loaded=true;}item.epoch=remote.draftEpoch||0;watchText(remote.id);
+      if(remote.activeRun)watchStream(remote.id);else unwatchStream(remote.id);
+      const data=liveReply({...remote,...overlay?.patch});delete data.sharedTextState;
+      // Until a card's text has arrived, keep what the board feed carries.
+      for(const field of fields)data[field]=item.loaded?item.doc.getText(field).toString():(data[field]??'');
       nodes.push(data);
     }
     for(const [key,overlay]of overlays)if(!seen.has(key)&&overlay.create)nodes.push(copy(overlay.create));
@@ -229,7 +271,7 @@ const coding = {
     nodeKey, handoffId, publish, ...(expectedPublishedId ? { expectedPublishedId } : {}),
   })),
 };
-window.BoardShared={coding,connect:start,async disconnect(){window.BranchCoding?.reset();await deletionQueue;if(ready&&writable&&!failure){try{await flush();await focusTask;await client.mutation('collaboration:release',args({tabId}));}catch{keepRecovery();}}ready=false;active=null;clearTimeout(timer);stopCoding();for(const off of subscriptions.splice(0))off();docs.clear();uploadedFiles.clear();pending.clear();overlays.clear();},get writable(){return writable;},headers(){return {'X-Board-Id':credentials?.boardId||'','X-Board-Token':credentials?.token||'',...(window.BranchAccount?.token?{Authorization:'Bearer '+window.BranchAccount.token}:{})};},get enabled(){return ready;},get applying(){return applying;},saveState,edit,send,deleteNode,moveNodes,async stop(key){try{await client.mutation('chat:stop',args({nodeKey:key}));}catch(error){host.notify(error.message);}},async uploadFile(file){
+window.BoardShared={coding,connect:start,async disconnect(){window.BranchCoding?.reset();await deletionQueue;if(ready&&writable&&!failure){try{await flush();await focusTask;await client.mutation('collaboration:release',args({tabId}));}catch{keepRecovery();}}ready=false;active=null;clearTimeout(timer);stopCoding();for(const key of [...textSubs.keys()])unwatchText(key);for(const key of [...streams.keys()])unwatchStream(key);lastSnapshot=null;for(const off of subscriptions.splice(0))off();docs.clear();uploadedFiles.clear();pending.clear();overlays.clear();},get writable(){return writable;},headers(){return {'X-Board-Id':credentials?.boardId||'','X-Board-Token':credentials?.token||'',...(window.BranchAccount?.token?{Authorization:'Bearer '+window.BranchAccount.token}:{})};},get enabled(){return ready;},get applying(){return applying;},saveState,edit,send,deleteNode,moveNodes,async stop(key){try{await client.mutation('chat:stop',args({nodeKey:key}));}catch(error){host.notify(error.message);}},async uploadFile(file){
  const scope=args();const {ticket,url}=await client.mutation('files:uploadUrl',scope);
  const response=await fetch(url,{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream'},body:file});
  if(!response.ok)throw Error('File upload failed');
@@ -238,7 +280,7 @@ window.BoardShared={coding,connect:start,async disconnect(){window.BranchCoding?
 document.addEventListener('keydown',e=>{if(ready&&(e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'&&fields.includes(fieldOf(e.target))){e.preventDefault();e.stopImmediatePropagation();window.BoardShared.undo(e.shiftKey);}},true);
 document.addEventListener('focusin',e=>focusEditor(e.target));
 document.addEventListener('focusout',e=>blurEditor(e.target));
-setInterval(()=>{updateLocks();if(active&&connected){const current=active;focusTask=focusTask.catch(()=>{}).then(async()=>{if(active!==current)return;const result=await client.mutation('collaboration:focus',args({nodeKey:current.key,field:current.field,tabId}));if(result.deleted){if(active===current)active=null;}else current.expiresAt=result.expiresAt;}).catch(error=>{failure=error;updateLocks();});}},4000);
+setInterval(()=>{updateLocks();if(active&&connected){const current=active;focusTask=focusTask.catch(()=>{}).then(async()=>{if(active!==current)return;const result=await client.mutation('collaboration:focus',args({nodeKey:current.key,field:current.field,tabId}));if(result.deleted){if(active===current)active=null;}else current.expiresAt=result.expiresAt;}).catch(error=>{failure=error;updateLocks();});}},8000);
 document.addEventListener('click',e=>{if(ready&&!writable&&e.target.closest('#cards,#chat-panel')&&!e.target.closest('[data-shared-context],[data-source-info],[data-context],[data-play-video],.resource,[data-media-credit],.collapse-card,.chat-preview-toggle,.open-chat-panel,[data-close-chat-panel]')){e.preventDefault();e.stopImmediatePropagation();}},true);
 document.addEventListener('submit',e=>{if(ready&&!writable&&e.target.closest('#cards,#chat-panel')){e.preventDefault();e.stopImmediatePropagation();}},true);
 document.addEventListener('click',async e=>{const link=e.target.closest('a[href]');if(!ready||!link||e.defaultPrevented||e.metaKey||e.ctrlKey)return;const target=new URL(link.href,location.href);if(target.origin!==location.origin||target.pathname!=='/')return;e.preventDefault();await window.BoardShared.disconnect();location.assign(target.href);});
@@ -249,7 +291,7 @@ async function start(config){
   try{
     credentials=config;client=config.client||new ConvexClient(config.url);writable=config.role!=='viewer';
     const snapshot=await client.query('boards:read',args());receive(snapshot);ready=true;connected=client.connectionState().isWebSocketConnected;
-    subscriptions.push(client.onUpdate('boards:read',args(),receive,error=>{failure=error;window.BranchCoding?.reset();document.body.classList.add('shared-starting');status('Access changed · return to your boards');host.notify('Access to this board changed. Return to your boards.');updateLocks();}));
+    subscriptions.push(client.onUpdate('boards:live',args(),receive,error=>{failure=error;window.BranchCoding?.reset();document.body.classList.add('shared-starting');status('Access changed · return to your boards');host.notify('Access to this board changed. Return to your boards.');updateLocks();}));
     subscriptions.push(client.onUpdate('collaboration:editors',args(),value=>{rows=value;updateLocks();},()=>{}));
     subscriptions.push(client.subscribeToConnectionState(state=>{connected=state.isWebSocketConnected;status(connected?'Shared · saved':'Reconnecting · Send paused');updateLocks();}));
     watchCoding();

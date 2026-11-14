@@ -35,3 +35,11 @@ export async function accessForUser(ctx: QueryCtx | MutationCtx, userId: Id<'use
   if (!role || (edit && role === 'viewer')) throw Error('Board access denied');
   return { userId, board, membership:{role} };
 }
+
+// A board's "last changed" time drives library sorting. Updating it at most
+// once a minute avoids refreshing every member's library on each edit.
+export const TOUCH_MS = 60_000;
+export async function touchBoard(ctx: MutationCtx, boardId: Id<'boards'>) {
+  const board = await ctx.db.get(boardId);
+  if (board && (board.updatedAt ?? 0) < Date.now() - TOUCH_MS) await ctx.db.patch(boardId, { updatedAt: Date.now() });
+}

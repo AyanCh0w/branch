@@ -23,7 +23,7 @@ it('throttles board positions, reprojects remote cursors, expires them and clean
  expect(cursor().style.transform).toBe('translate3d(10px,20px,0)');
  connection({isWebSocketConnected:false});expect(cursor()).toBeNull();
  connection({isWebSocketConnected:true});expect(cursor()).not.toBeNull();
- w.dispatchEvent(new w.Event('blur'));await vi.advanceTimersByTimeAsync(80);
+ w.dispatchEvent(new w.Event('blur'));await vi.advanceTimersByTimeAsync(200);
  expect(client.mutation.mock.lastCall![1].position).toBeNull();
  await vi.advanceTimersByTimeAsync(16000);expect(cursor()).toBeNull();
  stop();expect(w.document.querySelector('.human-cursors')).toBeNull();expect(off).toHaveBeenCalledTimes(2);

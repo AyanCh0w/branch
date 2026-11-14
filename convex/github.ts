@@ -5,7 +5,7 @@
 import { query, mutation, internalQuery, internalMutation } from './_generated/server';
 import { v } from 'convex/values';
 import { getAuthUserId } from '@convex-dev/auth/server';
-import { access, accessForUser } from './access';
+import { access, accessForUser, touchBoard } from './access';
 import { initialDocument } from './documents';
 
 export const MAX_BOARD_REPOS = 10;
@@ -133,7 +133,7 @@ export const insertCard = internalMutation({
     const user = await ctx.db.get(userId);
     const data = { id: args.key, type: 'github', title: args.title.slice(0, 200), x: args.x, y: args.y, width: 460, revision: 1, text: args.text, author: user?.name || 'You', github: { ...args.github, fetchedAt: Date.now() } };
     await ctx.db.insert('nodes', { boardId: args.boardId, key: args.key, data, textState: initialDocument(data), textVersion: 0, createdBy: userId, updatedBy: userId, deleted: false });
-    await ctx.db.patch(args.boardId, { updatedAt: Date.now() });
+    await touchBoard(ctx, args.boardId);
     return args.key;
   },
 });
