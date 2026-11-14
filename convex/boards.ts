@@ -57,8 +57,9 @@ export const read = query({
     return { title: board.title, role:membership.role, nodes: await Promise.all(nodes.filter(n => !n.deleted).map(async n => {
       const doc = loadDocument(n.textState); const text = readText(doc); doc.destroy();
       const author=await ctx.db.get(n.updatedBy);
+      const syncOwner=n.chatgptSynced?(n.createdBy===n.updatedBy?author:await ctx.db.get(n.createdBy)):null;
       const messages=await Promise.all((n.data.messages||[]).map(async(m:any)=>{const personId=typeof m.sentBy==='string'?ctx.db.normalizeId('users',m.sentBy):null;const person=personId?await ctx.db.get(personId):null;return {...m,...(person?{person:{name:person.name,color:person.color||'#6685cf'}}:{})};}));
-      return { ...n.data, ...text, messages, chatgptSynced: !!n.chatgptSynced, codingResult: n.codingResult ?? null, authorProfile:author?{name:author.name,color:author.color||'#6685cf'}:null, id: n.key, sharedVersion: n.textVersion, sharedTextState: n.textState };
+      return { ...n.data, ...text, messages, chatgptSynced: !!n.chatgptSynced, ...(n.chatgptSynced ? {chatgptSyncOwner:syncOwner?.name||'Board member', chatgptLatestUpdate:n.chatgptLatestUpdate||0} : {}), codingResult: n.codingResult ?? null, authorProfile:author?{name:author.name,color:author.color||'#6685cf'}:null, id: n.key, sharedVersion: n.textVersion, sharedTextState: n.textState };
     })) };
   },
 });

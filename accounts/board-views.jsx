@@ -1,7 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { usePaginatedQuery } from 'convex/react';
-import { api } from '../convex/_generated/api';
+import { ContextCanvas } from './context-canvas';
 
 const modes = [
   { id: 'visualization', title: 'Visualization', icon: 'git-branch', panel: 'board' },
@@ -53,10 +52,19 @@ export function BoardViews({ boardId, token }) {
     const receive = () => {
       const next = window.BranchHost.getState().nodes
         .filter(node => node.chatgptSynced)
-        .map(node => ({ id: node.id, title: node.title || 'Untitled card' }))
-        .sort((a, b) => a.title.localeCompare(b.title));
-      setCards(previous => previous.length === next.length && previous.every((card, index) =>
-        card.id === next[index].id && card.title === next[index].title) ? previous : next);
+        .map(node => ({ id: node.id, title: node.title || 'Untitled card', owner: node.chatgptSyncOwner || '', latest: node.chatgptLatestUpdate || 0 }));
+      setSelection(previous => next.some(card => card.id === previous) ? previous : next[0]?.id || '');
+      setCards(previous => {
+        const byId = new Map(next.map(card => [card.id, card]));
+        const ordered = previous.flatMap(card => {
+          const current = byId.get(card.id);
+          byId.delete(card.id);
+          return current ? [current] : [];
+        }).concat([...byId.values()]);
+        return previous.length === ordered.length && previous.every((card, index) =>
+          card.id === ordered[index].id && card.title === ordered[index].title &&
+          card.owner === ordered[index].owner && card.latest === ordered[index].latest) ? previous : ordered;
+      });
     };
     window.addEventListener('branch:board-updated', receive);
     receive();
@@ -73,8 +81,6 @@ export function BoardViews({ boardId, token }) {
     setMode(next);
   }
 
-  const card = cards.find(candidate => candidate.id === selection) ?? cards[0];
-
   return <>
     {createPortal(<div className="board-view-switch" role="tablist" aria-label="Board view" onKeyDown={navigateTabs}>
       {modes.map(view => <button key={view.id} id={view.id + '-tab'} ref={el => { tabs.current[view.id] = el; }}
@@ -84,38 +90,8 @@ export function BoardViews({ boardId, token }) {
         dangerouslySetInnerHTML={{ __html: window.Iconoir[view.icon] }} />)}
     </div>, slot)}
     <main id="board-context" role="tabpanel" aria-labelledby="context-tab" tabIndex={0} hidden={!showingContext}>
-      {showingContext && <div className="board-context-content">
-        <h1>Shared context</h1>
-        {card ? <>
-          {cards.length > 1
-            ? <label className="board-context-picker">Conversation
-              <select value={card.id} onChange={event => setSelection(event.target.value)}>
-                {cards.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
-              </select>
-            </label>
-            : <h2>{card.title}</h2>}
-          <ContextUpdates key={card.id} boardId={boardId} token={token} nodeKey={card.id} />
-        </> : <p className="board-context-empty">Updates from connected ChatGPT chats will appear here.</p>}
-      </div>}
+      <ContextCanvas active={showingContext} boardId={boardId} token={token} cards={cards}
+        selection={selection} onSelect={setSelection} />
     </main>
-  </>;
-}
-
-function ContextUpdates({ boardId, token, nodeKey }) {
-  const { results, status, loadMore } = usePaginatedQuery(api.chatgptSync.read,
-    { boardId, token, nodeKey }, { initialNumItems: 10 });
-  return <>
-    {status === 'LoadingFirstPage' && <p role="status">Loading updates…</p>}
-    <ol className="a-context-updates">
-      {results.map(update => <li key={update.id}>
-        <time dateTime={new Date(update.timestamp).toISOString()}>{new Date(update.timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</time>
-        {update.prompt && <p className="a-context-prompt">{update.prompt}</p>}
-        {typeof window.BranchMarkdown === 'function'
-          ? <div className="a-context-result" dangerouslySetInnerHTML={{ __html: window.BranchMarkdown(update.result) }} />
-          : <p className="a-context-prompt">{update.result}</p>}
-      </li>)}
-    </ol>
-    {(status === 'CanLoadMore' || status === 'LoadingMore') &&
-      <button className="a-secondary" disabled={status === 'LoadingMore'} onClick={() => loadMore(10)}>Load older updates</button>}
   </>;
 }

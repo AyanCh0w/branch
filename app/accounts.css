@@ -256,9 +256,6 @@ body.account-mode #account-app{background:var(--theme-surface, #fff)}
 .a-board-presence small{margin-left:auto;color:var(--theme-muted,#7b8290);font-size:10px;flex:none}
 @media(max-width:600px){.a-board-presence{right:12px;top:64px;width:158px}}
 
-#board-context .a-context-updates{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:12px;text-align:left}
-#board-context .a-context-updates li{min-width:0;border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-wrap:anywhere}
-#board-context time{font-size:11px;color:var(--theme-muted,#686868)}
 .a-context-prompt{background:var(--theme-canvas,#f8f9fa);border-radius:7px;padding:8px 10px;white-space:pre-wrap}
 .a-context-result pre{overflow:auto}
 .a-context-result > :last-child{margin-bottom:0}
@@ -278,17 +275,31 @@ body.account-mode #account-app{background:var(--theme-surface, #fff)}
 .board-view-switch button:focus-visible{outline-offset:1px}
 .board-context-mode :is(#board,#chat-panel){visibility:hidden}
 .board-context-mode :is(#creation-dock,footer,#undo,.a-board-presence){display:none}
-#board-context{position:fixed;inset:0;overflow:auto;overscroll-behavior:contain;background:var(--theme-canvas,#f8f9fa);z-index:9}
+#board-context{position:fixed;inset:0;overflow:hidden;background:var(--theme-canvas,#f8f9fa);z-index:9}
 #board-context:focus-visible{outline-offset:-3px}
-.board-context-content{max-width:780px;margin:0 auto;padding:92px 24px 48px}
-.board-context-content h1{font-size:27px;line-height:1.2;letter-spacing:-.7px;margin:0 0 18px;font-weight:600}
-.board-context-content h2{font-size:16px;line-height:1.4;margin:0 0 14px;overflow-wrap:anywhere}
-.board-context-empty{margin:0;color:var(--muted)}
-.board-context-picker{display:grid;gap:5px;margin:0 0 16px;color:var(--muted);font-size:12px}
-.board-context-picker select{width:100%;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:var(--theme-surface,#fff);color:var(--theme-ink,#171717);font-size:14px}
-#board-context .a-context-updates li{background:var(--theme-surface,#fff)}
 @media(max-width:600px){
  .topbar .board-view-controls{order:2;flex:0 0 100%}
  .topbar .board-view-controls .identity{flex:0 1 auto}
- .board-context-content{padding:122px 16px 32px}
 }
+
+.context-canvas{position:absolute;inset:0;overflow:hidden;touch-action:none;cursor:grab;background-image:radial-gradient(circle,color-mix(in srgb,var(--theme-control,#989b9f) 44%,transparent) .7px,transparent .9px);background-size:var(--context-grid) var(--context-grid)}
+.context-canvas.panning-context{cursor:grabbing}
+.context-canvas-empty{position:absolute;top:42%;left:16px;right:16px;text-align:center;color:var(--muted)}
+.context-world{position:absolute;inset:0;transform-origin:0 0;pointer-events:none}
+.context-world button{pointer-events:auto}
+.context-wires{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.context-wires path{fill:none;stroke:var(--blue);stroke-width:2;stroke-linecap:round;stroke-dasharray:4 5}
+.context-node.card{height:130px;min-height:0;padding:15px 17px;gap:5px;text-align:left;justify-content:flex-start;overflow:hidden}
+.context-node[aria-pressed=true],.context-node[aria-expanded=true]{border-color:var(--blue)}
+.context-node strong,.context-node-kind{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.context-node strong{font-size:15px;font-weight:600}
+.context-node-kind,.context-node time,.context-reader time{font-size:11px;color:var(--muted)}
+.context-update-excerpt{color:var(--muted);overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.context-load{position:absolute;white-space:nowrap}
+.context-reader.card{position:absolute;min-height:0;z-index:2;right:16px;bottom:70px;width:min(520px,calc(100vw - 32px));max-height:calc(100% - 200px);overflow:auto;overscroll-behavior:contain;touch-action:pan-y;cursor:auto;padding:17px 19px;overflow-wrap:anywhere}
+.context-reader header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.context-reader header button{font-size:20px;line-height:1}
+.context-zoom{position:absolute;right:24px;bottom:20px;display:flex;align-items:center;gap:10px;padding:3px 7px;border:1px solid var(--line);border-radius:9px;background:var(--theme-surface,#fff);color:var(--muted);font-size:11px}
+.context-zoom button{display:grid;place-items:center;width:24px;height:24px;padding:0;border-radius:5px;font-size:17px}
+.context-zoom .icon{width:15px;height:15px}
+.context-wires circle{fill:var(--blue)}

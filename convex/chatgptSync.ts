@@ -27,16 +27,18 @@ export const append = internalMutation({
     const nodeKey = existing?.nodeKey || crypto.randomUUID();
     const now = Date.now();
     let threadId;
+    let nodeId;
     if (existing) {
       const node = await ctx.db.query('nodes').withIndex('board_key', q => q.eq('boardId', boardId).eq('key', nodeKey)).unique();
       if (!node || node.deleted) throw new ConvexError('This card was deleted. Restore it in Branch, or start a new ChatGPT conversation.');
       threadId = existing._id;
+      nodeId = node._id;
     } else {
       const nodes = await ctx.db.query('nodes').withIndex('board_key', q => q.eq('boardId', boardId)).collect();
       const origin = { x: 140, y: 160 };
       const target = place(nodes.filter(node => !node.deleted).map(node => node.data), origin, 380, 175);
       const data = { id: nodeKey, type: 'plan', title, body: '', width: 380, ...target, revision: 1, titleEdited: true };
-      await ctx.db.insert('nodes', {
+      nodeId = await ctx.db.insert('nodes', {
         boardId, key: nodeKey, data, textState: initialDocument(data), textVersion: 0,
         createdBy: userId, updatedBy: userId, deleted: false, chatgptSynced: true,
       });
@@ -47,6 +49,7 @@ export const append = internalMutation({
       if (previous.prompt !== prompt || previous.result !== result) throw new ConvexError('Use a new update ID for new content.');
     } else {
       await ctx.db.insert('chatgptUpdates', { threadId, updateId: args.updateId, prompt, result });
+      await ctx.db.patch(nodeId, { chatgptLatestUpdate: now });
       await ctx.db.patch(boardId, { updatedAt: now });
     }
     const url = new URL('/app', frontend());

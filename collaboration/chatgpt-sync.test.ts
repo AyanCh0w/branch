@@ -128,3 +128,30 @@ it('rechecks editor access, rotates refresh tokens, and stops after disconnect',
   await editor.mutation(api.chatgptOAuth.disconnect, { boardId });
   expect((await exchange({ grant_type: 'refresh_token', refresh_token: renewed.refresh_token })).status).toBe(400);
 });
+
+it('keeps simultaneous updates from two connected collaborators on separate branches', async () => {
+  const { owner, editor, consent, exchange, sync, boardId } = await setup();
+  await consent(owner);
+  const firstConnection = await (await exchange()).json();
+  await consent(editor);
+  const otherConnection = await (await exchange()).json();
+
+  // Even when the same external conversation and retry IDs arrive, each
+  // connection writes its own card and thread within the shared board.
+  const [one, two] = await Promise.all([
+    sync(first, firstConnection.access_token),
+    sync({ ...first, title: 'Editor notes', result: 'Editor update' }, otherConnection.access_token),
+  ]);
+  expect(one.isError).not.toBe(true);
+  expect(two.isError).not.toBe(true);
+  expect(one.structuredContent.cardId).not.toBe(two.structuredContent.cardId);
+
+  const { nodes } = await owner.query(api.boards.read, { boardId, token: '' });
+  expect(nodes).toHaveLength(2);
+  expect(nodes.every(node => node.chatgptSynced && node.chatgptLatestUpdate > 0)).toBe(true);
+  const read = (nodeKey: string) => owner.query(api.chatgptSync.read, {
+    boardId, token: '', nodeKey, paginationOpts: { numItems: 10, cursor: null },
+  });
+  expect((await read(one.structuredContent.cardId)).page.map(item => item.result)).toEqual(['First update']);
+  expect((await read(two.structuredContent.cardId)).page.map(item => item.result)).toEqual(['Editor update']);
+});

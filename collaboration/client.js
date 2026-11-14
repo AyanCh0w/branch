@@ -101,7 +101,7 @@ function changeText(text, value) {
   if(old.length-left-right)text.delete(left,old.length-left-right);
   if(value.length-left-right)text.insert(left,value.slice(left,value.length-right));
 }
-function metadata(node) { const result = copy(node); for(const key of [...fields,'sharedVersion','sharedTextState','activeRun','activity','draftEpoch','messages','authorProfile','codingResult','chatgptSynced']) delete result[key]; return result; }
+function metadata(node) { const result = copy(node); for(const key of [...fields,'sharedVersion','sharedTextState','activeRun','activity','draftEpoch','messages','authorProfile','codingResult','chatgptSynced','chatgptSyncOwner','chatgptLatestUpdate']) delete result[key]; return result; }
 function schedule() { clearTimeout(timer);timer=setTimeout(()=>flush().catch(()=>{}),70); }
 function keepRecovery(){try{localStorage.setItem('branch-unsynced-'+credentials.boardId,JSON.stringify({savedAt:new Date().toISOString(),state:host.getState()}));}catch{}}
 function edit(node, field, value) {
