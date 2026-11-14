@@ -4,7 +4,24 @@ This branch replaces the active Convex runtime with Supabase Auth, typed private
 
 ## Deployment status
 
-The free Branch project has been provisioned, the schema applied, and the local Convex export imported. Live checks cover Supabase Auth signup/sign-in, member isolation and revocation, concurrent Yjs writes, idempotent Send, private Storage, own-row RLS, Realtime notifications, browser editing/reload, and worker error handling. The original password hashes were preserved. Import counts are 2 accounts, 5 boards, 22 nodes, and 14 runs from the local Convex deployment; any separate hosted Convex database is not included. The temporary verification accounts and board were removed afterward. All 202 automated tests, backend type checking, and the production build passed. Actual AI responses remain unverified because this checkout has no provider key or ChatGPT connection. The frontend and worker currently run locally; hosted production cutover has not occurred.
+Branch is live at **https://branch.eshteremberg.workers.dev**, using Cloudflare
+Workers/Queues/Hyperdrive and the Supabase Branch project. The initial local
+snapshot and the November 13, 2026 10:34 PM Pacific snapshot of hosted Convex
+`expert-mallard-315` have both been imported. The additive live import includes
+16 boards, 215 nodes, 43 completed runs, 8 username/password accounts, 2 teams,
+board/team/link memberships, and 11 files. The destination totals are 21 boards,
+237 nodes, 57 runs, 10 accounts, and 11 files. Existing destination records were
+preserved; original account password hashes, IDs and Yjs state were retained.
+Two source user IDs were already missing; non-login history placeholders preserve
+their references without granting anyone their permissions. Old browser sessions,
+editor leases and presence were intentionally omitted; sign in again or reopen
+an invitation on the new host. The old Convex deployment remains intact and is
+not continuously synchronized with Supabase.
+
+The deployed runtime passed 204 automated tests plus hosted Auth, access control,
+Storage, Realtime, concurrent editing, queue, share-preview and browser persistence
+checks. Real AI generation still requires a configured provider; importing old
+messages does not configure an API key.
 
 ## Configure and run
 
@@ -18,7 +35,7 @@ Only the project URL and publishable key reach the browser. Database credentials
 
 ## Data and account migration
 
-Create a fresh backup from the actual source deployment after stopping writes. Keep the old deployment intact until validation and rollback decisions are complete. The importer requires an empty target database and never overwrites newer data.
+Create a fresh backup from the actual source deployment. Coordinate a write freeze for a final cutover, or explicitly record the snapshot time and that later source writes are not synchronized. Keep the old deployment intact until validation and rollback decisions are complete. The original importer below requires an empty target database and never overwrites newer data.
 
 ```sh
 # In the source project configured for the correct Convex deployment:
@@ -113,10 +130,28 @@ BRANCH_APP_URL=https://branch.eshteremberg.workers.dev node scripts/verify-supab
 node scripts/cleanup-supabase-qa.cjs --apply
 ```
 
-The source import currently contains the earlier local Convex snapshot. The live
-`expert-mallard-315` deployment was located in the browser (16 boards), but its
-live import remains deferred as requested. It must be reconciled with existing
-Supabase accounts before importing; never replace populated destination data.
+For a disjoint snapshot going into a populated target, use the additive importer:
+
+```sh
+node scripts/append-convex-snapshot.cjs backups/SNAPSHOT
+# After reviewing the rollback rehearsal and destination backup:
+node scripts/append-convex-snapshot.cjs backups/SNAPSHOT --apply
+node scripts/verify-convex-append.cjs backups/SNAPSHOT
+```
+
+It refuses overlapping IDs/usernames, validates constraints in a rolled-back
+transaction, preserves existing rows, copies password hashes without resets,
+and verifies storage bytes by SHA-256. It saves a private destination backup
+and resumable Auth/Storage manifest. Repeating a completed import is refused.
+If documented source references point to missing users, the explicit
+`--preserve-missing-users` option creates labeled history-only placeholders with
+no Auth mapping or sessions; never map them to a different account. The live
+November 13 import used this option for two missing source users.
+
+Snapshots and manifests contain private data and stay in ignored `backups/`.
+Do not upload them, commit them, or print credentials. Historical completed-run
+inputs retain their original source URLs for fidelity; active file reads resolve
+preserved storage IDs to private Supabase URLs. No old jobs are replayed.
 
 Cloudflare validation: 204 automated tests passed (125 Node, 54 legacy parity,
 25 Supabase/request-scope tests), plus hosted signup/signin, wrong-password
