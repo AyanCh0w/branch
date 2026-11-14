@@ -1,7 +1,7 @@
 import {beforeEach,expect,test,vi} from 'vitest';
 const mocks=vi.hoisted(()=>({signIn:vi.fn(),createUser:vi.fn()}));
 vi.mock('../config.cjs',()=>({default:{url:'https://example.supabase.co',key:'public-test',secret:'private-test'}}));
-vi.mock('pg',()=>({Pool:class {async query(){return {rows:[{count:1}]};}}}));
+vi.mock('pg',()=>({Pool:class {on(){} async query(){return {rows:[{count:1}]};}}}));
 vi.mock('@supabase/supabase-js',()=>({createClient:()=>({auth:{signInWithPassword:mocks.signIn,admin:{createUser:mocks.createUser}}})}));
 import {authenticate,loginEmail} from '../service';
 beforeEach(()=>{vi.clearAllMocks();mocks.signIn.mockResolvedValue({data:{session:{access_token:'test-access',refresh_token:'test-refresh'}},error:null});});

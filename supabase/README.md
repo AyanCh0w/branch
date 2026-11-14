@@ -18,7 +18,7 @@ editor leases and presence were intentionally omitted; sign in again or reopen
 an invitation on the new host. The old Convex deployment remains intact and is
 not continuously synchronized with Supabase.
 
-The deployed runtime passed 211 automated tests plus hosted Auth, access control,
+The deployed runtime passed 212 automated tests plus hosted Auth, access control,
 Storage, Realtime, concurrent editing, queue, share-preview and browser persistence
 checks. The existing Convex OpenAI key was transferred, with explicit owner
 approval, into the Cloudflare Worker's encrypted secrets. A real GPT-5.4 mini
@@ -162,8 +162,8 @@ Do not upload them, commit them, or print credentials. Historical completed-run
 inputs retain their original source URLs for fidelity; active file reads resolve
 preserved storage IDs to private Supabase URLs. No old jobs are replayed.
 
-Cloudflare validation: 211 automated tests passed (126 Node, 54 legacy parity,
-31 Supabase/auth/request-scope tests), plus hosted signup/signin, wrong-password
+Cloudflare validation: 212 automated tests passed (126 Node, 54 legacy parity,
+32 Supabase/auth/request-scope tests), plus hosted signup/signin, wrong-password
 rejection, member isolation/revocation, concurrent Yjs writes, private Storage
 upload/download, Realtime/RLS, idempotent Send, and a queue-consumed failure
 when no AI provider is configured. A browser edit survived reload. Share-link

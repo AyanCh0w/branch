@@ -8,7 +8,16 @@ import config from './config.cjs';
 // Socket pools must never cross Cloudflare request/event lifetimes.
 const runtime=new AsyncLocalStorage<{pool:Pool,notify?:()=>Promise<void>}>();
 let localPool:Pool|undefined;
-const currentPool=()=>runtime.getStore()?.pool||(localPool??=new Pool({connectionString:config.database,max:8,connectionTimeoutMillis:10000,idleTimeoutMillis:30000}));
+const currentPool=()=>{
+ const scoped=runtime.getStore()?.pool;if(scoped)return scoped;
+ if(!localPool){
+  localPool=new Pool({connectionString:config.database,max:8,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});
+  // An idle socket can fail after a network change. Never let EventEmitter
+  // dump the pg client (which carries connection configuration) into logs.
+  localPool.on('error',()=>console.error('Database connection interrupted'));
+ }
+ return localPool;
+};
 export const pool=new Proxy({} as Pool,{get(_target,key){const active=currentPool(),value=Reflect.get(active,key);return typeof value==='function'?value.bind(active):value;}});
 export const configured=()=>!!(config.url&&config.key&&config.secret&&(runtime.getStore()||config.database));
 export async function withDatabase<T>(connectionString:string,fn:()=>Promise<T>,notify?:()=>Promise<void>):Promise<T>{
