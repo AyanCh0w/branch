@@ -2,6 +2,19 @@ import { defineSchema, defineTable } from 'convex/server';
 import { v } from 'convex/values';
 
 export default defineSchema({
+  chatgptCodes: defineTable({
+    userId: v.id('users'), boardId: v.id('boards'), codeHash: v.string(), challenge: v.string(), resource: v.string(), expiresAt: v.number(),
+  }).index('code', ['codeHash']).index('user_board', ['userId', 'boardId']),
+  chatgptGrants: defineTable({
+    userId: v.id('users'), boardId: v.id('boards'), resource: v.string(), accessHash: v.string(), refreshHash: v.string(),
+    accessUntil: v.number(), refreshUntil: v.number(),
+  }).index('access', ['accessHash']).index('refresh', ['refreshHash']).index('user_board', ['userId', 'boardId']),
+  chatgptThreads: defineTable({
+    boardId: v.id('boards'), userId: v.id('users'), conversationId: v.string(), nodeKey: v.string(),
+  }).index('conversation', ['boardId', 'userId', 'conversationId']).index('card', ['boardId', 'nodeKey']),
+  chatgptUpdates: defineTable({
+    threadId: v.id('chatgptThreads'), updateId: v.string(), prompt: v.optional(v.string()), result: v.string(),
+  }).index('thread', ['threadId']).index('update', ['threadId', 'updateId']),
   codingConnections: defineTable({ boardId: v.id('boards'), userId: v.id('users'), keyHash: v.string() })
     .index('board_user', ['boardId', 'userId']).index('key', ['keyHash']),
   codingHandoffs: defineTable({
@@ -22,7 +35,7 @@ export default defineSchema({
   boardMembers: defineTable({ boardId: v.id('boards'), userId: v.id('users'), role: v.union(v.literal('owner'), v.literal('editor'), v.literal('viewer')), responsibility: v.optional(v.string()) }).index('board_user', ['boardId', 'userId']).index('user',['userId']),
   projectResponsibilities: defineTable({boardId:v.id('boards'),userId:v.id('users'),responsibility:v.string()}).index('board_user',['boardId','userId']),
   sessions: defineTable({ tokenHash: v.string(), userId: v.id('users'), expiresAt: v.number() }).index('token', ['tokenHash']),
-  nodes: defineTable({ boardId: v.id('boards'), key: v.string(), data: v.any(), textState: v.bytes(), textVersion: v.number(), createdBy: v.id('users'), updatedBy: v.id('users'), deleted: v.boolean(), codingResult: v.optional(v.object({ handoffId: v.id('codingHandoffs'), text: v.string() })), deletion: v.optional(v.object({ operationId: v.string(), userId: v.id('users'), connections: v.array(v.any()) })) }).index('board_key', ['boardId', 'key']),
+  nodes: defineTable({ boardId: v.id('boards'), key: v.string(), data: v.any(), textState: v.bytes(), textVersion: v.number(), createdBy: v.id('users'), updatedBy: v.id('users'), deleted: v.boolean(), chatgptSynced: v.optional(v.boolean()), codingResult: v.optional(v.object({ handoffId: v.id('codingHandoffs'), text: v.string() })), deletion: v.optional(v.object({ operationId: v.string(), userId: v.id('users'), connections: v.array(v.any()) })) }).index('board_key', ['boardId', 'key']),
   boardPresence: defineTable({boardId:v.id('boards'),userId:v.id('users'),tabId:v.string(),expiresAt:v.number()}).index('board',['boardId']),
   cursors: defineTable({boardId:v.id('boards'),userId:v.id('users'),tabId:v.string(),x:v.number(),y:v.number(),expiresAt:v.number()}).index('board',['boardId']),
   editors: defineTable({ boardId: v.id('boards'), nodeKey: v.string(), field: v.string(), tabId: v.string(), userId: v.id('users'), expiresAt: v.number() }).index('board', ['boardId']).index('node', ['boardId', 'nodeKey']),

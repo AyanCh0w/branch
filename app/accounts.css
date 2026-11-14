@@ -255,3 +255,13 @@ body.account-mode #account-app{background:var(--theme-surface, #fff)}
 .a-board-presence li>span{min-width:0;overflow-wrap:anywhere}
 .a-board-presence small{margin-left:auto;color:var(--theme-muted,#7b8290);font-size:10px;flex:none}
 @media(max-width:600px){.a-board-presence{right:12px;top:64px;width:158px}}
+
+.a-shared-context .a-context-updates{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:12px;text-align:left}
+.a-shared-context li{min-width:0;border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-wrap:anywhere}
+.a-shared-context time{font-size:11px;color:var(--theme-muted,#686868)}
+.a-context-prompt{background:var(--theme-canvas,#f8f9fa);border-radius:7px;padding:8px 10px;white-space:pre-wrap}
+.a-context-result pre{overflow:auto}
+.a-context-result > :last-child{margin-bottom:0}
+.a-chatgpt-consent form{text-align:left;max-width:380px;margin:24px auto 0}
+.a-chatgpt-consent select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--theme-surface,#fff);color:inherit;font:inherit}
+.a-chatgpt-consent form .a-secondary{margin-left:8px}

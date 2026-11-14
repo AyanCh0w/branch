@@ -101,7 +101,7 @@ function changeText(text, value) {
   if(old.length-left-right)text.delete(left,old.length-left-right);
   if(value.length-left-right)text.insert(left,value.slice(left,value.length-right));
 }
-function metadata(node) { const result = copy(node); for(const key of [...fields,'sharedVersion','sharedTextState','activeRun','activity','draftEpoch','messages','authorProfile','codingResult']) delete result[key]; return result; }
+function metadata(node) { const result = copy(node); for(const key of [...fields,'sharedVersion','sharedTextState','activeRun','activity','draftEpoch','messages','authorProfile','codingResult','chatgptSynced']) delete result[key]; return result; }
 function schedule() { clearTimeout(timer);timer=setTimeout(()=>flush().catch(()=>{}),70); }
 function keepRecovery(){try{localStorage.setItem('branch-unsynced-'+credentials.boardId,JSON.stringify({savedAt:new Date().toISOString(),state:host.getState()}));}catch{}}
 function edit(node, field, value) {
@@ -235,7 +235,7 @@ document.addEventListener('keydown',e=>{if(ready&&(e.metaKey||e.ctrlKey)&&e.key.
 document.addEventListener('focusin',e=>focusEditor(e.target));
 document.addEventListener('focusout',e=>blurEditor(e.target));
 setInterval(()=>{updateLocks();if(active&&connected){const current=active;focusTask=focusTask.catch(()=>{}).then(async()=>{if(active!==current)return;const result=await client.mutation('collaboration:focus',args({nodeKey:current.key,field:current.field,tabId}));if(result.deleted){if(active===current)active=null;}else current.expiresAt=result.expiresAt;}).catch(error=>{failure=error;updateLocks();});}},4000);
-document.addEventListener('click',e=>{if(ready&&!writable&&e.target.closest('#cards,#chat-panel')&&!e.target.closest('[data-source-info],[data-context],[data-play-video],.resource,[data-media-credit],.collapse-card,.chat-preview-toggle,.open-chat-panel,[data-close-chat-panel]')){e.preventDefault();e.stopImmediatePropagation();}},true);
+document.addEventListener('click',e=>{if(ready&&!writable&&e.target.closest('#cards,#chat-panel')&&!e.target.closest('[data-shared-context],[data-source-info],[data-context],[data-play-video],.resource,[data-media-credit],.collapse-card,.chat-preview-toggle,.open-chat-panel,[data-close-chat-panel]')){e.preventDefault();e.stopImmediatePropagation();}},true);
 document.addEventListener('submit',e=>{if(ready&&!writable&&e.target.closest('#cards,#chat-panel')){e.preventDefault();e.stopImmediatePropagation();}},true);
 document.addEventListener('click',async e=>{const link=e.target.closest('a[href]');if(!ready||!link||e.defaultPrevented||e.metaKey||e.ctrlKey)return;const target=new URL(link.href,location.href);if(target.origin!==location.origin||target.pathname!=='/')return;e.preventDefault();await window.BoardShared.disconnect();location.assign(target.href);});
 window.addEventListener('pagehide',()=>{if(ready)client.mutation('collaboration:release',args({tabId})).catch(()=>{});});

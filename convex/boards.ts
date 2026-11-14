@@ -58,7 +58,7 @@ export const read = query({
       const doc = loadDocument(n.textState); const text = readText(doc); doc.destroy();
       const author=await ctx.db.get(n.updatedBy);
       const messages=await Promise.all((n.data.messages||[]).map(async(m:any)=>{const personId=typeof m.sentBy==='string'?ctx.db.normalizeId('users',m.sentBy):null;const person=personId?await ctx.db.get(personId):null;return {...m,...(person?{person:{name:person.name,color:person.color||'#6685cf'}}:{})};}));
-      return { ...n.data, ...text, messages, codingResult: n.codingResult ?? null, authorProfile:author?{name:author.name,color:author.color||'#6685cf'}:null, id: n.key, sharedVersion: n.textVersion, sharedTextState: n.textState };
+      return { ...n.data, ...text, messages, chatgptSynced: !!n.chatgptSynced, codingResult: n.codingResult ?? null, authorProfile:author?{name:author.name,color:author.color||'#6685cf'}:null, id: n.key, sharedVersion: n.textVersion, sharedTextState: n.textState };
     })) };
   },
 });

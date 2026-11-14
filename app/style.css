@@ -691,3 +691,8 @@ body.account-mode .human-cursors,body.shared-starting .human-cursors{display:non
 .coding-primary{color:var(--theme-surface,#fff);background:var(--theme-ink,#171717)}
 .coding-dialog :focus-visible,.coding-result :focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .coding-body [role=alert]{color:var(--theme-danger,#a73331)}
+
+.synced-card-content{padding:14px 16px}
+.shared-context-button{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid var(--line);border-radius:7px;font-size:12px;color:var(--theme-ink,#171717);background:var(--theme-canvas,#f8f9fa)}
+.shared-context-button .icon{width:15px;height:15px}
+.shared-context-button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}

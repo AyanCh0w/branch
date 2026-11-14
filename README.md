@@ -53,3 +53,13 @@ The Vercel project should connect to `AyanCh0w/branch` with `main` as its produc
 5. Open **Review coding draft** on the original card to read, discard, or publish the result. Use **Revoke handoff** to stop an outstanding handoff, or **Disconnect** in setup to revoke the board connection key.
 
 Branch connection keys are separate from your coding provider credentials. Keep them in your local environment. Active handoffs expire after one hour. Files and images are omitted as attachments.
+
+## Sync work from ChatGPT
+
+1. Deploy this branch's frontend and Convex functions to a test environment. Set `BRANCH_APP_URL` in Convex to the frontend origin, with no path. The connector URL is the Convex HTTP site URL plus `/chatgpt/mcp`. If testing behind an HTTPS proxy, set `BRANCH_CONNECTOR_URL` in Convex to that proxy's origin and forward the MCP, OAuth and discovery routes there.
+2. Open a board you can edit and use **ChatGPT** in the board header to copy the connector URL. In [ChatGPT Plugins](https://chatgpt.com/plugins), add a custom MCP server with that URL and OAuth. Use client metadata discovery when prompted. Sign in to Branch and choose an editable test board.
+3. In a ChatGPT chat with the plugin selected, ask “Sync this chat's completed work to Branch as we go.” After the first save, open the returned link or choose **Shared context** on the card. Ask for a follow-up in the same chat to verify it adds to the same card.
+
+The canvas shows the card title and the Shared context button. Board members with viewing access can open the updates. ChatGPT calls the connector during the conversation, subject to its tool selection and confirmation settings. The plugin does not independently monitor chats, import past transcripts, or receive assistant messages without a tool call. **Disconnect** in the board's ChatGPT settings revokes future access and keeps previously shared updates. The existing Codex and Claude Code handoff endpoint remains at `/mcp`.
+
+For the ChatGPT-side setup and confirmation behavior, see [OpenAI's connector testing guide](https://developers.openai.com/plugins/deploy/connect-chatgpt).

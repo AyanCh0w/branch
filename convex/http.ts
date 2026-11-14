@@ -4,6 +4,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { z } from 'zod';
 import { httpAction } from './_generated/server';
 import { internal } from './_generated/api';
+import { authorizationServer, authorizeChatGPT, chatgptMcp, protectedResource, token } from './chatgptHttp';
 import { tokenHash } from './access';
 import type { Id } from './_generated/dataModel';
 
@@ -71,4 +72,11 @@ const mcp = httpAction(async (ctx, request) => {
 
 const http = httpRouter();
 for (const method of ['GET', 'POST', 'DELETE'] as const) http.route({ path: '/mcp', method, handler: mcp });
+for (const method of ['GET', 'POST', 'DELETE'] as const) http.route({ path: '/chatgpt/mcp', method, handler: chatgptMcp });
+for (const path of ['/.well-known/oauth-protected-resource/chatgpt/mcp', '/.well-known/oauth-protected-resource']) {
+  http.route({ path, method: 'GET', handler: protectedResource });
+}
+http.route({ path: '/.well-known/oauth-authorization-server', method: 'GET', handler: authorizationServer });
+http.route({ path: '/chatgpt/authorize', method: 'GET', handler: authorizeChatGPT });
+http.route({ path: '/chatgpt/token', method: 'POST', handler: token });
 export default http;
