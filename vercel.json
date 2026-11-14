@@ -89,5 +89,6 @@
       "destination": "/app",
       "permanent": false
     }
-  ]
+  ],
+  "ignoreCommand": "exit 0"
 }

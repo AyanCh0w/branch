@@ -81,7 +81,11 @@ Cloudflare Workers + Static Assets for the frontend/API, the `branch-jobs` Queue
 for background generation, and Hyperdrive `branch-supabase` for PostgreSQL.
 The Hyperdrive origin verifies the Supabase CA and hostname (`verify-full`);
 SQL response caching is disabled so permissions and edits never use stale cache.
-The existing Vercel/Convex deployment is untouched.
+The existing Vercel/Convex deployment is preserved. `vercel.json` skips new
+Vercel Git builds (`ignoreCommand: "exit 0"`) so pushing this migration cannot
+replace that legacy deployment without its Supabase environment. Cloudflare is
+the active deployment target; remove that override only for a deliberate
+Vercel reactivation with its complete backend configuration.
 
 Deploy with `npm ci && npm run deploy:cloudflare` after authenticating Wrangler.
 The config is `wrangler.jsonc`; the bundle is generated in ignored `.worker-build/`.
