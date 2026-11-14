@@ -8,6 +8,7 @@ import {useSignInWithUsernamePassword,useSignUpWithUsernamePassword} from '@conv
 import {api} from '../convex/_generated/api';
 import '../collaboration/client.js';
 import {avatarURL} from './avatar';
+import {UsernameInput} from './username-input';
 window.BranchAvatar=avatarURL;
 const Avatar=({name,color})=><img className="a-person-avatar" src={avatarURL(name,color)} alt=""/>;
 
@@ -108,9 +109,7 @@ class ShareBoundary extends React.Component {
 }
 function Share(props){return <ShareBoundary onClose={props.onClose}><ShareContent {...props}/></ShareBoundary>;}
 function ShareContent({board,onClose}){
- const client=useConvex(),[teammates,setTeammates]=useState([]),[workspaceSettings,setWorkspaceSettings]=useState(false),data=useQuery(api.sharing.settings,{boardId:board.id});
- // Suggestions are optional: an unavailable lookup must never take down sharing.
- useEffect(()=>{let active=true;client.query(api.sharing.teammates,{boardId:board.id}).then(value=>{if(active)setTeammates(value);}).catch(()=>{});return()=>{active=false;};},[client,board.id]);
+ const [workspaceSettings,setWorkspaceSettings]=useState(false),data=useQuery(api.sharing.settings,{boardId:board.id});
  const create=useMutation(api.sharing.createLink),general=useMutation(api.sharing.setGeneralAccess),invite=useMutation(api.sharing.addMember),remove=useMutation(api.sharing.removeMember),changeMember=useMutation(api.sharing.changeMemberRole);
  const [username,setUsername]=useState(''),[memberRole,setMemberRole]=useState('editor'),[error,setError]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[manualLink,setManualLink]=useState('');
  const cacheKey='branch-share-link-'+board.id;
@@ -123,15 +122,13 @@ function ShareContent({board,onClose}){
   if(publicAccess){const link=created&&links.some(l=>l.id===created.id)?created:await createInvite(linkRole);url=location.origin+'/#join='+link.token;}
   try{await navigator.clipboard.writeText(url);setMessage('Link copied');}catch{setManualLink(url);setMessage('Select and copy the link below.');}
  });
- const suggestions=(teammates||[]).filter(m=>!m.teamAccess&&!data?.members.some(p=>p.userId===m.userId)&&(m.name+' '+m.username).toLowerCase().includes(username.trim().replace(/^@/,'').toLowerCase())).slice(0,5);
  if(workspaceSettings&&data?.teamId&&data.canOpenWorkspace)return <TeamMembers team={{id:data.teamId,name:data.teamName}} onClose={()=>setWorkspaceSettings(false)}/>;
  return <Dialog title={'Share “'+board.title+'”'} className="a-sharing-dialog" onClose={onClose}>
  {data===undefined?<p className="a-muted" role="status">Loading access…</p>:!data.owner?<p className="a-muted">Only the board owner can change access.</p>:<>
  <p className="a-form-note">{data.teamName?`Everyone in ${data.teamName} already has editing access. Invite additional people to this board below.`:'Personal board · access is granted through individual invitations and any enabled board links.'}</p><form className="a-share-entry" onSubmit={e=>{e.preventDefault();run(async()=>{await invite({boardId:board.id,username:username.trim().replace(/^@/,''),role:memberRole});setUsername('');setMessage('Person added. This board is now in their library.');});}}>
- <label className="a-field"><span className="a-sr-only">Add people by username</span><input aria-label="Add people by username" placeholder="Add people by username" autoComplete="off" disabled={busy} value={username} onChange={e=>setUsername(e.target.value)} required/></label>
+ <UsernameInput value={username} onChange={setUsername} disabled={busy} boardId={board.id}/>
  {username.trim()&&<div className="a-share-entry-actions"><span>Branch accounts · no email notification</span><select aria-label="Invitation permission" disabled={busy} value={memberRole} onChange={e=>setMemberRole(e.target.value)}><option value="editor">Editor</option><option value="viewer">Viewer</option></select><button className="a-primary" disabled={busy}>Add</button></div>}
  </form>
- {username.trim()&&suggestions.length>0&&<div className="a-share-suggestions" aria-label="Suggested teammates">{suggestions.map(m=><button type="button" className="a-share-person" key={m.userId} disabled={busy||!m.username} onClick={()=>setUsername(m.username)}><span className="a-avatar a-avatar-small"><Avatar name={m.name} color={m.color}/></span><span className="a-member-details"><strong>{m.name}</strong><small>@{m.username}</small></span></button>)}</div>}
  <h3 className="a-share-heading">People with access</h3>
  <div className="a-member-list">{data.members.map(m=><div className="a-member" key={m.id}><span className="a-avatar a-avatar-small"><Avatar name={m.name} color={m.color}/></span><span className="a-member-details"><span>{m.name}{m.isOwner?' (you)':''}</span><small>{m.isOwner?'Board owner':m.teamAccess?'Direct invitation + workspace editor':'Direct access'}</small></span>{m.isOwner?<span className="a-muted">Owner</span>:<select aria-label={'Access for '+m.name} disabled={busy} value={m.role} onChange={e=>{const role=e.target.value;run(async()=>{if(role==='remove')await remove({memberId:m.id});else await changeMember({memberId:m.id,role});setMessage(role==='remove'?'Direct access removed. Workspace and link access still apply.':m.teamAccess?'Direct invitation updated. This person remains an editor through the workspace.':'Access updated');});}}><option value="viewer">Viewer</option><option value="editor">Editor</option><option value="remove">Remove access</option></select>}</div>)}
  {data.teamName&&<div className="a-member"><span className="a-workspace-mark"><Icon name="page"/></span><span className="a-member-details"><span>{data.teamName}</span><small>Everyone in this workspace · Editor</small></span>{data.canOpenWorkspace&&<button className="a-text-button" onClick={()=>setWorkspaceSettings(true)}>Workspace settings</button>}</div>}
@@ -206,7 +203,7 @@ function WorkspaceSettings({team,data,onClose}){
  <ChatGPTSettings/><section className="a-settings-section"><h3 className="a-settings-heading">Board access</h3><p className="a-muted">All {data.members.length} workspace members can create and edit every board here, including new boards. Individual board owners manage additional invitations and links.</p><p className="a-form-note">Moving a board to a personal space removes workspace access. Individual invitations and active board links still apply.</p></section>
  <section className="a-settings-section"><h3 className="a-settings-heading">Members · {data.members.length}</h3>
  {data.owner&&<form onSubmit={e=>{e.preventDefault();run(async()=>{await add({teamId:team.id,username,responsibility});setUsername('');setResponsibility('');},'Member added to all workspace boards.');}}>
- <label className="a-field">Add by username<input placeholder="Branch username" value={username} onChange={e=>setUsername(e.target.value)} required disabled={busy}/></label>
+ <UsernameInput label="Add by username" value={username} onChange={setUsername} disabled={busy} teamId={team.id}/>
  <label className="a-field"><span>Role & responsibilities <span className="a-muted">(optional)</span></span><input value={responsibility} onChange={e=>setResponsibility(e.target.value)} maxLength={1000} disabled={busy}/></label>
  <button className="a-secondary" disabled={busy||!username.trim()}><Icon name="plus"/>Add member</button><p className="a-form-note">They’ll get access to all boards in this workspace. Use a board’s Share control to invite someone to just that board.</p>
  </form>}

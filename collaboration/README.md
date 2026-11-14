@@ -131,3 +131,7 @@ Before enabling a production registration, complete a real connect → model dis
 ## Active board users
 
 The top-right canvas roster shows each active person's local Blobz avatar and display name, including the current person. Attendance is independent of cursor position and editing leases, so reading or using board controls keeps people visible without blocking Send. Visible tabs renew attendance every five seconds; hidden tabs and navigation release their own session. Multiple tabs are grouped by user, revoked access is filtered, and lost connections expire after 15 seconds (also filtered locally). Deploy the additive `boardPresence` schema and `collaboration:activeUsers` / `collaboration:attend` functions with this frontend.
+
+## Invitation autocomplete
+
+Board Share and workspace member invitations suggest existing accounts after two username characters, ignoring case and an optional `@`. Owners alone can query suggestions; results contain only username, display name, avatar color and user ID, excluding self and existing direct/workspace members. Arrow keys and Enter select a suggestion; Escape dismisses it, and Add remains an explicit action. Lookup failure preserves manual username entry. Deploy `invitations:suggestions` with the frontend. The current lookup resolves usernames through the auth component across account rows; a dedicated indexed directory will be needed before scaling to a large account population.
