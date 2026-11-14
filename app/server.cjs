@@ -26,6 +26,8 @@ async function* requestChunks(req){
 }
 function createHandler(apiKey,{fetchImpl=fetch,hosted=false}={}){
  return async(req,res)=>{
+  // Branch never needs to be framed by another site; this blocks clickjacking of approval pages.
+  res.setHeader('X-Frame-Options','DENY');res.setHeader('Content-Security-Policy',"frame-ancestors 'none'");
   const host=req.headers.host;if(hosted?!/^[a-z0-9.-]+(?::\d+)?$/i.test(host||''):![`127.0.0.1:${PORT}`,`localhost:${PORT}`].includes(host)){res.writeHead(403);return res.end();}
   const origin=(hosted?'https://':'http://')+host;
   const url=new URL(req.url,origin);
@@ -84,7 +86,7 @@ function createHandler(apiKey,{fetchImpl=fetch,hosted=false}={}){
   if(name==='app'||name==='app/')name='index.html';
   const pdfAsset=/^pdfjs\/(?:pdf(?:\.worker)?\.mjs|(?:cmaps|standard_fonts|wasm)\/[a-zA-Z0-9_.-]+)$/.test(name);
   const mathAsset=/^katex\/(?:katex\.min\.css|fonts\/[a-zA-Z0-9_-]+\.(?:woff2?|ttf))$/.test(name);
-  const allowed=mathAsset||pdfAsset||['favicon.ico','favicon.svg','landing.html','landing.css','landing.js','landing-shader.bundle.js','landing-theme.css','index.html','app.js','whiteboard.js','whiteboard.css','reactive-grid.js','markdown.bundle.js','context.js','video-context.js','auto-layout.js','media.js','pdf-viewer.js','icons.js','style.css','collaboration.bundle.js','accounts.bundle.js','accounts.css','tooltips.js','tooltips.css','theme.js','theme.css'].includes(name)||/^(fonts|icons)\/[a-zA-Z0-9_.-]+\.(woff2|svg)$/.test(name);
+  const allowed=mathAsset||pdfAsset||['favicon.ico','favicon.svg','landing.html','landing.css','landing.js','landing-shader.bundle.js','landing-theme.css','index.html','app.js','whiteboard.js','whiteboard.css','coding.js','reactive-grid.js','markdown.bundle.js','context.js','video-context.js','auto-layout.js','media.js','pdf-viewer.js','icons.js','style.css','collaboration.bundle.js','accounts.bundle.js','accounts.css','tooltips.js','tooltips.css','theme.js','theme.css'].includes(name)||/^(fonts|icons)\/[a-zA-Z0-9_.-]+\.(woff2|svg)$/.test(name);
   if(!allowed){res.writeHead(404);return res.end();}
   const mime={'.ico':'image/x-icon','.mjs':'text/javascript','.wasm':'application/wasm','.bcmap':'application/octet-stream','.ttf':'font/ttf','.pfb':'application/octet-stream','.html':'text/html','.js':'text/javascript','.css':'text/css','.woff':'font/woff','.woff2':'font/woff2','.svg':'image/svg+xml'};
   try{const file=fs.readFileSync(path.join(__dirname,name));res.writeHead(200,{'Content-Type':mime[path.extname(name)],'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});res.end(req.method==='HEAD'?undefined:file);}catch{res.writeHead(404);res.end();}

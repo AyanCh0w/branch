@@ -4,6 +4,7 @@ import { stepsValidator, writePlan } from './visualPlan';
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 import { access, requireDevelopmentSecret, tokenHash } from './access';
+import { revokeCardHandoffs } from './coding';
 import { initialDocument, loadDocument, readText } from './documents';
 
 export const developmentSession = mutation({
@@ -59,8 +60,9 @@ export const read = query({
     return { title: board.title, role:membership.role, nodes: await Promise.all(nodes.filter(n => !n.deleted).map(async n => {
       const doc = loadDocument(n.textState); const text = readText(doc); doc.destroy();
       const author=await ctx.db.get(n.updatedBy);
+      const syncOwner=n.chatgptSynced?(n.createdBy===n.updatedBy?author:await ctx.db.get(n.createdBy)):null;
       const messages=await Promise.all((n.data.messages||[]).map(async(m:any)=>{const personId=typeof m.sentBy==='string'?ctx.db.normalizeId('users',m.sentBy):null;const person=personId?await ctx.db.get(personId):null;return {...m,...(person?{person:{name:person.name,color:person.color||'#6685cf'}}:{})};}));
-      return { ...n.data, ...text, messages, authorProfile:author?{name:author.name,color:author.color||'#6685cf'}:null, id: n.key, sharedVersion: n.textVersion, sharedTextState: n.textState };
+      return { ...n.data, ...text, messages, chatgptSynced: !!n.chatgptSynced, ...(n.chatgptSynced ? {chatgptSyncOwner:syncOwner?.name||'Board member', chatgptLatestUpdate:n.chatgptLatestUpdate||0} : {}), codingResult: n.codingResult ?? null, authorProfile:author?{name:author.name,color:author.color||'#6685cf'}:null, id: n.key, sharedVersion: n.textVersion, sharedTextState: n.textState };
     })) };
   },
 });
@@ -92,6 +94,7 @@ export const deleteNode = mutation({
       delete data.activity;
       data.agentStage = 'Stopped';
     }
+    await revokeCardHandoffs(ctx, node._id);
     await ctx.db.patch(node._id, { data, deleted: true, updatedBy: userId, deletion: { operationId: args.operationId, userId, connections } });
     await ctx.db.patch(args.boardId, { updatedAt: Date.now() });
   },
@@ -130,9 +133,11 @@ export const patchNodes = mutation({
         if (!['plan','thread','web','upload','media','search'].includes(data.type)) throw Error('Invalid node type');
         await ctx.db.insert('nodes', { boardId: args.boardId, key: change.id, data: { ...data, id: change.id, messages: data.messages || [] }, textState: initialDocument(data), textVersion: 0, createdBy: userId, updatedBy: userId, deleted: false });
       } else if (node && !node.deleted) {
-        if (change.remove) { await ctx.db.patch(node._id, { deleted: true, updatedBy: userId }); continue; }
+        if (change.remove) { await revokeCardHandoffs(ctx, node._id); await ctx.db.patch(node._id, { deleted: true, updatedBy: userId }); continue; }
         const patch: Record<string, any> = {};
-        for (const [key, value] of Object.entries(change.patch || {})) if (editableFields.has(key)) patch[key] = value;
+        // GitHub card content comes only from the server's fetch, never from a client.
+        const locked = node.data.type === 'github' ? new Set(['text', 'github', 'revision']) : null;
+        for (const [key, value] of Object.entries(change.patch || {})) if (editableFields.has(key) && !locked?.has(key)) patch[key] = value;
         await ctx.db.patch(node._id, { data: { ...node.data, ...patch }, updatedBy: userId });
       }
     }

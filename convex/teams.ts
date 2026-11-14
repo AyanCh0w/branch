@@ -1,4 +1,5 @@
 import {query,mutation} from './_generated/server';
+import { pruneUserAgents } from './maintenance';
 import type {QueryCtx,MutationCtx} from './_generated/server';
 import type {Id} from './_generated/dataModel';
 import {v} from 'convex/values';
@@ -33,7 +34,7 @@ export const addMember=mutation({args:{teamId:v.id('teams'),username:v.string(),
  await ctx.db.insert('teamMembers',{teamId:args.teamId,userId:userId as Id<'users'>,role:'member',responsibility:args.responsibility?.trim()});
 }});
 export const removeMember=mutation({args:{memberId:v.id('teamMembers')},handler:async(ctx,args)=>{
- const row=await ctx.db.get(args.memberId);if(!row)throw Error('Member not found');const {team}=await member(ctx,row.teamId,true);if(row.userId===team.ownerId)throw Error('The owner cannot be removed');await ctx.db.delete(row._id);
+ const row=await ctx.db.get(args.memberId);if(!row)throw Error('Member not found');const {team}=await member(ctx,row.teamId,true);if(row.userId===team.ownerId)throw Error('The owner cannot be removed');await ctx.db.delete(row._id);await pruneUserAgents(ctx,row.userId);
 }});
 export const rename=mutation({args:{teamId:v.id('teams'),name:v.string()},handler:async(ctx,args)=>{
  await member(ctx,args.teamId,true);const name=args.name.trim();if(!name||name.length>60)throw Error('Use a team name between 1 and 60 characters');await ctx.db.patch(args.teamId,{name});
@@ -62,13 +63,16 @@ export const remove=mutation({args:{teamId:v.id('teams'),confirmation:v.string()
  // Preserve individually owned boards and their explicit grants. Team access ends atomically.
  const boards=await ctx.db.query('boards').withIndex('team',q=>q.eq('teamId',args.teamId)).collect();
  for(const board of boards)await ctx.db.patch(board._id,{teamId:undefined,updatedAt:Date.now()});
- for(const row of await ctx.db.query('teamMembers').withIndex('team_user',q=>q.eq('teamId',args.teamId)).collect())await ctx.db.delete(row._id);
+ const formerMembers=await ctx.db.query('teamMembers').withIndex('team_user',q=>q.eq('teamId',args.teamId)).collect();
+ for(const row of formerMembers)await ctx.db.delete(row._id);
  for(const row of await ctx.db.query('teamInvites').withIndex('team',q=>q.eq('teamId',args.teamId)).collect())await ctx.db.delete(row._id);
  const key=await ctx.db.query('workspaceKeys').withIndex('scope',q=>q.eq('scope','team:'+args.teamId)).unique();if(key)await ctx.db.delete(key._id);
  await ctx.db.delete(args.teamId);
+ for(const row of formerMembers)await pruneUserAgents(ctx,row.userId);
 }});
 export const leave=mutation({args:{teamId:v.id('teams')},handler:async(ctx,args)=>{
  const {team,userId,membership}=await member(ctx,args.teamId);
  if(team.ownerId===userId)throw Error('The owner cannot leave their workspace');
  await ctx.db.delete(membership._id);
+ await pruneUserAgents(ctx,userId);
 }});

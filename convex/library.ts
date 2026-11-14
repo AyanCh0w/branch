@@ -1,4 +1,5 @@
 import { query, mutation } from './_generated/server';
+import { pruneBoardAgents } from './maintenance';
 import { v } from 'convex/values';
 import { getAuthUserId } from '@convex-dev/auth/server';
 import { access, requireDevelopmentSecret } from './access';
@@ -42,6 +43,7 @@ export const rename = mutation({args:{boardId:v.id('boards'),title:v.string()},h
 export const archive = mutation({args:{boardId:v.id('boards')},handler:async(ctx,args)=>{
   const {membership}=await access(ctx,'',args.boardId);if(membership.role!=='owner')throw Error('Only the owner can archive this board');
   await ctx.db.patch(args.boardId,{archived:true});
+  await pruneBoardAgents(ctx,args.boardId);
 }});
 export const claimInfo = query({args:{secret:v.string(),identityKey:v.string()},handler:async(ctx,args)=>{
   requireDevelopmentSecret(args.secret);const user=await ctx.db.query('users').withIndex('identity',q=>q.eq('identityKey',args.identityKey)).unique();if(!user)return [];

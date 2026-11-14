@@ -21,7 +21,7 @@ test('notes are the default creation action and use a single plaintext editor wi
  const dom=boot(),w=dom.window,d=w.document;
  try{
   assert.equal(d.querySelector('[data-create]').dataset.create,'plan');assert.equal(d.querySelector('[data-dock]').dataset.dock,'plan');
-  assert.deepEqual(Array.from(d.querySelectorAll('[data-dock]'),el=>el.dataset.dock),['plan','image','file','website','video','search','thread','agent']);
+  assert.deepEqual(Array.from(d.querySelectorAll('[data-dock]'),el=>el.dataset.dock),['plan','image','file','website','video','search','github','thread','agent']);
   assert.equal(d.querySelector('#empty-note').hidden,false);d.querySelector('#empty-note').click();
   const n=w.BranchHost.getState().nodes[0];assert.equal(n.type,'plan');assert.equal(n.body,'');assert.equal(d.activeElement.getAttribute('aria-label'),'Note text');
   assert.equal(d.querySelector('.plan-body').getAttribute('contenteditable'),'plaintext-only');
