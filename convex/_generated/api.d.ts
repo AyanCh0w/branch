@@ -16,6 +16,8 @@ import type * as chat from "../chat.js";
 import type * as collaboration from "../collaboration.js";
 import type * as documents from "../documents.js";
 import type * as files from "../files.js";
+import type * as github from "../github.js";
+import type * as githubActions from "../githubActions.js";
 import type * as library from "../library.js";
 import type * as people from "../people.js";
 import type * as sharing from "../sharing.js";
@@ -38,6 +40,8 @@ declare const fullApi: ApiFromModules<{
   collaboration: typeof collaboration;
   documents: typeof documents;
   files: typeof files;
+  github: typeof github;
+  githubActions: typeof githubActions;
   library: typeof library;
   people: typeof people;
   sharing: typeof sharing;
@@ -76,4 +80,5 @@ export declare const components: {
   auth: import("@convex-dev/auth/_generated/component.js").ComponentApi<"auth">;
   authPassword: import("@convex-dev/auth/components/password/_generated/component.js").ComponentApi<"authPassword">;
   authUsername: import("@convex-dev/auth/components/username/_generated/component.js").ComponentApi<"authUsername">;
+  authGithub: import("@convex-dev/auth/components/github/_generated/component.js").ComponentApi<"authGithub">;
 };

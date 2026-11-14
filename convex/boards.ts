@@ -129,7 +129,9 @@ export const patchNodes = mutation({
       } else if (node && !node.deleted) {
         if (change.remove) { await ctx.db.patch(node._id, { deleted: true, updatedBy: userId }); continue; }
         const patch: Record<string, any> = {};
-        for (const [key, value] of Object.entries(change.patch || {})) if (editableFields.has(key)) patch[key] = value;
+        // GitHub card content comes only from the server's fetch, never from a client.
+        const locked = node.data.type === 'github' ? new Set(['text', 'github', 'revision']) : null;
+        for (const [key, value] of Object.entries(change.patch || {})) if (editableFields.has(key) && !locked?.has(key)) patch[key] = value;
         await ctx.db.patch(node._id, { data: { ...node.data, ...patch }, updatedBy: userId });
       }
     }

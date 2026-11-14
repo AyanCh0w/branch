@@ -6,6 +6,7 @@
   if(node.type==='upload')return node.text||node.title;
   if(node.type==='media')return [node.title,node.credit,node.source,node.transcriptLanguage&&node.transcript?'YouTube captions (spoken content; may contain automatic-caption errors). Language: '+node.transcriptLanguage:'',node.transcript].filter(Boolean).join('\n');
   if(node.type==='web'){const notes=String(node.body||'').trim();return [node.url,notes?`User perspective and notes (written by a board collaborator, not extracted website text):\n${notes}`:''].filter(Boolean).join('\n\n');}
+  if(node.type==='github'){const g=node.github||{};const label=g.kind==='file'?'GitHub file '+g.repo+'/'+g.path+(g.ref?' (branch '+g.ref+')':''):(g.kind==='pull'?'GitHub pull request ':'GitHub issue ')+g.repo+'#'+g.number+' ('+(g.state||'open')+(g.author?', opened by @'+g.author:'')+')';return [label,g.kind==='file'?'':'Title: '+String(node.title||'').replace(/^#\d+\s*/,''),g.url?'URL: '+g.url:'',g.truncated?'Note: this content was truncated.':'',g.kind==='file'?'```'+(g.language||'')+'\n'+(node.text||'')+'\n```':node.text||''].filter(Boolean).join('\n')}
   if(node.type==='thread'){let messages=node.messages||[];const index=cutoff?messages.findIndex(m=>m.id===cutoff):-1;if(index>=0)messages=messages.slice(0,index+1);return messages.map(m=>(m.role==='user'?'You':'AI')+': '+m.text).join('\n\n')}
   return node.query||node.title||'';
  }

@@ -36,7 +36,7 @@ The tests include local HTTP server checks, which require permission to listen o
 - `convex/`: authenticated backend, storage, shared documents, and AI runs.
 - `collaboration/`: Yjs client integration, context processing, research helpers, and backend tests.
 
-See [shared-board architecture and limitations](collaboration/README.md) and [canvas interactions](app/README.md) for details. Email recovery and billing are not implemented.
+GitHub sign-in and repositories as board context are described in [GitHub](docs/github.md). See [shared-board architecture and limitations](collaboration/README.md) and [canvas interactions](app/README.md) for details. Email recovery and billing are not implemented.
 
 ## Vercel hosting
 

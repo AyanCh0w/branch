@@ -2,17 +2,24 @@ import { internalMutation, query, mutation } from './_generated/server';
 import { v } from 'convex/values';
 import { getAuthUserId } from '@convex-dev/auth/server';
 import { components } from './_generated/api';
+import { vGithubProfile } from '@convex-dev/auth/methods/github/server';
 
 export const createUser = internalMutation({
   args: { method: v.object({ name: v.literal('usernamePassword'), profile: v.object({}) }) },
   returns: v.id('users'),
   handler: async ctx => ctx.db.insert('users', { name: '', kind: 'account' }),
 });
+// Accounts created through GitHub sign-in start with the GitHub display name.
+export const createUserGithub = internalMutation({
+  args: { method: v.object({ name: v.literal('github'), profile: vGithubProfile }) },
+  returns: v.id('users'),
+  handler: async (ctx, args) => ctx.db.insert('users', { name: (args.method.profile.name || args.method.profile.login).slice(0, 60), kind: 'account', githubLogin: args.method.profile.login }),
+});
 export const me = query({ args: {}, handler: async ctx => {
   const id=await getAuthUserId(ctx); if(!id)return null;
   const user=await ctx.db.get(id); if(!user)return null;
   const username=await ctx.runQuery(components.authUsername.public.getUsername,{userId:id});
-  return {id,name:user.name||username||'Member',username,color:user.color||'#6685cf',background:user.background||''};
+  return {id,name:user.name||username||'Member',username,githubLogin:user.githubLogin||null,color:user.color||'#6685cf',background:user.background||''};
 }});
 export const setName = mutation({args:{name:v.string()},handler:async(ctx,args)=>{
   const id=await getAuthUserId(ctx);if(!id)throw Error('Sign in first');
