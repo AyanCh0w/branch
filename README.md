@@ -43,3 +43,13 @@ See [shared-board architecture and limitations](collaboration/README.md) and [ca
 Vercel uses `npm run build:vercel` to copy an explicit set of browser assets into `public/`, with Node.js API handlers in `api/`. Set `CONVEX_URL` and `OPENAI_API_KEY` as server-side Vercel environment variables. Continue to configure the shared AI key in Convex separately. The hosted frontend can use the same Convex deployment as the local app; hosting does not migrate or reset existing accounts and boards.
 
 The Vercel project should connect to `AyanCh0w/branch` with `main` as its production branch. The landing page is `/`, accounts and boards are `/app`, and existing `/?board=…` URLs still open the canvas. Local startup remains `npm run dev`. Development identity migration routes are disabled in hosted mode; do not configure the development bridge secret on Vercel.
+
+## Use a card in Codex or Claude Code
+
+1. Run or update your Convex development deployment with `npx convex dev`, then build and open Branch. Sign in and open a board you can edit.
+2. On a card, choose **Use in coding agent**. Open **Connect Codex or Claude Code**, create a connection key, and copy it. Export it as `BRANCH_MCP_KEY` in the environment that launches your coding client. For example, in zsh, run `read -rs 'BRANCH_MCP_KEY?Branch connection key: '`, paste the key, press Return, then run `export BRANCH_MCP_KEY`.
+3. Copy the setup command for your client from the dialog. Run it in the repository where you use the coding assistant. Reopen or resume the client with the same environment to load Branch. If you use more than one board, use a distinct server name and environment variable for each key. A loopback Convex deployment is reachable only from the same machine.
+4. Preview the card, select any context to include, and create the handoff. Paste its prompt into your session and add the task you want it to do. The agent reads the card and returns a text draft using the Branch MCP tools.
+5. Open **Review coding draft** on the original card to read, discard, or publish the result. Use **Revoke handoff** to stop an outstanding handoff, or **Disconnect** in setup to revoke the board connection key.
+
+Branch connection keys are separate from your coding provider credentials. Keep them in your local environment. Active handoffs expire after one hour. Files and images are omitted as attachments.

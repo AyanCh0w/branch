@@ -101,7 +101,7 @@ function changeText(text, value) {
   if(old.length-left-right)text.delete(left,old.length-left-right);
   if(value.length-left-right)text.insert(left,value.slice(left,value.length-right));
 }
-function metadata(node) { const result = copy(node); for(const key of [...fields,'sharedVersion','sharedTextState','activeRun','activity','draftEpoch','messages','authorProfile']) delete result[key]; return result; }
+function metadata(node) { const result = copy(node); for(const key of [...fields,'sharedVersion','sharedTextState','activeRun','activity','draftEpoch','messages','authorProfile','codingResult']) delete result[key]; return result; }
 function schedule() { clearTimeout(timer);timer=setTimeout(()=>flush().catch(()=>{}),70); }
 function keepRecovery(){try{localStorage.setItem('branch-unsynced-'+credentials.boardId,JSON.stringify({savedAt:new Date().toISOString(),state:host.getState()}));}catch{}}
 function edit(node, field, value) {
@@ -160,7 +160,7 @@ function selectionOffset(el){if(el instanceof HTMLTextAreaElement)return [el.sel
 function caretSnapshot(){const el=document.activeElement,field=fieldOf(el),key=el?.closest?.('.card')?.dataset.node,item=docs.get(key);if(!item||!fields.includes(field))return null;const offsets=selectionOffset(el);if(!offsets)return null;return {key,field,positions:offsets.map(i=>Y.createRelativePositionFromTypeIndex(item.doc.getText(field),i))};}
 function restoreCaret(saved){if(!saved)return;const item=docs.get(saved.key);if(!item)return;const el=document.querySelector(`[data-node="${saved.key}"] ${saved.field==='draft'?'[data-prompt]':`[data-edit="${saved.field}"]`}`);if(!el)return;const offsets=saved.positions.map(p=>Y.createAbsolutePositionFromRelativePosition(p,item.doc)?.index||0);el.focus({preventScroll:true});if(el instanceof HTMLTextAreaElement){el.setSelectionRange(...offsets);return;}const point=index=>{const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let leaf,last;while(leaf=walker.nextNode()){last=leaf;if(index<=leaf.length)return [leaf,index];index-=leaf.length;}return last?[last,last.length]:[el,0];};getSelection().setBaseAndExtent(...point(offsets[0]),...point(offsets[1]));}
 function receive(snapshot){
-  if(!snapshot)return;writable=snapshot.role!=='viewer';document.body.classList.toggle('board-viewer',!writable);const caret=caretSnapshot();applying=true;
+  if(!snapshot)return;writable=snapshot.role!=='viewer';document.body.classList.toggle('board-viewer',!writable);if(!writable)window.BranchCoding?.reset();const caret=caretSnapshot();applying=true;
   try{
     const nodes=[];const seen=new Set();
     for(const remote of snapshot.nodes){
@@ -207,7 +207,25 @@ async function moveNodes(nodes){
   for(const change of changes){const overlay=overlays.get(change.id);if(!overlay?.patch)continue;for(const field of ['x','y'])if(overlay.patch[field]===change.patch[field])delete overlay.patch[field];if(!Object.keys(overlay.patch).length){delete overlay.patch;if(!Object.keys(overlay).length)overlays.delete(change.id);}}
  }catch(error){host.notify(error.message);}
 }
-window.BoardShared={connect:start,async disconnect(){await deletionQueue;if(ready&&writable&&!failure){try{await flush();await focusTask;await client.mutation('collaboration:release',args({tabId}));}catch{keepRecovery();}}ready=false;active=null;clearTimeout(timer);for(const off of subscriptions.splice(0))off();docs.clear();uploadedFiles.clear();pending.clear();overlays.clear();},get writable(){return writable;},headers(){return {'X-Board-Id':credentials?.boardId||'','X-Board-Token':credentials?.token||'',...(window.BranchAccount?.token?{Authorization:'Bearer '+window.BranchAccount.token}:{})};},get enabled(){return ready;},get applying(){return applying;},saveState,edit,send,deleteNode,moveNodes,async stop(key){try{await client.mutation('chat:stop',args({nodeKey:key}));}catch(error){host.notify(error.message);}},async uploadFile(file){
+const coding = {
+  watch(callback, onError) {
+    return client.onUpdate('coding:status', args(), callback, onError);
+  },
+  async preview(nodeKey) {
+    if (!ready || !writable || !connected || failure) throw Error('Reconnect and sync before creating a handoff.');
+    const scope = args({ nodeKey });
+    await flush();
+    if (!ready || args().boardId !== scope.boardId) throw Error('Open the card again.');
+    return client.query('coding:preview', scope);
+  },
+  create: (nodeKey, fingerprint, sources) => client.mutation('coding:create', args({ nodeKey, fingerprint, sources })),
+  configure: keyHash => client.mutation('coding:configure', args(keyHash ? { keyHash } : {})),
+  readDraft: nodeKey => client.query('coding:draft', args({ nodeKey })),
+  resolve: (nodeKey, handoffId, publish, expectedPublishedId) => client.mutation('coding:resolve', args({
+    nodeKey, handoffId, publish, ...(expectedPublishedId ? { expectedPublishedId } : {}),
+  })),
+};
+window.BoardShared={coding,connect:start,async disconnect(){window.BranchCoding?.reset();await deletionQueue;if(ready&&writable&&!failure){try{await flush();await focusTask;await client.mutation('collaboration:release',args({tabId}));}catch{keepRecovery();}}ready=false;active=null;clearTimeout(timer);for(const off of subscriptions.splice(0))off();docs.clear();uploadedFiles.clear();pending.clear();overlays.clear();},get writable(){return writable;},headers(){return {'X-Board-Id':credentials?.boardId||'','X-Board-Token':credentials?.token||'',...(window.BranchAccount?.token?{Authorization:'Bearer '+window.BranchAccount.token}:{})};},get enabled(){return ready;},get applying(){return applying;},saveState,edit,send,deleteNode,moveNodes,async stop(key){try{await client.mutation('chat:stop',args({nodeKey:key}));}catch(error){host.notify(error.message);}},async uploadFile(file){
  const scope=args();const {ticket,url}=await client.mutation('files:uploadUrl',scope);
  const response=await fetch(url,{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream'},body:file});
  if(!response.ok)throw Error('File upload failed');
@@ -227,9 +245,10 @@ async function start(config){
   try{
     credentials=config;client=config.client||new ConvexClient(config.url);writable=config.role!=='viewer';
     const snapshot=await client.query('boards:read',args());receive(snapshot);ready=true;connected=client.connectionState().isWebSocketConnected;
-    subscriptions.push(client.onUpdate('boards:read',args(),receive,error=>{failure=error;document.body.classList.add('shared-starting');status('Access changed · return to your boards');host.notify('Access to this board changed. Return to your boards.');updateLocks();}));
+    subscriptions.push(client.onUpdate('boards:read',args(),receive,error=>{failure=error;window.BranchCoding?.reset();document.body.classList.add('shared-starting');status('Access changed · return to your boards');host.notify('Access to this board changed. Return to your boards.');updateLocks();}));
     subscriptions.push(client.onUpdate('collaboration:editors',args(),value=>{rows=value;updateLocks();},()=>{}));
     subscriptions.push(client.subscribeToConnectionState(state=>{connected=state.isWebSocketConnected;status(connected?'Shared · saved':'Reconnecting · Send paused');updateLocks();}));
+    if (!config.token) subscriptions.push(coding.watch(value => window.BranchCoding?.update(value), () => window.BranchCoding?.reset()));
     subscriptions.push(startCursors({client,scope:args(),tabId,host}));
     document.body.classList.remove('shared-starting');status('Shared · saved');updateLocks();focusEditor(document.activeElement);
     // URL bookkeeping must never prevent live subscriptions or leave the canvas locked.

@@ -112,3 +112,9 @@ Set `WORKSPACE_KEY_ENCRYPTION_KEY` to the same random 32-byte hex secret in the 
 ## Active board users
 
 The top-right canvas roster shows each active person's local Blobz avatar and display name, including the current person. Attendance is independent of cursor position and editing leases, so reading or using board controls keeps people visible without blocking Send. Visible tabs renew attendance every five seconds; hidden tabs and navigation release their own session. Multiple tabs are grouped by user, revoked access is filtered, and lost connections expire after 15 seconds (also filtered locally). Deploy the additive `boardPresence` schema and `collaboration:activeUsers` / `collaboration:attend` functions with this frontend.
+
+## Coding agent handoffs
+
+Branch exposes a Streamable HTTP MCP endpoint at `/mcp` on the Convex site URL. Codex and Claude Code connect from their existing clients and keep their own provider sign-in and billing. Branch issues one revocable MCP key per account and board, and stores only its hash. Guests and viewers cannot create handoffs. The endpoint checks current editing access on every request, including when returning a draft.
+
+Handoffs use acknowledged card text and explicitly selected text sources. The preview is fingerprinted so a concurrent edit requires another review. Files and images are omitted as attachments, and long text is capped with a visible omission marker. New handoffs are readable for one hour. Returned drafts stay private to the initiator until published or discarded. Card deletion revokes its handoffs, even if the card is later restored. Publishing updates only the card's result field and rejects an overwrite if the previously reviewed shared result changed.
