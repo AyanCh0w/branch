@@ -486,3 +486,15 @@ test('context inspector shows frozen upstream input, exclusions and explicit ref
   dialog.querySelector('[data-inspector-close]').click();assert.equal(d.querySelector('#context-inspector'),null);
  }finally{w.close();}
 });
+
+test('account model choices update composers without touching drafts and disconnect restores default',async()=>{
+ const dom=boot(),w=dom.window,d=w.document;
+ try{
+  const selected=[];w.BranchAI={connected:true,selectedModel:'model-a',models:[{slug:'model-a',name:'Model A'},{slug:'model-b',name:'Model B'}],choose:async model=>selected.push(model),open(){}};
+  w.dispatchEvent(new w.Event('branch-ai-changed'));
+  assert.equal(d.querySelector('.model-picker > summary').textContent.trim(),'Model A');assert.equal(d.querySelector('.model-slider-row').hidden,true);assert.equal(d.querySelectorAll('[data-select-model]').length,2);assert.equal(d.querySelector('[data-prompt]').value,'A shared draft');
+  d.querySelector('[data-select-model="model-b"]').click();await Promise.resolve();assert.deepEqual(selected,['model-b']);
+  w.BranchAI={connected:false,models:[],selectedModel:'gpt-5.4-mini'};w.dispatchEvent(new w.Event('branch-ai-changed'));
+  assert.equal(d.querySelector('[data-model-name]').textContent,'GPT-5.4 mini');assert.equal(d.querySelector('.model-slider-row').hidden,false);assert.equal(d.querySelector('[data-ai-settings]').textContent,'Branch default');assert.equal(d.querySelector('[data-prompt]').value,'A shared draft');
+ }finally{w.close();}
+});

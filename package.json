@@ -9,7 +9,8 @@
     "convex:dev": "convex dev",
     "test": "node --test app/tests/*.test.cjs && vitest run",
     "typecheck": "tsc --noEmit -p convex",
-    "build:vercel": "npm run build && node scripts/build-public.cjs"
+    "build:vercel": "npm run build && node scripts/build-public.cjs",
+    "mcp": "node mcp/server.cjs"
   },
   "keywords": [],
   "author": "",
@@ -18,15 +19,19 @@
   "dependencies": {
     "@blobz/avatar-core": "^0.1.2",
     "@convex-dev/auth": "^2.0.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@resvg/resvg-js": "^2.6.2",
     "convex": "^1.49.0",
     "dompurify": "^3.4.17",
+    "jose": "^6.2.17",
     "katex": "^0.19.1",
     "marked": "^18.2.0",
     "pdfjs-dist": "^6.5.438",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "yjs": "^13.6.33",
-    "youtube-transcript-plus": "^2.0.3"
+    "youtube-transcript-plus": "^2.0.3",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

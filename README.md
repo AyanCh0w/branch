@@ -1,6 +1,6 @@
 # Branch
 
-A collaborative canvas for branching conversations, research, notes, and media. Built with a local Node.js frontend server, React account/workspace UI, Convex, and Yjs. AI responses use server-side OpenAI Responses API calls with `gpt-5.4-mini`.
+A collaborative canvas for branching conversations, research, notes, and media. Built with a local Node.js frontend server, React account/workspace UI, Convex, and Yjs. AI responses use server-side OpenAI Responses API calls with `gpt-5.4-mini` by default. An approval-gated Sign in with ChatGPT integration lets connected users choose models available to their own plan.
 
 ## Local setup
 
@@ -43,3 +43,7 @@ GitHub sign-in and repositories as board context are described in [GitHub](docs/
 Vercel uses `npm run build:vercel` to copy an explicit set of browser assets into `public/`, with Node.js API handlers in `api/`. Set `CONVEX_URL` and `OPENAI_API_KEY` as server-side Vercel environment variables. Continue to configure the shared AI key in Convex separately. The hosted frontend can use the same Convex deployment as the local app; hosting does not migrate or reset existing accounts and boards.
 
 The Vercel project should connect to `AyanCh0w/branch` with `main` as its production branch. The landing page is `/`, accounts and boards are `/app`, and existing `/?board=…` URLs still open the canvas. Local startup remains `npm run dev`. Development identity migration routes are disabled in hosted mode; do not configure the development bridge secret on Vercel.
+
+## ChatGPT plan connections
+
+AI settings replaces custom workspace API keys with personal ChatGPT connections and account-specific model choices. Hosted plan usage requires an approved OpenAI client; the feature stays unavailable until configured. The existing default model remains available. See [setup, security, and rollout requirements](collaboration/README.md#chatgpt-connections-and-model-choice).

@@ -277,3 +277,13 @@ button.a-gh-row{cursor:pointer}button.a-gh-row:hover,button.a-gh-row:focus-visib
 .a-gh-hint{margin:0;font-size:11px;color:var(--theme-muted, #858b93)}
 .a-github-panel>.a-error,.a-github-panel>.a-share-status{margin:0;padding:0 16px 12px;font-size:12px}
 .a-gh-pick{display:flex;flex-direction:column;gap:8px}
+.a-field select{width:100%;padding:10px 12px;border:1px solid var(--theme-line,#e3e4e6);border-radius:6px;background:var(--theme-surface,#fff);color:inherit;font:inherit}
+.a-field select:focus-visible{outline:2px solid var(--theme-accent,#4879f5);outline-offset:2px}
+
+.a-username-field{position:relative;min-width:0}
+.a-username-popup{position:absolute;z-index:5;top:100%;left:0;right:0;margin-top:-12px;padding:5px;border:1px solid var(--theme-line,#e1e4e8);border-radius:10px;background:var(--theme-surface,#fff);box-shadow:0 4px 12px #20253016}
+.a-username-popup .a-share-person[aria-selected=true]{background:var(--theme-raised,#f3f4f5)}
+.a-username-popup .a-member-details{display:flex;flex-direction:column;gap:3px;overflow-wrap:anywhere}
+.a-username-popup strong{font-size:13px;font-weight:500}
+.a-username-popup small,.a-username-status{font-size:11px;color:var(--theme-muted,#777d86)}
+.a-username-status{margin:7px 8px;line-height:1.5}

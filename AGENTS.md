@@ -58,3 +58,5 @@
 - Chat Responses API calls enable hosted web_search with gpt-5.4-mini only. Supplied URLs trigger lookup at send time; preserve inline clickable citations and distinguish collaborator notes from retrieved facts. Never claim blocked/private pages were read. Website cards do not store extracted page text.
 
 - Reasoning slider maps Thoughtful/Balanced/Fast to high/medium/low effort on gpt-5.4-mini. Shared stream activity shows Thinking/Searching/Writing in-node and clears on completion/failure. Citation clicks open a source card beside the chat; modified clicks keep normal browser behavior.
+
+- ChatGPT connection update supersedes fixed-model/custom-key rules: disconnected users use server-side gpt-5.4-mini; connected users choose from their own SIWC model catalog. Hosted SIWC must remain disabled until approved for plan usage. Never use Codex app-server auth for hosted services. Connections are personal, requests freeze sender/provider/model, and connection failures never silently charge the default key. Workspace custom keys are retired. See collaboration/README.md.
