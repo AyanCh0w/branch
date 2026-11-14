@@ -33,11 +33,12 @@ export function ConnectChatGPT({ request }) {
   }
 
   function cancel() {
-    const endpoint = request.get('resource');
-    if (!endpoint || !URL.canParse(endpoint)) { location.replace('/app'); return; }
+    // The issuer is Branch's own connector base, not whatever the link claims.
+    const endpoint = request.get('resource') || '';
+    if (!/^https?:\/\/[^?#]+\/chatgpt\/mcp$/.test(endpoint) || !URL.canParse(endpoint)) { location.replace('/app'); return; }
     const callback = new URL('https://chatgpt.com/connector_platform_oauth_redirect');
     callback.search = new URLSearchParams({
-      error: 'access_denied', state: request.get('state') || '', iss: new URL(endpoint).origin,
+      error: 'access_denied', state: request.get('state') || '', iss: endpoint.replace(/\/chatgpt\/mcp$/, ''),
     }).toString();
     location.replace(callback.href);
   }

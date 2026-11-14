@@ -4,9 +4,10 @@ import { registerCore, sessionIdentity } from '@convex-dev/auth/test';
 import { registerPassword } from '@convex-dev/auth/components/password/test';
 import { registerUsername } from '@convex-dev/auth/components/username/test';
 import schema from '../convex/schema';
-import { api } from '../convex/_generated/api';
+import { api, internal } from '../convex/_generated/api';
 import { tokenHash } from '../convex/access';
-import { chatgptClient, chatgptRedirect, pkce } from '../convex/chatgptOAuth';
+import { chatgptClient, chatgptRedirect, pkce, grantMaxMs, refreshGraceMs } from '../convex/chatgptOAuth';
+import { BURST } from '../convex/chatgptSync';
 
 const modules = import.meta.glob('../convex/**/*.ts');
 const issuer = 'https://test.convex.site';
@@ -16,7 +17,7 @@ const code = 'c'.repeat(64);
 const first = { updateId: '2779ed4c-ee63-4880-83cb-077c08a7e3f5', title: 'Check-in notes', prompt: 'Draft the plan', result: 'First update' };
 const second = { ...first, updateId: '2e9d4c89-5278-4f7b-b411-db99618c0b6e', result: 'Second update' };
 
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 async function setup() {
   vi.stubEnv('CONVEX_SITE_URL', issuer);
@@ -118,8 +119,15 @@ it('rechecks editor access, rotates refresh tokens, and stops after disconnect',
   await consent(editor);
   const started = await (await exchange()).json();
   const refresh = { grant_type: 'refresh_token', refresh_token: started.refresh_token };
+  const now = Date.now();
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+  await (await exchange(refresh)).json();
+  // A retry with the just-replaced token (for example after a lost response) still works briefly.
   const renewed = await (await exchange(refresh)).json();
+  expect(renewed.refresh_token).toBeTruthy();
+  clock.mockReturnValue(now + refreshGraceMs + 1);
   expect((await exchange(refresh)).status).toBe(400);
+  clock.mockRestore();
   expect((await sync(first, started.access_token)).isError).toBe(true);
   expect((await sync(first, renewed.access_token)).isError).not.toBe(true);
   const { members } = await owner.query(api.sharing.settings, { boardId });
@@ -154,4 +162,70 @@ it('keeps simultaneous updates from two connected collaborators on separate bran
   });
   expect((await read(one.structuredContent.cardId)).page.map(item => item.result)).toEqual(['First update']);
   expect((await read(two.structuredContent.cardId)).page.map(item => item.result)).toEqual(['Editor update']);
+});
+
+it('caps a ChatGPT grant at 90 days and keeps one grant per person', async () => {
+  const { editor, consent, exchange, boardId, secondBoard, owner } = await setup();
+  await owner.mutation(api.sharing.addMember, { boardId: secondBoard, username: 'editor', role: 'editor' });
+  await consent(editor);
+  const firstTokens = await (await exchange()).json();
+  await consent(editor, { boardId: secondBoard });
+  await (await exchange()).json();
+  // Re-pointing ChatGPT to another board replaces the earlier grant.
+  expect((await editor.query(api.chatgptOAuth.connection, { boardId })).connected).toBe(false);
+  expect((await editor.query(api.chatgptOAuth.connection, { boardId: secondBoard })).connected).toBe(true);
+  expect((await exchange({ grant_type: 'refresh_token', refresh_token: firstTokens.refresh_token })).status).toBe(400);
+
+  // Approve again, then keep refreshing every 25 days: rotation never extends past 90 days from approval.
+  await consent(editor, { boardId: secondBoard });
+  let refreshToken = (await (await exchange()).json()).refresh_token as string;
+  const start = Date.now();
+  for (const days of [25, 50, 75]) {
+    vi.spyOn(Date, 'now').mockReturnValue(start + days * 86400_000);
+    const next = await exchange({ grant_type: 'refresh_token', refresh_token: refreshToken });
+    expect(next.status).toBe(200);
+    refreshToken = (await next.json()).refresh_token;
+  }
+  vi.spyOn(Date, 'now').mockReturnValue(start + grantMaxMs + 1);
+  expect((await exchange({ grant_type: 'refresh_token', refresh_token: refreshToken })).status).toBe(400);
+});
+
+it('recreates a ChatGPT card that was removed without undo, and limits bursts', async () => {
+  const { owner, consent, exchange, sync, boardId } = await setup();
+  await consent();
+  const tokens = await (await exchange()).json();
+  const created = await sync(first, tokens.access_token);
+  const nodeKey = created.structuredContent.cardId;
+  await owner.mutation(api.boards.patchNodes, { boardId, token: '', changes: [{ id: nodeKey, remove: true }] });
+  const again = await sync(second, tokens.access_token);
+  expect(again.isError).not.toBe(true);
+  const replacement = again.structuredContent.cardId;
+  expect(replacement).not.toBe(nodeKey);
+  const timeline = await owner.query(api.chatgptSync.read, { boardId, token: '', nodeKey: replacement, paginationOpts: { numItems: 10, cursor: null } });
+  expect(timeline.page.map(row => row.result)).toEqual(['Second update', 'First update']);
+
+  for (let i = 0; i < BURST - 2; i++) expect((await sync({ ...first, updateId: crypto.randomUUID(), result: 'Burst ' + i }, tokens.access_token)).isError).not.toBe(true);
+  const limited = await sync({ ...first, updateId: crypto.randomUUID(), result: 'One too many' }, tokens.access_token);
+  expect(limited.isError).toBe(true);
+  expect(JSON.stringify(limited)).toContain('Too many updates');
+});
+
+it('drops agent connections when access ends and cleans up expired rows', async () => {
+  const { t, owner, editor, consent, exchange, boardId } = await setup();
+  await consent(editor);
+  const tokens = await (await exchange()).json();
+  await editor.mutation(api.coding.configure, { boardId, token: '', keyHash: await tokenHash('branch_' + 'd'.repeat(64)) });
+  const count = async () => t.run(async ctx => ({ grants: (await ctx.db.query('chatgptGrants').collect()).length, coding: (await ctx.db.query('codingConnections').collect()).length }));
+  expect(await count()).toEqual({ grants: 1, coding: 1 });
+  const { members } = await owner.query(api.sharing.settings, { boardId });
+  await owner.mutation(api.sharing.removeMember, { memberId: members.find(member => member.role === 'editor')!.id });
+  expect(await count()).toEqual({ grants: 0, coding: 0 });
+  // Re-adding the person doesn't revive the old refresh token.
+  await owner.mutation(api.sharing.addMember, { boardId, username: 'editor', role: 'editor' });
+  expect((await exchange({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token })).status).toBe(400);
+
+  await consent(owner);
+  vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 10 * 60_000);
+  await t.mutation(internal.maintenance.cleanup, {});
+  expect(await t.run(async ctx => (await ctx.db.query('chatgptCodes').collect()).length)).toBe(0);
 });

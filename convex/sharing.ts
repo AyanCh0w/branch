@@ -1,4 +1,5 @@
 import type {Id} from './_generated/dataModel';
+import { pruneBoardAgents } from './maintenance';
 import type {QueryCtx,MutationCtx} from './_generated/server';
 import { query, mutation } from './_generated/server';
 import { v } from 'convex/values';
@@ -47,10 +48,10 @@ export const createLink=mutation({args:{boardId:v.id('boards'),role,label:v.stri
   return ctx.db.insert('boardLinks',{boardId:args.boardId,tokenHash:tokenHashValue,role:args.role,label:args.label.trim().slice(0,60)||'Guest link',revoked:false});
 }});
 export const revokeLink=mutation({args:{linkId:v.id('boardLinks')},handler:async(ctx,args)=>{
-  const link=await ctx.db.get(args.linkId);if(!link)throw Error('Link not found');const {membership}=await access(ctx,'',link.boardId);if(membership.role!=='owner')throw Error('Only the owner can change sharing');await ctx.db.patch(link._id,{revoked:true});
+  const link=await ctx.db.get(args.linkId);if(!link)throw Error('Link not found');const {membership}=await access(ctx,'',link.boardId);if(membership.role!=='owner')throw Error('Only the owner can change sharing');await ctx.db.patch(link._id,{revoked:true});await pruneBoardAgents(ctx,link.boardId);
 }});
 export const changeLinkRole=mutation({args:{linkId:v.id('boardLinks'),role},handler:async(ctx,args)=>{
-  const link=await ctx.db.get(args.linkId);if(!link)throw Error('Link not found');const {membership}=await access(ctx,'',link.boardId);if(membership.role!=='owner')throw Error('Only the owner can change sharing');await ctx.db.patch(link._id,{role:args.role});
+  const link=await ctx.db.get(args.linkId);if(!link)throw Error('Link not found');const {membership}=await access(ctx,'',link.boardId);if(membership.role!=='owner')throw Error('Only the owner can change sharing');await ctx.db.patch(link._id,{role:args.role});await pruneBoardAgents(ctx,link.boardId);
 }});
 export const join=mutation({args:{linkToken:v.string()},handler:async(ctx,args)=>{
   const userId=await getAuthUserId(ctx);if(!userId)throw Error('Sign in first');const {link}=await liveLink(ctx,args.linkToken);
@@ -75,7 +76,7 @@ export const addMember=mutation({args:{boardId:v.id('boards'),username:v.string(
   if(existing)await ctx.db.patch(existing._id,{role:args.role,...(args.responsibility!==undefined?{responsibility:args.responsibility.trim()}:{})});else await ctx.db.insert('boardMembers',{boardId:args.boardId,userId:userId as any,role:args.role,responsibility:args.responsibility?.trim()});
 }});
 export const removeMember=mutation({args:{memberId:v.id('boardMembers')},handler:async(ctx,args)=>{
-  const member=await ctx.db.get(args.memberId);if(!member)throw Error('Member not found');const {board,membership}=await access(ctx,'',member.boardId);if(membership.role!=='owner'||member.userId===board.ownerId)throw Error('Cannot remove this member');await ctx.db.delete(member._id);
+  const member=await ctx.db.get(args.memberId);if(!member)throw Error('Member not found');const {board,membership}=await access(ctx,'',member.boardId);if(membership.role!=='owner'||member.userId===board.ownerId)throw Error('Cannot remove this member');await ctx.db.delete(member._id);await pruneBoardAgents(ctx,member.boardId);
 }});
 
 export const setResponsibility=mutation({args:{memberId:v.id('boardMembers'),responsibility:v.string()},handler:async(ctx,args)=>{
@@ -91,12 +92,14 @@ export const setGeneralAccess=mutation({args:{boardId:v.id('boards'),role:v.unio
  const {membership}=await access(ctx,'',args.boardId);if(membership.role!=='owner')throw Error('Only the owner can change sharing');
  const links=await ctx.db.query('boardLinks').withIndex('board',q=>q.eq('boardId',args.boardId)).collect();
  for(const link of links)if(!link.revoked)await ctx.db.patch(link._id,args.role==='restricted'?{revoked:true}:{role:args.role});
+ await pruneBoardAgents(ctx,args.boardId);
 }});
 export const changeMemberRole=mutation({args:{memberId:v.id('boardMembers'),role},handler:async(ctx,args)=>{
  const member=await ctx.db.get(args.memberId);if(!member)throw Error('Member not found');
  const {board,membership}=await access(ctx,'',member.boardId);
  if(membership.role!=='owner'||member.userId===board.ownerId)throw Error('Only the owner can change member access');
  await ctx.db.patch(member._id,{role:args.role});
+ await pruneBoardAgents(ctx,member.boardId);
 }});
 
 // A live invite is the capability: board IDs alone never expose preview data.

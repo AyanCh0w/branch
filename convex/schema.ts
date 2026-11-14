@@ -10,7 +10,10 @@ export default defineSchema({
   chatgptGrants: defineTable({
     userId: v.id('users'), boardId: v.id('boards'), resource: v.string(), accessHash: v.string(), refreshHash: v.string(),
     accessUntil: v.number(), refreshUntil: v.number(),
-  }).index('access', ['accessHash']).index('refresh', ['refreshHash']).index('user_board', ['userId', 'boardId']),
+    // The refresh token replaced by the latest rotation stays usable briefly, so a lost
+    // response or a duplicate refresh doesn't disconnect; grantedAt caps the grant's lifetime.
+    previousRefreshHash: v.optional(v.string()), previousRefreshUntil: v.optional(v.number()), grantedAt: v.optional(v.number()),
+  }).index('access', ['accessHash']).index('refresh', ['refreshHash']).index('previous_refresh', ['previousRefreshHash']).index('user_board', ['userId', 'boardId']).index('user', ['userId']),
   chatgptThreads: defineTable({
     boardId: v.id('boards'), userId: v.id('users'), conversationId: v.string(), nodeKey: v.string(),
   }).index('conversation', ['boardId', 'userId', 'conversationId']).index('card', ['boardId', 'nodeKey']),

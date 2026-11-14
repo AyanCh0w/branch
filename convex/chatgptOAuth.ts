@@ -10,6 +10,9 @@ export const resource = () => issuer() + '/chatgpt/mcp';
 export const frontend = () => (process.env.BRANCH_APP_URL || 'http://127.0.0.1:4387').replace(/\/$/, '');
 export const accessSeconds = 3600;
 const refreshMs = 30 * 86400_000;
+// After this long since approval, the person must connect again.
+export const grantMaxMs = 90 * 86400_000;
+export const refreshGraceMs = 2 * 60_000;
 const digest = /^[a-f0-9]{64}$/;
 const challenge = /^[A-Za-z0-9_-]{43}$/;
 
@@ -48,25 +51,34 @@ export const exchange = internalMutation({
   handler: async (ctx, args) => {
     if (args.resource !== resource() || !digest.test(args.accessHash) || !digest.test(args.refreshHash)) throw invalidGrant();
     const now = Date.now();
-    const tokenFields = {
+    const tokenFields = (grantedAt: number) => ({
       resource: args.resource, accessHash: args.accessHash, refreshHash: args.refreshHash,
-      accessUntil: now + accessSeconds * 1000, refreshUntil: now + refreshMs,
-    };
+      accessUntil: Math.min(now + accessSeconds * 1000, grantedAt + grantMaxMs), refreshUntil: Math.min(now + refreshMs, grantedAt + grantMaxMs), grantedAt,
+    });
     if (args.code) {
       const code = args.code;
       const saved = await ctx.db.query('chatgptCodes').withIndex('code', q => q.eq('codeHash', code.hash)).unique();
       if (!saved || saved.expiresAt <= now || saved.challenge !== code.challenge || saved.resource !== args.resource) throw invalidGrant();
       await accessForUser(ctx, saved.userId, saved.boardId, true);
-      const old = await ctx.db.query('chatgptGrants').withIndex('user_board', q => q.eq('userId', saved.userId).eq('boardId', saved.boardId)).unique();
-      if (old) await ctx.db.patch(old._id, tokenFields);
-      else await ctx.db.insert('chatgptGrants', { ...tokenFields, userId: saved.userId, boardId: saved.boardId });
+      // ChatGPT keeps one token set per connection, so a new approval replaces this
+      // person's earlier grants (including ones for other boards).
+      for (const old of await ctx.db.query('chatgptGrants').withIndex('user', q => q.eq('userId', saved.userId)).collect()) await ctx.db.delete(old._id);
+      await ctx.db.insert('chatgptGrants', { ...tokenFields(now), userId: saved.userId, boardId: saved.boardId, previousRefreshHash: undefined, previousRefreshUntil: undefined });
       await ctx.db.delete(saved._id);
     } else if (args.refresh) {
       const refresh = args.refresh;
-      const old = await ctx.db.query('chatgptGrants').withIndex('refresh', q => q.eq('refreshHash', refresh)).unique();
+      let old = await ctx.db.query('chatgptGrants').withIndex('refresh', q => q.eq('refreshHash', refresh)).unique();
+      // A retry with the just-replaced token is accepted for a short window.
+      if (!old) {
+        const previous = await ctx.db.query('chatgptGrants').withIndex('previous_refresh', q => q.eq('previousRefreshHash', refresh)).unique();
+        if (previous && (previous.previousRefreshUntil || 0) > now) old = previous;
+      }
       if (!old || old.refreshUntil <= now || old.resource !== args.resource) throw invalidGrant();
       await accessForUser(ctx, old.userId, old.boardId, true);
-      await ctx.db.patch(old._id, tokenFields);
+      const grantedAt = old.grantedAt ?? old._creationTime;
+      if (grantedAt + grantMaxMs <= now) throw invalidGrant();
+      const rotatedFrom = old.refreshHash === refresh ? refresh : old.previousRefreshHash;
+      await ctx.db.patch(old._id, { ...tokenFields(grantedAt), previousRefreshHash: rotatedFrom, previousRefreshUntil: old.refreshHash === refresh ? now + refreshGraceMs : old.previousRefreshUntil });
     } else throw invalidGrant();
   },
 });

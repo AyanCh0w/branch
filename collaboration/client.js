@@ -15,6 +15,10 @@ let client, credentials, ready = false, applying = false, connected = false;
 let rows = [], active = null, focusTask = Promise.resolve(), queue = Promise.resolve();
 let lastState, timer, failure = null;
 let writable=true;const subscriptions=[];
+// The coding-agent subscription restarts after errors and when edit access returns.
+let codingWatch=null,codingRetry=null;
+function stopCoding(){clearTimeout(codingRetry);codingRetry=null;const stop=codingWatch;codingWatch=null;try{stop?.();}catch{}}
+function watchCoding(){if(codingWatch||!ready||!credentials||credentials.token||!writable||failure)return;codingWatch=coding.watch(value=>window.BranchCoding?.update(value),()=>{window.BranchCoding?.reset();stopCoding();codingRetry=setTimeout(watchCoding,15000);});}
 const uploadedFiles = new Map();
 const docs = new Map(), pending = new Map(), overlays = new Map(), sending = new Set();
 const deletedNodes = [], restoredNodes = [];
@@ -160,7 +164,7 @@ function selectionOffset(el){if(el instanceof HTMLTextAreaElement)return [el.sel
 function caretSnapshot(){const el=document.activeElement,field=fieldOf(el),key=el?.closest?.('.card')?.dataset.node,item=docs.get(key);if(!item||!fields.includes(field))return null;const offsets=selectionOffset(el);if(!offsets)return null;return {key,field,positions:offsets.map(i=>Y.createRelativePositionFromTypeIndex(item.doc.getText(field),i))};}
 function restoreCaret(saved){if(!saved)return;const item=docs.get(saved.key);if(!item)return;const el=document.querySelector(`[data-node="${saved.key}"] ${saved.field==='draft'?'[data-prompt]':`[data-edit="${saved.field}"]`}`);if(!el)return;const offsets=saved.positions.map(p=>Y.createAbsolutePositionFromRelativePosition(p,item.doc)?.index||0);el.focus({preventScroll:true});if(el instanceof HTMLTextAreaElement){el.setSelectionRange(...offsets);return;}const point=index=>{const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let leaf,last;while(leaf=walker.nextNode()){last=leaf;if(index<=leaf.length)return [leaf,index];index-=leaf.length;}return last?[last,last.length]:[el,0];};getSelection().setBaseAndExtent(...point(offsets[0]),...point(offsets[1]));}
 function receive(snapshot){
-  if(!snapshot)return;writable=snapshot.role!=='viewer';document.body.classList.toggle('board-viewer',!writable);if(!writable)window.BranchCoding?.reset();const caret=caretSnapshot();applying=true;
+  if(!snapshot)return;writable=snapshot.role!=='viewer';document.body.classList.toggle('board-viewer',!writable);if(!writable){window.BranchCoding?.reset();stopCoding();}else if(ready)watchCoding();const caret=caretSnapshot();applying=true;
   try{
     const nodes=[];const seen=new Set();
     for(const remote of snapshot.nodes){
@@ -225,7 +229,7 @@ const coding = {
     nodeKey, handoffId, publish, ...(expectedPublishedId ? { expectedPublishedId } : {}),
   })),
 };
-window.BoardShared={coding,connect:start,async disconnect(){window.BranchCoding?.reset();await deletionQueue;if(ready&&writable&&!failure){try{await flush();await focusTask;await client.mutation('collaboration:release',args({tabId}));}catch{keepRecovery();}}ready=false;active=null;clearTimeout(timer);for(const off of subscriptions.splice(0))off();docs.clear();uploadedFiles.clear();pending.clear();overlays.clear();},get writable(){return writable;},headers(){return {'X-Board-Id':credentials?.boardId||'','X-Board-Token':credentials?.token||'',...(window.BranchAccount?.token?{Authorization:'Bearer '+window.BranchAccount.token}:{})};},get enabled(){return ready;},get applying(){return applying;},saveState,edit,send,deleteNode,moveNodes,async stop(key){try{await client.mutation('chat:stop',args({nodeKey:key}));}catch(error){host.notify(error.message);}},async uploadFile(file){
+window.BoardShared={coding,connect:start,async disconnect(){window.BranchCoding?.reset();await deletionQueue;if(ready&&writable&&!failure){try{await flush();await focusTask;await client.mutation('collaboration:release',args({tabId}));}catch{keepRecovery();}}ready=false;active=null;clearTimeout(timer);stopCoding();for(const off of subscriptions.splice(0))off();docs.clear();uploadedFiles.clear();pending.clear();overlays.clear();},get writable(){return writable;},headers(){return {'X-Board-Id':credentials?.boardId||'','X-Board-Token':credentials?.token||'',...(window.BranchAccount?.token?{Authorization:'Bearer '+window.BranchAccount.token}:{})};},get enabled(){return ready;},get applying(){return applying;},saveState,edit,send,deleteNode,moveNodes,async stop(key){try{await client.mutation('chat:stop',args({nodeKey:key}));}catch(error){host.notify(error.message);}},async uploadFile(file){
  const scope=args();const {ticket,url}=await client.mutation('files:uploadUrl',scope);
  const response=await fetch(url,{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream'},body:file});
  if(!response.ok)throw Error('File upload failed');
@@ -248,7 +252,7 @@ async function start(config){
     subscriptions.push(client.onUpdate('boards:read',args(),receive,error=>{failure=error;window.BranchCoding?.reset();document.body.classList.add('shared-starting');status('Access changed · return to your boards');host.notify('Access to this board changed. Return to your boards.');updateLocks();}));
     subscriptions.push(client.onUpdate('collaboration:editors',args(),value=>{rows=value;updateLocks();},()=>{}));
     subscriptions.push(client.subscribeToConnectionState(state=>{connected=state.isWebSocketConnected;status(connected?'Shared · saved':'Reconnecting · Send paused');updateLocks();}));
-    if (!config.token) subscriptions.push(coding.watch(value => window.BranchCoding?.update(value), () => window.BranchCoding?.reset()));
+    watchCoding();
     subscriptions.push(startCursors({client,scope:args(),tabId,host}));
     document.body.classList.remove('shared-starting');status('Shared · saved');updateLocks();focusEditor(document.activeElement);
     // URL bookkeeping must never prevent live subscriptions or leave the canvas locked.
