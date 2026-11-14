@@ -1,11 +1,12 @@
 import { nodeArgs } from '../collaboration/agent.cjs';
 import { place } from '../app/auto-layout.js';
 import { stepsValidator, writePlan } from './visualPlan';
-import { mutation, query } from './_generated/server';
+import { mutation, query, type QueryCtx } from './_generated/server';
+import type { Doc, Id } from './_generated/dataModel';
 import { v } from 'convex/values';
-import { access, requireDevelopmentSecret, tokenHash } from './access';
+import { access, requireDevelopmentSecret, tokenHash, touchBoard } from './access';
 import { revokeCardHandoffs } from './coding';
-import { initialDocument, loadDocument, readText } from './documents';
+import { initialDocument, loadDocument, readText, withText, withTexts } from './documents';
 
 export const developmentSession = mutation({
   args: { secret: v.string(), identityKey: v.string(), token: v.string(), boardId: v.optional(v.id('boards')) },
@@ -52,19 +53,36 @@ export const initialize = mutation({
   },
 });
 
+// One card as the canvas sees it. `withTextState` adds the card's text; the
+// live board subscription leaves it out (text arrives per card via
+// collaboration:text), so typing on one card doesn't resend the whole board.
+async function boardNode(ctx: QueryCtx, raw: Doc<'nodes'>, withTextState: boolean) {
+  const n = withTextState ? await withText(ctx, raw) : raw;
+  const text = withTextState ? (() => { const doc = loadDocument(n.textState); const value = readText(doc); doc.destroy(); return value; })() : {};
+  const author=await ctx.db.get(n.updatedBy);
+  const syncOwner=n.chatgptSynced?(n.createdBy===n.updatedBy?author:await ctx.db.get(n.createdBy)):null;
+  const messages=await Promise.all((n.data.messages||[]).map(async(m:any)=>{const personId=typeof m.sentBy==='string'?ctx.db.normalizeId('users',m.sentBy):null;const person=personId?await ctx.db.get(personId):null;return {...m,...(person?{person:{name:person.name,color:person.color||'#6685cf'}}:{})};}));
+  // The live feed leaves out body and draft text (which can be large and is
+  // delivered per card); titles stay so new cards never render blank.
+  const { body: _body, draft: _draft, ...data } = n.data;
+  return { ...(withTextState ? n.data : data), ...text, messages, chatgptSynced: !!n.chatgptSynced, ...(n.chatgptSynced ? {chatgptSyncOwner:syncOwner?.name||'Board member', chatgptLatestUpdate:n.chatgptLatestUpdate||0} : {}), codingResult: n.codingResult ?? null, authorProfile:author?{name:author.name,color:author.color||'#6685cf'}:null, id: n.key, ...(withTextState ? { sharedVersion: n.textVersion, sharedTextState: n.textState } : {}) };
+}
+async function board(ctx: QueryCtx, args: { token: string; boardId: Id<'boards'> }, withTextState: boolean) {
+  const { board, membership } = await access(ctx, args.token, args.boardId);
+  const nodes = await ctx.db.query('nodes').withIndex('board_key', q => q.eq('boardId', args.boardId)).collect();
+  return { title: board.title, role: membership.role, nodes: await Promise.all(nodes.filter(n => !n.deleted).map(n => boardNode(ctx, n, withTextState))) };
+}
+
+// Full board, including every card's text. For one-off reads.
 export const read = query({
   args: { token: v.string(), boardId: v.id('boards') },
-  handler: async (ctx, args) => {
-    const { board, membership } = await access(ctx, args.token, args.boardId);
-    const nodes = await ctx.db.query('nodes').withIndex('board_key', q => q.eq('boardId', args.boardId)).collect();
-    return { title: board.title, role:membership.role, nodes: await Promise.all(nodes.filter(n => !n.deleted).map(async n => {
-      const doc = loadDocument(n.textState); const text = readText(doc); doc.destroy();
-      const author=await ctx.db.get(n.updatedBy);
-      const syncOwner=n.chatgptSynced?(n.createdBy===n.updatedBy?author:await ctx.db.get(n.createdBy)):null;
-      const messages=await Promise.all((n.data.messages||[]).map(async(m:any)=>{const personId=typeof m.sentBy==='string'?ctx.db.normalizeId('users',m.sentBy):null;const person=personId?await ctx.db.get(personId):null;return {...m,...(person?{person:{name:person.name,color:person.color||'#6685cf'}}:{})};}));
-      return { ...n.data, ...text, messages, chatgptSynced: !!n.chatgptSynced, ...(n.chatgptSynced ? {chatgptSyncOwner:syncOwner?.name||'Board member', chatgptLatestUpdate:n.chatgptLatestUpdate||0} : {}), codingResult: n.codingResult ?? null, authorProfile:author?{name:author.name,color:author.color||'#6685cf'}:null, id: n.key, sharedVersion: n.textVersion, sharedTextState: n.textState };
-    })) };
-  },
+  handler: (ctx, args) => board(ctx, args, true),
+});
+
+// The live board subscription: everything except card text.
+export const live = query({
+  args: { token: v.string(), boardId: v.id('boards') },
+  handler: (ctx, args) => board(ctx, args, false),
 });
 
 const editableFields = new Set(['x','y','width','minHeight','collapsed','contexts','revision','author','titleEdited','titleGenerated','mediaType','source','videoId','image','credit','license','licenseURL','url','asset','storageId','mime','size','text','transcript','transcriptLanguage','contextFor','bottomPorts','modelStage','modelBalance','query','searchMode','mediaResults','resultMode','nextPage','creditOpen','agent','agentName','autoGroup','layoutHeight']);
@@ -96,7 +114,7 @@ export const deleteNode = mutation({
     }
     await revokeCardHandoffs(ctx, node._id);
     await ctx.db.patch(node._id, { data, deleted: true, updatedBy: userId, deletion: { operationId: args.operationId, userId, connections } });
-    await ctx.db.patch(args.boardId, { updatedAt: Date.now() });
+    await touchBoard(ctx, args.boardId);
   },
 });
 
@@ -117,7 +135,7 @@ export const restoreNode = mutation({
       await ctx.db.patch(target._id, { data: { ...target.data, contexts } });
     }
     await ctx.db.patch(node._id, { deleted: false, updatedBy: userId, deletion: undefined });
-    await ctx.db.patch(args.boardId, { updatedAt: Date.now() });
+    await touchBoard(ctx, args.boardId);
   },
 });
 
@@ -141,7 +159,7 @@ export const patchNodes = mutation({
         await ctx.db.patch(node._id, { data: { ...node.data, ...patch }, updatedBy: userId });
       }
     }
-    await ctx.db.patch(args.boardId, {updatedAt:Date.now(),...(args.title !== undefined?{title: args.title.slice(0, 200)}:{})});
+    if (args.title !== undefined) await ctx.db.patch(args.boardId, { updatedAt: Date.now(), title: args.title.slice(0, 200) }); else await touchBoard(ctx, args.boardId);
   },
 });
 
@@ -161,7 +179,7 @@ export const addAgentCard = mutation({
   const {userId}=await access(ctx,args.token,args.boardId,true);
   const a=nodeArgs(args);if(!/^[a-zA-Z0-9_-]{1,100}$/.test(args.cardId)||args.sourceIds.length>12)throw Error('Invalid card or sources');
   const key='mcp-'+args.cardId;
-  const rows=await ctx.db.query('nodes').withIndex('board_key',q=>q.eq('boardId',args.boardId)).collect();
+  const rows=await withTexts(ctx,await ctx.db.query('nodes').withIndex('board_key',q=>q.eq('boardId',args.boardId)).collect());
   const existing=rows.find(n=>n.key===key);
   if(existing){if(existing.deleted||existing.createdBy!==userId)throw Error('Card ID unavailable');return {id:key};}
   const contexts=args.sourceIds.map(source=>{
@@ -174,6 +192,6 @@ export const addAgentCard = mutation({
   const location=place(rows.filter(n=>!n.deleted).map(n=>n.data),{x:600,y:80},440,420);
   const data={id:key,type:a.kind==='note'?'plan':a.kind==='chat'?'thread':'web',title:a.title,...location,width:440,revision:1,contexts,...(a.kind==='chat'?{draft:a.content,messages:[]}: {body:a.content}),...(a.kind==='website'?{url:a.url}:{})};
   await ctx.db.insert('nodes',{boardId:args.boardId,key,data,textState:initialDocument(data),textVersion:0,createdBy:userId,updatedBy:userId,deleted:false});
-  await ctx.db.patch(args.boardId,{updatedAt:Date.now()});return {id:key};
+  await touchBoard(ctx,args.boardId);return {id:key};
  }
 });

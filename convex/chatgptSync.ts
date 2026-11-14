@@ -2,7 +2,7 @@ import { ConvexError, v } from 'convex/values';
 import { paginationOptsValidator } from 'convex/server';
 import { internalMutation, query, type MutationCtx } from './_generated/server';
 import type { Id } from './_generated/dataModel';
-import { access } from './access';
+import { access, touchBoard } from './access';
 import { initialDocument } from './documents';
 import { place } from '../app/auto-layout.js';
 import { frontend, syncGrant } from './chatgptOAuth';
@@ -68,7 +68,7 @@ export const append = internalMutation({
       const oldest = await ctx.db.query('chatgptUpdates').withIndex('thread', q => q.eq('threadId', threadId)).order('desc').take(MAX_UPDATES + 5);
       for (const row of oldest.slice(MAX_UPDATES)) await ctx.db.delete(row._id);
       await ctx.db.patch(nodeId, { chatgptLatestUpdate: now });
-      await ctx.db.patch(boardId, { updatedAt: now });
+      await touchBoard(ctx, boardId);
     }
     const url = new URL('/app', frontend());
     url.searchParams.set('board', boardId);

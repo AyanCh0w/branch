@@ -25,7 +25,7 @@ it.each([false,true])('receives live board changes even when URL replacement fai
  expect(callbacks.size).toBe(2);
  expect(replace).toHaveBeenCalledOnce();
  if(!rejectHistory)expect(w.location.search).toBe('?board=board');
- callbacks.get('boards:read')!({title:'Live update',role:'owner',nodes:[]});
+ callbacks.get('boards:live')!({title:'Live update',role:'owner',nodes:[]});
  expect(state.title).toBe('Live update');
  connection({isWebSocketConnected:false});
  expect(w.document.getElementById('save-state')!.textContent).toContain('Reconnecting');

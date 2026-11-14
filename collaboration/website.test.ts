@@ -29,7 +29,8 @@ it('perspective notes persist through shared editing and enter a frozen AI run',
  expect(run!.input.contexts[0].text).toContain('not extracted website text');
  expect(run!.billedUserId).toBe(session.userId);
  await t.mutation(internal.chat.append,{runId,text:'',activity:'searching'});
- expect((await t.query(api.boards.read,auth)).nodes.find(n=>n.id==='chat')!.activity).toBe('searching');
+ // Streaming status lives on the chat's stream feed, not the board record.
+ expect((await t.query(api.chat.stream,{...auth,nodeKey:'chat'}))!.activity).toBe('searching');
  await t.mutation(internal.chat.append,{runId,text:'Partial reply',activity:'writing'});
  await t.mutation(internal.chat.append,{runId,text:'',done:true,finalText:'A project for attendees. [Hackathon](https://hackathon.example)'});
  const completed=await t.query(api.boards.read,auth);

@@ -1,7 +1,7 @@
 import type { MutationCtx } from './_generated/server';
 import type { Id } from './_generated/dataModel';
-import { accessForUser } from './access';
-import { loadDocument, readText, initialDocument, encodeDocument } from './documents';
+import { accessForUser, touchBoard } from './access';
+import { loadDocument, readText, initialDocument, encodeDocument, withTexts, patchNode } from './documents';
 import { textOf, branchPayload, snapshotNode } from '../app/context.js';
 import { place } from '../app/auto-layout.js';
 
@@ -16,7 +16,7 @@ function materialize(row:any){const doc=loadDocument(row.textState);const text=r
 export async function canvasAction(ctx:MutationCtx, runId:Id<'runs'>, callId:string, name:string, args:any){
  const run=await ctx.db.get(runId);if(!run||run.status!=='streaming')throw Error('Run is no longer active');
  await accessForUser(ctx,run.initiatedBy,run.boardId,true);
- const rows=await ctx.db.query('nodes').withIndex('board_key',q=>q.eq('boardId',run.boardId)).collect();
+ const rows=await withTexts(ctx,await ctx.db.query('nodes').withIndex('board_key',q=>q.eq('boardId',run.boardId)).collect());
  const origin=rows.find(n=>n.key===run.nodeKey&&!n.deleted);
  if(!origin||origin.data.activeRun!==runId)throw Error('Source node is no longer available');
  const live=rows.filter(n=>!n.deleted), nodes=live.map(materialize);
@@ -60,7 +60,7 @@ export async function canvasAction(ctx:MutationCtx, runId:Id<'runs'>, callId:str
   const location=place(nodes,{x:(Number.isFinite(source.x)?source.x:0)+(source.width||440)+100,y:Number.isFinite(source.y)?source.y:0},440,420);
   const data={id:key,type:name==='create_excerpt'?'plan':'thread',title,...location,width:440,revision:1,titleEdited:true,autoGroup:run.nodeKey,createdByRun:runId,author:origin.data.agentName||'AI',contexts,...(name==='create_excerpt'?{body:quote}:{messages:[],draft:payload.draft||string(args.prompt,'prompt',12000,true)})};
   await ctx.db.insert('nodes',{boardId:run.boardId,key,data,textState:initialDocument(data),textVersion:0,createdBy:run.initiatedBy,updatedBy:run.initiatedBy,deleted:false});
-  await ctx.db.patch(run.boardId,{updatedAt:Date.now()});return {id:key,title};
+  await touchBoard(ctx,run.boardId);return {id:key,title};
  }
  if(name==='connect_nodes'){
   const {node:source}=get(args.sourceId),{row,node:target}=await writable(args.targetId);
@@ -74,7 +74,7 @@ export async function canvasAction(ctx:MutationCtx, runId:Id<'runs'>, callId:str
   if(source.type==='thread')throw Error('Use branch_chat or create_excerpt to connect a specific chat message');
   const context={id:key,...snapshotNode(source,nodes)};
   await ctx.db.patch(row._id,{data:{...row.data,contexts:[...(row.data.contexts||[]),context]},updatedBy:run.initiatedBy});
-  await ctx.db.patch(run.boardId,{updatedAt:Date.now()});return {id:target.id,connected:true};
+  await touchBoard(ctx,run.boardId);return {id:target.id,connected:true};
  }
  if(name==='update_note'){
   const {row,node}=await writable(args.nodeId);
@@ -83,14 +83,14 @@ export async function canvasAction(ctx:MutationCtx, runId:Id<'runs'>, callId:str
   if(node.body!==row.data.body||node.title!==row.data.title)throw Error('A person edited this card; create a new note to preserve their work');
   const title=string(args.title,'title',100),body=string(args.content,'content',24000,true),doc=loadDocument(row.textState);
   for(const [field,value] of [['title',title],['body',body]]){const text=doc.getText(field);text.delete(0,text.length);text.insert(0,value);}
-  await ctx.db.patch(row._id,{textState:encodeDocument(doc),textVersion:row.textVersion+1,data:{...row.data,title,body},updatedBy:run.initiatedBy});doc.destroy();
-  await ctx.db.patch(run.boardId,{updatedAt:Date.now()});return {id:node.id,version:row.textVersion+1};
+  await patchNode(ctx,row,{textState:encodeDocument(doc),textVersion:row.textVersion+1,data:{...row.data,title,body},updatedBy:run.initiatedBy});doc.destroy();
+  await touchBoard(ctx,run.boardId);return {id:node.id,version:row.textVersion+1};
  }
  if(name==='arrange_nodes'){
   if(!Array.isArray(args.nodes)||!args.nodes.length||args.nodes.length>16)throw Error('Arrange 1–16 generated cards');
   if(new Set(args.nodes.map((n:any)=>n.id)).size!==args.nodes.length)throw Error('Duplicate node');
   for(const item of args.nodes){const {row}=await writable(item.id);if(!Number.isFinite(item.x)||!Number.isFinite(item.y)||Math.abs(item.x)>100000||Math.abs(item.y)>100000)throw Error('Invalid position');await ctx.db.patch(row._id,{data:{...row.data,x:item.x,y:item.y},updatedBy:run.initiatedBy});}
-  await ctx.db.patch(run.boardId,{updatedAt:Date.now()});return {arranged:args.nodes.length};
+  await touchBoard(ctx,run.boardId);return {arranged:args.nodes.length};
  }
  throw Error('Unknown canvas tool');
 }

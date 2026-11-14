@@ -3,7 +3,7 @@ import { pruneBoardAgents } from './maintenance';
 import { v } from 'convex/values';
 import { getAuthUserId } from '@convex-dev/auth/server';
 import { access, requireDevelopmentSecret } from './access';
-import { loadDocument } from './documents';
+import { loadDocument, withTexts } from './documents';
 
 export const list = query({args:{},handler:async ctx=>{
   const userId=await getAuthUserId(ctx);if(!userId)return [];
@@ -14,7 +14,7 @@ export const list = query({args:{},handler:async ctx=>{
   const ids=[...new Set([...direct,...linked].map(m=>m.boardId).concat(teamBoards.map(b=>b._id)))];const result=[];
   for(const boardId of ids){let permission;try{permission=await access(ctx,'',boardId);}catch{continue;}
     const {board,membership}=permission;
-    const nodes=await ctx.db.query('nodes').withIndex('board_key',q=>q.eq('boardId',boardId)).collect();
+    const nodes=await withTexts(ctx,await ctx.db.query('nodes').withIndex('board_key',q=>q.eq('boardId',boardId)).collect());
     const live=nodes.filter(n=>!n.deleted);
     const preview=await Promise.all(live.map(async n=>{
       const doc=loadDocument(n.textState),d=n.data;const title=doc.getText('title').toString(),body=doc.getText('body').toString().slice(0,1400),draft=doc.getText('draft').toString().slice(0,200);doc.destroy();

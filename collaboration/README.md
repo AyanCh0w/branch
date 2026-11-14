@@ -18,10 +18,12 @@ The home workspace switcher lists personal and team spaces. Users create a team,
 
 ## Shared editing and AI
 
+- Database cost: card text (Yjs state) lives in `nodeTexts`, separate from `nodes`. The live board feed (`boards:live`) carries everything except body and draft text; each card's text has its own feed (`collaboration:text`), so a keystroke resends only that card's text. Typing is saved after a 0.6 s pause (at least every 1.5 s while typing). `boards:read` remains the full one-off read. A board's last-changed time updates at most once a minute (`touchBoard`). `collaboration/efficiency.test.ts` guards these.
+
 - Individual node rows and Yjs documents merge concurrent body, title and composer edits. Metadata changes patch individual fields; never replace the board with a stale snapshot.
-- Per-field editing leases expire after 15 seconds and renew every four seconds. Blur flushes changes before releasing the lease. Send is allowed while the sender edits. It is blocked while another distinct person edits any field on the same node; multiple tabs from one account count as one person.
+- Per-field editing leases expire after 20 seconds and renew every eight seconds. Blur flushes changes before releasing the lease. Send is allowed while the sender edits. It is blocked while another distinct person edits any field on the same node; multiple tabs from one account count as one person.
 - Send atomically checks leases, acknowledged document version, active generation and idempotent request ID. It freezes the prompt, history and directional context. A draft epoch rejects late edits to a sent prompt.
-- Scheduled Convex actions use `gpt-5.4-mini` by default or the connected sender’s selected ChatGPT model. Stream chunks persist approximately every 100ms and remain available if the initiator closes their browser. Automatic titles preserve manual titles.
+- Scheduled Convex actions use `gpt-5.4-mini` by default or the connected sender’s selected ChatGPT model. Stream chunks persist on the run about every 250 ms (read per chat through `chat:stream`, not the board feed); the finished reply is written to the card once. Replies remain available if the initiator closes their browser. Automatic titles preserve manual titles.
 - `billedUserId` comes from the board owner. Token usage is recorded; actual credit charges are not implemented.
 - Activity badges and card outlines show active editors. Named human cursors use separate, read-authorized presence; remote text selections remain future work.
 - Text undo is scoped to local Yjs edits. Canvas Command/Ctrl+Z restores locally deleted nodes and their incoming/outgoing context connections; Shift+Command/Ctrl+Z redoes deletion. The session keeps up to 70 deletions. Restoration retains canonical Yjs text, media references, transcript, and frozen context snapshots, merges connections into current destination rows, and skips destinations still deleted. Whole-board snapshot undo remains disabled.
@@ -93,7 +95,7 @@ Personal libraries also show individually accessible boards from workspaces the 
 
 ## Human cursor presence
 
-Shared boards publish pointer positions in canvas coordinates, at most once per 80 ms with one request in flight, and renew stationary pointers every five seconds. A separate presence table lets viewers point without acquiring editing leases or blocking Send. Queries exclude the current account (including its other tabs), enforce board access, and filter revoked members. Names and profile colors identify each remote tab. Remote cursors reproject immediately when the local camera changes and never intercept input or animate artificially, including with reduced motion.
+Shared boards publish pointer positions in canvas coordinates, at most once per 200 ms, only after a visible move, with one request in flight, and renew stationary pointers every eight seconds. Nothing is sent while nobody else is on the board. A separate presence table lets viewers point without acquiring editing leases or blocking Send. Queries exclude the current account (including its other tabs), enforce board access, and filter revoked members. Names and profile colors identify each remote tab. Remote cursors reproject immediately when the local camera changes and never intercept input or animate artificially, including with reduced motion.
 
 Leaving the canvas, ending a touch, hiding the tab, or disconnecting clears presence; unacknowledged departures expire after 15 seconds. Clients remove expired rows locally and writers prune stale rows. Navigation removes subscriptions and listeners and releases the old board's cursor. Deploy the additive cursors schema and collaboration functions before this frontend.
 
@@ -130,7 +132,7 @@ Before enabling a production registration, complete a real connect → model dis
 
 ## Active board users
 
-The top-right canvas roster shows each active person's local Blobz avatar and display name, including the current person. Attendance is independent of cursor position and editing leases, so reading or using board controls keeps people visible without blocking Send. Visible tabs renew attendance every five seconds; hidden tabs and navigation release their own session. Multiple tabs are grouped by user, revoked access is filtered, and lost connections expire after 15 seconds (also filtered locally). Deploy the additive `boardPresence` schema and `collaboration:activeUsers` / `collaboration:attend` functions with this frontend.
+The top-right canvas roster shows each active person's local Blobz avatar and display name, including the current person. Attendance is independent of cursor position and editing leases, so reading or using board controls keeps people visible without blocking Send. Visible tabs renew attendance every 12 seconds; hidden tabs and navigation release their own session. Multiple tabs are grouped by user, revoked access is filtered, and lost connections expire after 30 seconds (also filtered locally). Deploy the additive `boardPresence` schema and `collaboration:activeUsers` / `collaboration:attend` functions with this frontend.
 
 ## Shared link thumbnails
 

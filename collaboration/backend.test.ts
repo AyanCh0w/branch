@@ -4,6 +4,7 @@ import * as Y from 'yjs';
 import schema from '../convex/schema';
 import { api } from '../convex/_generated/api';
 import { loadDocument } from '../convex/documents';
+import { LEASE_MS } from '../convex/collaboration';
 
 const modules = import.meta.glob('../convex/**/*.ts');
 afterEach(()=>{vi.unstubAllEnvs();vi.useRealTimers();});
@@ -70,7 +71,7 @@ describe('shared board boundaries',()=>{
     vi.useFakeTimers();const {t,auth,bob}=await setup();const before=await t.query(api.boards.read,auth);const chat=before.nodes.find(n=>n.id==='chat')!;
     await t.mutation(api.collaboration.focus,{...auth,nodeKey:'chat',field:'draft',tabId:'a'});
     await t.mutation(api.collaboration.focus,{...bob,nodeKey:'chat',field:'draft',tabId:'b'});
-    vi.setSystemTime(Date.now()+16000);
+    vi.setSystemTime(Date.now()+LEASE_MS+1000);
     await t.mutation(api.chat.send,{...auth,nodeKey:'chat',requestId:'expired-send',expectedVersion:0});
     await t.mutation(api.collaboration.focus,{...auth,nodeKey:'chat',field:'draft',tabId:'a'});
     const doc=loadDocument(chat.sharedTextState),vector=Y.encodeStateVector(doc);doc.getText('draft').insert(0,'Late edit ');

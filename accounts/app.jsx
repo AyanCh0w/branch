@@ -323,6 +323,9 @@ function LinkLanding({token,authenticated,me}){const preview=useQuery(api.sharin
 function transport(client){return {query:(name,args)=>client.query(makeFunctionReference(name),args),mutation:(name,args)=>client.mutation(makeFunctionReference(name),args),connectionState:()=>client.connectionState(),subscribeToConnectionState:fn=>client.subscribeToConnectionState(fn),onUpdate(name,args,cb,onError){const watcher=client.watchQuery(makeFunctionReference(name),args);const emit=()=>{try{const value=watcher.localQueryResult();if(value!==undefined)cb(value);}catch(e){onError?.(e);}};const unsubscribe=watcher.onUpdate(emit);emit();return unsubscribe;}};}
 function ActiveBoardUsers({boardId,token,userId}){
  const client=useConvex(),[users,setUsers]=useState([]),[online,setOnline]=useState(false),[now,setNow]=useState(Date.now);
+ // Lets live cursors stay quiet while nobody else is on the board.
+ useEffect(()=>{window.BranchPresenceCount=users.filter(u=>u.expiresAt>now).length;},[users,now]);
+ useEffect(()=>()=>{delete window.BranchPresenceCount;},[]);
  useEffect(()=>{
   const tabId=crypto.randomUUID(),scope={boardId,token};
   let disposed=false,connected=client.connectionState().isWebSocketConnected,writing=false,pending;
@@ -346,7 +349,8 @@ function ActiveBoardUsers({boardId,token,userId}){
   const hide=()=>publish(false);
   document.addEventListener('visibilitychange',update);window.addEventListener('pagehide',hide);
   window.addEventListener('pageshow',update);
-  const heartbeat=setInterval(update,5000),expiry=setInterval(()=>setNow(Date.now()),1000);
+  // Presence lasts 30 s on the server; renewing every 12 s keeps it with room for a missed beat.
+  const heartbeat=setInterval(update,12000),expiry=setInterval(()=>setNow(Date.now()),1000);
   update();
   return()=>{
    disposed=true;clearInterval(heartbeat);clearInterval(expiry);offRows();offConnection();

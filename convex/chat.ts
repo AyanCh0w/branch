@@ -2,8 +2,9 @@ import { canvasAction } from './agentCanvas';
 import { stepsValidator, writePlan } from './visualPlan';
 import { connectionForUser } from './chatgpt';
 import { planRequest, providerError, completedResponse } from '../collaboration/chatgpt/requests.cjs';
-import { mutation, internalMutation, internalQuery, internalAction } from './_generated/server';
+import { mutation, query, internalMutation, internalQuery, internalAction } from './_generated/server';
 import { internal } from './_generated/api';
+import type { Id } from './_generated/dataModel';
 import { v, ConvexError } from 'convex/values';
 import { ASSISTANT_ROLE, WEB_INSTRUCTIONS, webOptions, citedText, reasoningOptions, activityForEvent } from '../collaboration/web-search.cjs';
 import { contextInput } from '../collaboration/context-input.cjs';
@@ -13,8 +14,8 @@ import { BOARD_TOOLS, PLAN_TOOL, CANVAS_TOOL, CANVAS_INSTRUCTIONS, PASSES, nodeA
 import { place } from '../app/auto-layout.js';
 import { fileForBoard } from './files';
 import { peopleContext } from './people';
-import { access, accessForUser } from './access';
-import { loadDocument, encodeDocument, contextForChat, initialDocument } from './documents';
+import { access, accessForUser, touchBoard } from './access';
+import { loadDocument, encodeDocument, contextForChat, initialDocument, withText, patchNode } from './documents';
 
 export const send = mutation({
   args: { token: v.string(), boardId: v.id('boards'), nodeKey: v.string(), requestId: v.string(), expectedVersion: v.number(), videoTranscripts:v.optional(v.array(v.object({id:v.string(),text:v.string(),language:v.string()}))), localFiles: v.optional(v.array(v.object({asset:v.string(),storageId:v.id('_storage')}))) },
@@ -22,8 +23,9 @@ export const send = mutation({
     const { userId, board } = await access(ctx, args.token, args.boardId, true);
     const previous = await ctx.db.query('runs').withIndex('request', q => q.eq('boardId', args.boardId).eq('requestId', args.requestId)).unique();
     if (previous) return previous._id;
-    const node = await ctx.db.query('nodes').withIndex('board_key', q => q.eq('boardId', args.boardId).eq('key', args.nodeKey)).unique();
-    if (!node || node.deleted || node.data.type !== 'thread') throw Error('Chat not found');
+    const found = await ctx.db.query('nodes').withIndex('board_key', q => q.eq('boardId', args.boardId).eq('key', args.nodeKey)).unique();
+    if (!found || found.deleted || found.data.type !== 'thread') throw Error('Chat not found');
+    const node = await withText(ctx, found);
     const editors = await ctx.db.query('editors').withIndex('node', q => q.eq('boardId', args.boardId).eq('nodeKey', args.nodeKey)).collect();
     // The sender counts as one person, even when clicking Send blurs their field.
     // Their own leases (including other tabs) never block them. Other people
@@ -65,7 +67,7 @@ export const send = mutation({
     const assistantId = args.requestId + '-assistant';
     const runId = await ctx.db.insert('runs', { boardId: args.boardId, nodeKey: args.nodeKey, status: 'queued', initiatedBy: userId, billedUserId: board.ownerId, model, provider, ...(connection?{connectionId:connection._id,providerUserId:userId}:{}), requestId: args.requestId, input: { messages: [...history, { role: 'user', content: text }], contexts, modelStage: node.data.modelStage ?? 0, agent: !!node.data.agent }, assistantId, createdAt: Date.now() });
     doc.getText('draft').delete(0, doc.getText('draft').length);
-    await ctx.db.patch(node._id, { textState: encodeDocument(doc), textVersion: node.textVersion + 1, updatedBy: userId, data: { ...node.data, contexts:bindings, draftEpoch: (node.data.draftEpoch || 0) + 1, activeRun: runId, ...(node.data.agent?{agentStage:'Discovering pages'}:{}), activity: 'thinking', messages: [...(node.data.messages || []), userMessage, { id: assistantId, role: 'assistant', text: '', model, provider, context: bindings, usedContext: contextForChat(bindings) }] } });
+    await patchNode(ctx, node, { textState: encodeDocument(doc), textVersion: node.textVersion + 1, updatedBy: userId, data: { ...node.data, contexts:bindings, draftEpoch: (node.data.draftEpoch || 0) + 1, activeRun: runId, ...(node.data.agent?{agentStage:'Discovering pages'}:{}), activity: 'thinking', messages: [...(node.data.messages || []), userMessage, { id: assistantId, role: 'assistant', text: '', model, provider, context: bindings, usedContext: contextForChat(bindings) }] } });
     doc.destroy();
     await ctx.scheduler.runAfter(0, internal.chat.generate, { runId });
     return runId;
@@ -76,25 +78,32 @@ export const titleTarget = internalQuery({ args: { runId: v.id('runs') }, handle
   const run=await ctx.db.get(args.runId);if(!run)return null;
   const node=await ctx.db.query('nodes').withIndex('board_key',q=>q.eq('boardId',run.boardId).eq('key',run.nodeKey)).unique();
   if(!node||node.deleted||node.data.titleEdited||node.data.titleGenerated)return null;
-  const doc=loadDocument(node.textState);const title=doc.getText('title').toString();doc.destroy();return {nodeId:node._id,title};
+  const doc=loadDocument((await withText(ctx,node)).textState);const title=doc.getText('title').toString();doc.destroy();return {nodeId:node._id,title};
 }});
 export const setTitle = internalMutation({args:{nodeId:v.id('nodes'),original:v.string(),title:v.string()},handler:async(ctx,args)=>{
-  const node=await ctx.db.get(args.nodeId);if(!node||node.deleted||node.data.titleEdited||node.data.titleGenerated)return;
-  const doc=loadDocument(node.textState);const title=doc.getText('title');if(title.toString()!==args.original){doc.destroy();return;}
-  title.delete(0,title.length);title.insert(0,args.title.slice(0,64));await ctx.db.patch(node._id,{textState:encodeDocument(doc),textVersion:node.textVersion+1,data:{...node.data,titleGenerated:true}});doc.destroy();
+  const stored=await ctx.db.get(args.nodeId);if(!stored||stored.deleted||stored.data.titleEdited||stored.data.titleGenerated)return;
+  const node=await withText(ctx,stored);const doc=loadDocument(node.textState);const title=doc.getText('title');if(title.toString()!==args.original){doc.destroy();return;}
+  title.delete(0,title.length);title.insert(0,args.title.slice(0,64));await patchNode(ctx,node,{textState:encodeDocument(doc),textVersion:node.textVersion+1,data:{...node.data,titleGenerated:true}});doc.destroy();
 }});
 export const append = internalMutation({
   args: { runId: v.id('runs'), text: v.string(), done: v.optional(v.boolean()), error: v.optional(v.string()), usage: v.optional(v.any()), finalText: v.optional(v.string()), activity: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const run = await ctx.db.get(args.runId); if (!run || ['complete','failed','cancelled'].includes(run.status)) return;
+    const text = args.finalText ?? ((run.streamText ?? '') + args.text);
+    // While a reply streams, its text lives on the run (watched per chat via
+    // chat:stream), so the board isn't re-sent to everyone for every chunk.
+    if (!args.done && !args.error) {
+      await ctx.db.patch(run._id, { status: 'streaming', streamText: text, ...(args.activity ? { streamActivity: args.activity } : {}), ...(args.usage ? { usage: args.usage } : {}) });
+      return;
+    }
     const node = await ctx.db.query('nodes').withIndex('board_key', q => q.eq('boardId', run.boardId).eq('key', run.nodeKey)).unique();
-    // Keep a deleted node’s in-flight transcript current so undo cannot revive a stuck run.
+    // Keep a deleted node’s transcript current so undo cannot revive a stuck run.
     if (node && node.data.activeRun === run._id) {
-      const messages = node.data.messages.map((m: any) => m.id === run.assistantId ? { ...m, text: args.finalText ?? (m.text + args.text), ...(args.error ? { error: args.error } : {}) } : m);
-      const data = { ...node.data, messages, ...(args.activity ? {activity:args.activity} : {}) }; if (args.done || args.error) {delete data.activeRun;delete data.activity;if(run.input.agent)data.agentStage=args.error?'Needs attention':'Complete';}
+      const messages = node.data.messages.map((m: any) => m.id === run.assistantId ? { ...m, text, ...(args.error ? { error: args.error } : {}) } : m);
+      const data = { ...node.data, messages }; delete data.activeRun; delete data.activity; if(run.input.agent)data.agentStage=args.error?'Needs attention':'Complete';
       await ctx.db.patch(node._id, { data });
     }
-    await ctx.db.patch(run._id, { status: args.error ? 'failed' : args.done ? 'complete' : 'streaming', ...(args.error ? { error: args.error } : {}), ...(args.usage ? { usage: args.usage } : {}) });
+    await ctx.db.patch(run._id, { status: args.error ? 'failed' : 'complete', streamText: undefined, streamActivity: undefined, ...(args.error ? { error: args.error } : {}), ...(args.usage ? { usage: args.usage } : {}) });
   },
 });
 // Cancellation leaves the acknowledged transcript intact and rejects late writes/tools.
@@ -102,9 +111,11 @@ export const stop = mutation({args:{token:v.string(),boardId:v.id('boards'),node
   await access(ctx,args.token,args.boardId,true);
   const node=await ctx.db.query('nodes').withIndex('board_key',q=>q.eq('boardId',args.boardId).eq('key',args.nodeKey)).unique();
   if(!node?.data.activeRun)return;
-  const run=await ctx.db.get(node.data.activeRun);if(!run)return;
-  await ctx.db.patch(run._id,{status:'cancelled'});
-  const data={...node.data,agentStage:'Stopped'};delete data.activeRun;delete data.activity;
+  const run=await ctx.db.get(node.data.activeRun as Id<'runs'>);if(!run)return;
+  await ctx.db.patch(run._id,{status:'cancelled',streamText:undefined,streamActivity:undefined});
+  // Keep what had streamed so far.
+  const messages=(node.data.messages||[]).map((m:any)=>m.id===run.assistantId&&run.streamText!==undefined?{...m,text:run.streamText}:m);
+  const data={...node.data,messages,agentStage:'Stopped'};delete data.activeRun;delete data.activity;
   await ctx.db.patch(node._id,{data});
 }});
 export const claim = internalMutation({args:{runId:v.id('runs')},handler:async(ctx,args)=>{
@@ -139,14 +150,14 @@ export const createNode = internalMutation({args:{runId:v.id('runs'),callId:v.st
  const type=a.kind==='note'?'plan':a.kind==='chat'?'thread':'web';
  const sourceIndex=created.filter(n=>n.data.researchSource).length;
  const location=place(rows.filter(n=>!n.deleted).map(n=>n.data),{x:origin.data.x+(args.research?-520*(1+sourceIndex%2):(origin.data.width||520)+100),y:origin.data.y+(args.research?Math.floor(sourceIndex/2)*260:0)},type==='thread'?520:type==='web'?440:380,type==='thread'?640:type==='web'?160:260);
- const transcript=origin.data.messages.filter((m:any)=>m.text&&!m.error).map((m:any)=>m.role+': '+m.text).join('\n\n');
+ const transcript=origin.data.messages.map((m:any)=>m.id===run.assistantId&&run.streamText!==undefined?{...m,text:run.streamText}:m).filter((m:any)=>m.text&&!m.error).map((m:any)=>m.role+': '+m.text).join('\n\n');
  const inherited=origin.data.contexts||[];
  const parentContext={id:key+'-context',source:run.nodeKey,title:origin.data.title,body:transcript,cutoff:run.assistantId,revision:origin.data.revision||1,enabled:true,inherited};
  const data:any={id:key,type,title:a.title,titleEdited:true,...location,width:type==='thread'?520:type==='web'?440:380,revision:1,autoGroup:run.nodeKey,createdByRun:run._id,researchSource:!!args.research,author:origin.data.agentName||'AI',...(!args.research?{contexts:[parentContext]}:{}),...(type==='thread'?{messages:[],draft:a.content,contexts:[parentContext]}:type==='web'?{url:a.url,body:a.content}:{body:a.content})};
  await ctx.db.insert('nodes',{boardId:run.boardId,key,data,textState:initialDocument(data),textVersion:0,createdBy:run.initiatedBy,updatedBy:run.initiatedBy,deleted:false});
  // Discovered sources are provenance, not silently refreshed user input snapshots.
  if(args.research){const refs=origin.data.researchSources||[];await ctx.db.patch(origin._id,{data:{...origin.data,researchSources:[...refs,{id:key,url:a.url,title:a.title}],contexts:[...(origin.data.contexts||[]),{id:key+'-ref',source:key,title:a.title,body:'Website URL: '+a.url+'\nDiscovered during this research run; see cited findings in the agent transcript.',revision:1,enabled:true}]}});}
- await ctx.db.patch(board._id,{updatedAt:Date.now()});
+ await touchBoard(ctx,board._id);
  return {id:key,title:a.title};
 }});
 export const generate = internalAction({
@@ -181,7 +192,7 @@ export const generate = internalAction({
           if(run.input.agent&&event.type==='response.output_item.done'&&event.item?.type==='web_search_call'){for(const source of researchSources({output:[event.item]})){try{await ctx.runMutation(internal.chat.createNode,{runId:run._id,callId:'live-source-'+saved.turn+'-'+sourceEvent++,node:{kind:'website',title:source.title,content:'',url:source.url},research:true});}catch{}}}
           const nextActivity = activityForEvent(event);if(nextActivity && nextActivity!==activity){activity=nextActivity;await ctx.runMutation(internal.chat.append,{runId:run._id,text:'',activity});}
           if (!research && (event.type === 'response.output_text.delta' || event.type === 'response.refusal.delta')) pending += event.delta;
-          if (pending && Date.now() - lastFlush >= 100) { await ctx.runMutation(internal.chat.append, { runId: run._id, text: pending }); pending = ''; lastFlush = Date.now(); }
+          if (pending && Date.now() - lastFlush >= 250) { await ctx.runMutation(internal.chat.append, { runId: run._id, text: pending }); pending = ''; lastFlush = Date.now(); }
           if (event.type === 'response.completed') {
             const response=event.response;
             if(!research){await ctx.runMutation(internal.chat.append,{runId:run._id,text:'',finalText:citedText(response)});pending='';}
@@ -221,3 +232,13 @@ export const updatePlan = internalMutation({args:{runId:v.id('runs'),goal:v.stri
 }});
 
 export const canvasActionTool = internalMutation({args:{runId:v.id('runs'),callId:v.string(),name:v.string(),args:v.any()},handler:async(ctx,args)=>canvasAction(ctx,args.runId,args.callId,args.name,args.args)});
+
+// The streaming reply for one chat: what the client merges into the card while
+// the run is active. Only this small result changes as text streams in.
+export const stream = query({args:{token:v.string(),boardId:v.id('boards'),nodeKey:v.string()},handler:async(ctx,args)=>{
+  await access(ctx,args.token,args.boardId);
+  const node=await ctx.db.query('nodes').withIndex('board_key',q=>q.eq('boardId',args.boardId).eq('key',args.nodeKey)).unique();
+  const runId=node&&!node.deleted?node.data.activeRun:null;if(!runId)return null;
+  const run=await ctx.db.get(runId as Id<'runs'>);if(!run||!['queued','streaming'].includes(run.status))return null;
+  return {runId:String(run._id),assistantId:run.assistantId,text:run.streamText??'',activity:run.streamActivity??''};
+}});

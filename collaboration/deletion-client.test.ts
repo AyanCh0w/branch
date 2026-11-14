@@ -48,13 +48,13 @@ it.each([false,true])('keeps deletion working after a remote branch deletion (in
   if(name==='boards:deleteNode')nodes=nodes.filter(n=>n.id!==args.nodeKey);
   else if(name==='boards:restoreNode')nodes.push(branch);
   else if(name!=='collaboration:release')throw Error('Unexpected mutation: '+name);
- }),connectionState:()=>({isWebSocketConnected:true}),onUpdate:(name:string,_args:any,cb:any)=>{if(name==='boards:read')receive=cb;return ()=>{};},subscribeToConnectionState:()=>()=>{}};
+ }),connectionState:()=>({isWebSocketConnected:true}),onUpdate:(name:string,_args:any,cb:any)=>{if(name==='boards:live')receive=cb;return ()=>{};},subscribeToConnectionState:()=>()=>{}};
  (w as any).BranchHost={getState:()=>state,receive:(next:any)=>{state=next;},notify:vi.fn()};
  await import('./client.js');
  const shared=(w as any).BoardShared;
  await shared.connect({client,boardId:'board',token:'test'});
  shared.edit(state.nodes[0],'body','Unacknowledged edit');
- if(inFlight)await vi.advanceTimersByTimeAsync(70);
+ if(inFlight)await vi.advanceTimersByTimeAsync(600);
  nodes=[sibling];
  if(inFlight){finish();await vi.advanceTimersByTimeAsync(0);}else receive(snapshot());
  await shared.deleteNode('sibling');

@@ -1,8 +1,8 @@
 import { internalMutation, internalQuery, mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 import type { Id } from './_generated/dataModel';
 import { ConvexError, v } from 'convex/values';
-import { access, accessForUser, tokenHash } from './access';
-import { contextForChat, loadDocument, readText } from './documents';
+import { access, accessForUser, tokenHash, touchBoard } from './access';
+import { contextForChat, loadDocument, readText, withText } from './documents';
 import { textOf } from '../app/context.js';
 
 const scope = { boardId: v.id('boards'), token: v.string() };
@@ -58,7 +58,7 @@ function originOf(data: any) {
 }
 
 async function snapshot(ctx: QueryCtx, boardId: Id<'boards'>, nodeKey: string, viewer: Id<'users'>) {
-  const node = await card(ctx, boardId, nodeKey);
+  const node = await withText(ctx, await card(ctx, boardId, nodeKey));
   const doc = loadDocument(node.textState);
   const { title, body, draft } = readText(doc);
   doc.destroy();
@@ -189,7 +189,7 @@ export const resolve = mutation({
       if (!row.result) throw new ConvexError('There is no draft to publish.');
       if (node.codingResult?.handoffId !== args.expectedPublishedId) throw new ConvexError('The shared result changed. Review it before publishing.');
       await ctx.db.patch(node._id, { codingResult: { handoffId: row._id, text: row.result } });
-      await ctx.db.patch(args.boardId, { updatedAt: Date.now() });
+      await touchBoard(ctx, args.boardId);
     }
     await ctx.db.delete(row._id);
   },

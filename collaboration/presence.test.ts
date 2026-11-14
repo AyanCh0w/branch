@@ -2,6 +2,7 @@ import {convexTest} from 'convex-test';
 import {it,expect,vi,afterEach} from 'vitest';
 import schema from '../convex/schema';
 import {api} from '../convex/_generated/api';
+import { PRESENCE_MS } from '../convex/collaboration';
 const modules=import.meta.glob('../convex/**/*.ts');
 afterEach(()=>{vi.unstubAllEnvs();vi.useRealTimers();});
 it('lists people once, preserves other tabs, expires attendance and filters revoked access',async()=>{
@@ -20,7 +21,7 @@ it('lists people once, preserves other tabs, expires attendance and filters revo
  expect(await t.query(api.collaboration.activeUsers,a)).toHaveLength(2);
  await t.mutation(api.collaboration.attend,{...b,tabId:'two',active:false});
  expect(await t.query(api.collaboration.activeUsers,a)).toMatchObject([{userId:alice.userId}]);
- vi.advanceTimersByTime(15001);
+ vi.advanceTimersByTime(PRESENCE_MS+1);
  expect(await t.query(api.collaboration.activeUsers,a)).toEqual([]);
  await t.mutation(api.collaboration.attend,{...b,tabId:'two',active:true});
  expect(await t.run(ctx=>ctx.db.query('boardPresence').collect())).toHaveLength(1);
