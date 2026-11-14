@@ -354,7 +354,7 @@ const checks=['Can you discover the context nib without instructions?','Does the
 function showHelp(){ $('#test-list').innerHTML=checks.map((c,i)=>`<label><input type="checkbox" data-test="${i}" ${state.tests.includes(i)?'checked':''}>${escapeHTML(c)}</label>`).join('');$('#test-notes').value=state.notes||'';$('#help-dialog').showModal();$$('[data-test]').forEach(c=>c.onchange=()=>{state.tests=c.checked?[...new Set([...state.tests,+c.dataset.test])]:state.tests.filter(i=>i!==+c.dataset.test);save()})}
 $('#help').onclick=showHelp;$('#help-dialog .close').onclick=()=>$('#help-dialog').close();$('#test-notes').oninput=e=>{state.notes=e.target.value;save()};$('#reset').onclick=()=>{remember();stopAllSprings();state=initialState();openContexts.clear();camera={x:0,y:0,z:1};render();fit();save();$('#help-dialog').close();notify('Sample workspace restored · undo available')};$('#export').onclick=()=>{commitEdit();const url=URL.createObjectURL(new Blob([JSON.stringify(state,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='branch-session.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
 document.addEventListener('keydown',e=>{
- if(document.body.classList.contains('account-mode')||e.target.closest('.a-shared-context'))return;
+ if(e.defaultPrevented||document.body.matches('.account-mode,.board-context-mode'))return;
  if(e.key==='Escape'){if(panelNodeId&&!e.target.closest('.idea-preview'))closeChatPanel();for(const key of ideaPreviews.keys()){expandingIdeas.get(key)?.abort();ideaPreviews.delete(key);const node=nodeById(key);if(node){updateIdeaPreview(node);cardEl(key)?.querySelector('[data-expand-idea]')?.focus({preventScroll:true});}}closeContextMenu();if(gesture){cancelGesture();notify('Cancelled')}hideSelection();$('#create-menu').hidden=true;return}
  if($('#help-dialog').open)return;
  if(window.BoardShared?.enabled&&!window.BoardShared.writable)return;
@@ -458,7 +458,7 @@ function animateCardEntrance(node){
 }
 function editableTarget(target){return !!target.closest('input,textarea,[contenteditable="true"],[contenteditable="plaintext-only"]');}
 function insertVideoLink(raw,point){const vid=BranchMedia.videoId(raw);if(!vid)return false;addMediaCard({type:'video',id:vid,title:'YouTube video',source:'https://www.youtube.com/watch?v='+vid},null,point);showFirstUse('video');return true;}
-document.addEventListener('paste',e=>{if(document.body.classList.contains('account-mode')||(window.BoardShared?.enabled&&!window.BoardShared.writable))return;if(e.defaultPrevented||editableTarget(e.target)||e.target.closest('dialog'))return;const images=[...(e.clipboardData?.files||[])].filter(f=>f.type.startsWith('image/'));if(images.length){e.preventDefault();importFiles(images,boardInsertPoint());return;}const raw=e.clipboardData?.getData('text/plain')?.trim();if(!raw)return;e.preventDefault();if(BranchMedia.videoId(raw)){insertVideoLink(raw,boardInsertPoint());return;}let url;try{url=new URL(raw);}catch{}if(url&&['https:','http:'].includes(url.protocol)){remember();const p=boardInsertPoint(),n={id:id(),type:'web',title:url.hostname,url:url.href,x:p.x,y:p.y,width:440,revision:1};state.nodes.push(n);refreshCard(n);record('Pasted website');showFirstUse('website');}else{const n=newCard('plan',boardInsertPoint());n.body=raw;n.title='Note';refreshCard(n);save();}});
+document.addEventListener('paste',e=>{if(document.body.matches('.account-mode,.board-context-mode')||(window.BoardShared?.enabled&&!window.BoardShared.writable))return;if(e.defaultPrevented||editableTarget(e.target)||e.target.closest('dialog'))return;const images=[...(e.clipboardData?.files||[])].filter(f=>f.type.startsWith('image/'));if(images.length){e.preventDefault();importFiles(images,boardInsertPoint());return;}const raw=e.clipboardData?.getData('text/plain')?.trim();if(!raw)return;e.preventDefault();if(BranchMedia.videoId(raw)){insertVideoLink(raw,boardInsertPoint());return;}let url;try{url=new URL(raw);}catch{}if(url&&['https:','http:'].includes(url.protocol)){remember();const p=boardInsertPoint(),n={id:id(),type:'web',title:url.hostname,url:url.href,x:p.x,y:p.y,width:440,revision:1};state.nodes.push(n);refreshCard(n);record('Pasted website');showFirstUse('website');}else{const n=newCard('plan',boardInsertPoint());n.body=raw;n.title='Note';refreshCard(n);save();}});
 $('#board').addEventListener('dragover',e=>{if(gesture||editableTarget(e.target))return;if([...e.dataTransfer.types].some(t=>['Files','text/plain','text/uri-list'].includes(t))){e.preventDefault();e.dataTransfer.dropEffect='copy';$('#board').classList.add('file-drop-active');}});
 $('#board').addEventListener('dragleave',e=>{if(!$('#board').contains(e.relatedTarget))$('#board').classList.remove('file-drop-active');});
 $('#board').addEventListener('drop',e=>{if(window.BoardShared?.enabled&&!window.BoardShared.writable)return;$('#board').classList.remove('file-drop-active');if(gesture||editableTarget(e.target))return;e.preventDefault();const point=boardPoint(e.clientX,e.clientY),files=[...e.dataTransfer.files];if(files.length){importFiles(files,point);return;}insertVideoLink(e.dataTransfer.getData('text/uri-list')||e.dataTransfer.getData('text/plain'),point);});
@@ -662,6 +662,11 @@ onCardEvent('keydown',e=>{if(e.key==='Escape'&&e.target.closest('.website-perspe
 function showSharedContext(node){
  window.dispatchEvent(new CustomEvent('branch:show-context',{detail:{id:node.id,title:node.title}}));
 }
+window.addEventListener('branch:view-changed',()=>{
+ if(document.body.classList.contains('board-context-mode')){
+  commitEdit();cancelGesture();hideSelection();closeCreateMenu();closeContextMenu();dockLink.hidden=true;
+ }else requestDraw();
+});
 let initialSharedContext=new URL(location.href).searchParams.get('context');
 window.addEventListener('branch:show-initial-context',()=>{
  const node=nodeById(initialSharedContext);
@@ -762,7 +767,7 @@ window.BranchHost={boardPoint,screenPoint,prepareVideoTranscripts,readLocalFile,
  }
  if(n.activeRun)generatingChats.set(n.id,{abort(){}});else generatingChats.delete(n.id);cardEl(n.id)?.setAttribute('aria-busy',String(!!n.activeRun));updateActivity(n);result.push(n);
  }
- for(const n of previous.values()){cardEl(n.id)?.remove();generatingChats.delete(n.id);}state.nodes=result;window.BranchCoding?.sync();syncAgentStacks();mountChatPanel();state.title=snapshot.title;$('#board-title').textContent=state.title;requestDraw();
+ for(const n of previous.values()){cardEl(n.id)?.remove();generatingChats.delete(n.id);}state.nodes=result;window.dispatchEvent(new Event('branch:board-updated'));window.BranchCoding?.sync();syncAgentStacks();mountChatPanel();state.title=snapshot.title;$('#board-title').textContent=state.title;requestDraw();
  try{localStorage.setItem(KEY,JSON.stringify(state));}catch{}
 }};
 

@@ -256,12 +256,39 @@ body.account-mode #account-app{background:var(--theme-surface, #fff)}
 .a-board-presence small{margin-left:auto;color:var(--theme-muted,#7b8290);font-size:10px;flex:none}
 @media(max-width:600px){.a-board-presence{right:12px;top:64px;width:158px}}
 
-.a-shared-context .a-context-updates{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:12px;text-align:left}
-.a-shared-context li{min-width:0;border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-wrap:anywhere}
-.a-shared-context time{font-size:11px;color:var(--theme-muted,#686868)}
+#board-context .a-context-updates{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:12px;text-align:left}
+#board-context .a-context-updates li{min-width:0;border:1px solid var(--line);border-radius:10px;padding:13px 14px;overflow-wrap:anywhere}
+#board-context time{font-size:11px;color:var(--theme-muted,#686868)}
 .a-context-prompt{background:var(--theme-canvas,#f8f9fa);border-radius:7px;padding:8px 10px;white-space:pre-wrap}
 .a-context-result pre{overflow:auto}
 .a-context-result > :last-child{margin-bottom:0}
 .a-chatgpt-consent form{text-align:left;max-width:380px;margin:24px auto 0}
 .a-chatgpt-consent select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--theme-surface,#fff);color:inherit;font:inherit}
 .a-chatgpt-consent form .a-secondary{margin-left:8px}
+
+/* The board keeps its canvas position while the shared context is open. */
+.board-view-controls{display:flex;flex:0 1 auto;align-items:center;gap:8px;min-width:0}
+.topbar .board-view-controls .identity{order:0;min-width:0}
+#board-view-slot:empty{display:none}
+.board-view-switch{display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--line);border-radius:11px;background:var(--theme-surface,#fff)}
+.board-view-switch button{display:grid;place-items:center;width:34px;height:34px;padding:0;border:1px solid transparent;border-radius:8px;color:var(--muted)}
+.board-view-switch .icon{width:19px;height:19px;stroke-width:1.6;stroke-linecap:round}
+.board-view-switch button:hover{color:var(--theme-ink,#171717)}
+.board-view-switch button[aria-selected=true]{color:var(--theme-ink,#171717);background:var(--theme-raised,#f0f1f3);border-color:var(--line);box-shadow:inset 0 1px 0 var(--theme-shine,transparent)}
+.board-view-switch button:focus-visible{outline-offset:1px}
+.board-context-mode :is(#board,#chat-panel){visibility:hidden}
+.board-context-mode :is(#creation-dock,footer,#undo,.a-board-presence){display:none}
+#board-context{position:fixed;inset:0;overflow:auto;overscroll-behavior:contain;background:var(--theme-canvas,#f8f9fa);z-index:9}
+#board-context:focus-visible{outline-offset:-3px}
+.board-context-content{max-width:780px;margin:0 auto;padding:92px 24px 48px}
+.board-context-content h1{font-size:27px;line-height:1.2;letter-spacing:-.7px;margin:0 0 18px;font-weight:600}
+.board-context-content h2{font-size:16px;line-height:1.4;margin:0 0 14px;overflow-wrap:anywhere}
+.board-context-empty{margin:0;color:var(--muted)}
+.board-context-picker{display:grid;gap:5px;margin:0 0 16px;color:var(--muted);font-size:12px}
+.board-context-picker select{width:100%;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:var(--theme-surface,#fff);color:var(--theme-ink,#171717);font-size:14px}
+#board-context .a-context-updates li{background:var(--theme-surface,#fff)}
+@media(max-width:600px){
+ .topbar .board-view-controls{order:2;flex:0 0 100%}
+ .topbar .board-view-controls .identity{flex:0 1 auto}
+ .board-context-content{padding:122px 16px 32px}
+}

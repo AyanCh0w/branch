@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useMutation, usePaginatedQuery, useQuery } from 'convex/react';
+import React, { useState } from 'react';
+import { useMutation, useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
 
 export function ConnectChatGPT({ request }) {
@@ -80,33 +80,5 @@ export function ChatGPTBoardSettings({ boardId, Dialog, onClose }) {
       }}>Disconnect</button>}
     </>}
     <p role="status">{status}</p>
-  </Dialog>;
-}
-
-export function SharedContext({ boardId, token, Dialog }) {
-  const [card, setCard] = useState(null);
-  useEffect(() => {
-    const show = event => setCard(event.detail);
-    window.addEventListener('branch:show-context', show);
-    window.dispatchEvent(new CustomEvent('branch:show-initial-context'));
-    return () => window.removeEventListener('branch:show-context', show);
-  }, []);
-  const { results, status, loadMore } = usePaginatedQuery(api.chatgptSync.read,
-    card ? { boardId, token, nodeKey: card.id } : 'skip', { initialNumItems: 10 });
-  if (!card) return null;
-  return <Dialog title="Shared context" onClose={() => setCard(null)} className="a-shared-context">
-    <p className="a-muted">{card.title}</p>
-    {status === 'LoadingFirstPage' && <p role="status">Loading updates…</p>}
-    <ol className="a-context-updates">
-      {results.map(update => <li key={update.id}>
-        <time dateTime={new Date(update.timestamp).toISOString()}>{new Date(update.timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</time>
-        {update.prompt && <p className="a-context-prompt">{update.prompt}</p>}
-        {typeof window.BranchMarkdown === 'function'
-          ? <div className="a-context-result" dangerouslySetInnerHTML={{ __html: window.BranchMarkdown(update.result) }} />
-          : <p className="a-context-prompt">{update.result}</p>}
-      </li>)}
-    </ol>
-    {(status === 'CanLoadMore' || status === 'LoadingMore') &&
-      <button className="a-secondary" disabled={status === 'LoadingMore'} onClick={() => loadMore(10)}>Load older updates</button>}
   </Dialog>;
 }
