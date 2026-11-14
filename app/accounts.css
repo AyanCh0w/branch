@@ -338,3 +338,4 @@ body:not(.board-context-mode) .topbar .a-context-connection{display:none}
 .context-zoom button{display:grid;place-items:center;width:24px;height:24px;padding:0;border-radius:5px;font-size:17px}
 .context-zoom .icon{width:15px;height:15px}
 .context-wires circle{fill:var(--blue)}
+.a-gh-header .a-gh-switch{min-height:30px;padding:5px 10px;font-size:12px;margin-left:auto}.a-gh-header h2+.a-gh-switch{margin-left:0}

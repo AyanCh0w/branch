@@ -5,7 +5,7 @@
 import { query, mutation, internalQuery, internalMutation } from './_generated/server';
 import { v } from 'convex/values';
 import { getAuthUserId } from '@convex-dev/auth/server';
-import { access } from './access';
+import { access, accessForUser } from './access';
 import { initialDocument } from './documents';
 
 export const MAX_BOARD_REPOS = 10;
@@ -148,5 +148,44 @@ export const updateCard = internalMutation({
     // A new revision marks chats holding the old snapshot as stale; they refresh explicitly.
     await ctx.db.patch(node._id, { updatedBy: userId, data: { ...node.data, text: args.text, github: { ...args.github, fetchedAt: Date.now() }, ...(changed ? { revision: (node.data.revision || 1) + 1 } : {}) } });
     return { changed };
+  },
+});
+
+// Which repository a chat run may read, and within which folders. Both come
+// from the context frozen at Send; the link must still exist on the board.
+export const repoForRun = internalQuery({
+  args: { runId: v.id('runs'), repo: v.string() },
+  handler: async (ctx, args) => {
+    const run = await ctx.db.get(args.runId);
+    if (!run || run.status !== 'streaming') throw Error('This chat is no longer running.');
+    await accessForUser(ctx, run.initiatedBy, run.boardId, true);
+    const wanted = args.repo.toLowerCase();
+    const bindings = (run.input.contexts || []).filter((c: any) => c.githubRepo && String(c.githubRepo.repo).toLowerCase() === wanted);
+    if (!bindings.length) throw Error('Repository ' + args.repo + ' isn’t connected to this chat.');
+    const links = await ctx.db.query('boardRepos').withIndex('board', q => q.eq('boardId', run.boardId)).collect();
+    const link = links.find(l => l.fullName.toLowerCase() === wanted);
+    if (!link) throw Error(args.repo + ' is no longer linked to this board.');
+    // Several cards for the same repository: allow the union of their limits; any unlimited card allows everything.
+    const scopes = bindings.map((c: any) => c.githubRepo.scope || []);
+    const scope = scopes.some((s: string[]) => !s.length) ? [] : [...new Set(scopes.flat())] as string[];
+    return { link: { linkId: link._id, fullName: link.fullName, repoId: link.repoId, installationId: link.installationId, defaultBranch: link.defaultBranch }, scope };
+  },
+});
+
+// Shows which files a reply read, on the reply itself.
+export const recordRead = internalMutation({
+  args: { runId: v.id('runs'), repo: v.string(), path: v.string() },
+  handler: async (ctx, args) => {
+    const run = await ctx.db.get(args.runId);
+    if (!run || run.status !== 'streaming') return;
+    const node = await ctx.db.query('nodes').withIndex('board_key', q => q.eq('boardId', run.boardId).eq('key', run.nodeKey)).unique();
+    if (!node || node.data.activeRun !== run._id) return;
+    const messages = (node.data.messages || []).map((m: any) => {
+      if (m.id !== run.assistantId) return m;
+      const reads = m.githubReads || [];
+      if (reads.length >= 50 || reads.some((r: any) => r.repo === args.repo && r.path === args.path)) return m;
+      return { ...m, githubReads: [...reads, { repo: args.repo, path: args.path }] };
+    });
+    await ctx.db.patch(node._id, { data: { ...node.data, messages } });
   },
 });

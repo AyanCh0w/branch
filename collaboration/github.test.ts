@@ -7,11 +7,12 @@ import { registerUsername } from '@convex-dev/auth/components/username/test';
 import schema from '../convex/schema';
 import { api } from '../convex/_generated/api';
 import { appJWT, fileCard } from './github.cjs';
-import { textOf } from '../app/context.js';
+import { textOf, snapshotNode } from '../app/context.js';
+import { internal } from '../convex/_generated/api';
 
 const modules = import.meta.glob('../convex/**/*.ts');
 const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs1', format: 'pem' } });
-afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
+afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 const b64 = (text: string) => Buffer.from(text).toString('base64');
 const REPO = { id: 101, full_name: 'acme/app', private: true, default_branch: 'main' };
@@ -35,15 +36,22 @@ function fakeGitHub(overrides: Record<string, any> = {}) {
     'GET /repos/acme/app/issues/3/comments?per_page=50': [{ user: { login: 'bo' }, body: 'Confirmed on Safari' }],
     'GET /repos/acme/app/pulls/9': { number: 9, title: 'Fix login', state: 'open', body: 'Fixes #3', user: { login: 'bo' }, base: { ref: 'main' }, head: { ref: 'fix-login' }, additions: 3, deletions: 1, changed_files: 1, comments: 0, html_url: 'https://github.com/acme/app/pull/9' },
     'GET /repos/acme/app/pulls/9/files?per_page=100': [{ filename: 'src/login.ts', status: 'modified', additions: 3, deletions: 1, patch: '@@ -1 +1 @@\n-old\n+new' }],
+    'GET /repos/acme/app': { full_name: 'acme/app', default_branch: 'main', description: 'The Acme app', private: true, html_url: 'https://github.com/acme/app', language: 'TypeScript' },
+    'GET /repos/acme/app/git/trees/main?recursive=1': { truncated: false, tree: [{ type: 'tree', path: 'src' }, { type: 'blob', path: 'src/main.ts' }, { type: 'tree', path: 'docs' }, { type: 'blob', path: 'docs/guide.md' }, { type: 'blob', path: 'README.md' }, { type: 'tree', path: 'src/lib' }, { type: 'blob', path: 'src/lib/util.ts' }] },
+    'GET /repos/acme/app/readme?ref=main': { raw: '# Acme\n\nStart with `src/main.ts`.' },
+    'GET /repos/acme/app/contents/src?ref=main': [{ type: 'file', name: 'main.ts', path: 'src/main.ts', size: 30 }, { type: 'dir', name: 'lib', path: 'src/lib', size: 0 }],
+    'GET /repos/acme/app/contents/docs/guide.md?ref=main': { type: 'file', path: 'docs/guide.md', size: 10, content: b64('Guide') },
     ...overrides,
   };
   const stub = vi.fn(async (input: string, init: any = {}) => {
+    if (input.startsWith('https://api.openai.com/')) return routes.openai(JSON.parse(init.body));
     const method = init.method || 'GET', url = input.replace('https://api.github.com', '');
     const body = init.body ? JSON.parse(init.body) : null;
     calls.push({ method, url, body, auth: init.headers?.Authorization || '' });
     const route = routes[method + ' ' + url];
     if (route === undefined) return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404 });
-    const value = typeof route === 'function' ? route(body) : route;
+    const value = typeof route === 'function' ? route(body, input) : route;
+    if (value && typeof value === 'object' && 'raw' in value) return new Response(value.raw, { status: 200 });
     return route === null ? new Response(null, { status: 204 }) : new Response(JSON.stringify(value), { status: 200, headers: { 'Content-Type': 'application/json' } });
   });
   vi.stubGlobal('fetch', stub);
@@ -191,4 +199,86 @@ it('truncates very large files and rejects folders', () => {
   expect(fileCard('a/b', big, 'main')).toMatchObject({ github: { truncated: true } });
   expect(fileCard('a/b', big, 'main').text).toHaveLength(100000);
   expect(() => fileCard('a/b', { type: 'dir' }, 'main')).toThrow(/folder/);
+});
+
+describe('Repository cards', () => {
+  it('summarizes the whole repository and its README as one card', async () => {
+    const { owner, board, connectAndLink } = await setup();
+    const linkId = await connectAndLink();
+    await owner.action(api.githubActions.addCard, { ...board, linkId, target: { kind: 'repo' }, key: 'gh-repo-1', x: 0, y: 0 });
+    const card = (await owner.query(api.boards.read, board)).nodes[0];
+    expect(card).toMatchObject({ type: 'github', title: 'acme/app', github: { kind: 'repo', repo: 'acme/app', ref: 'main', scope: [], files: 4, folders: ['src', 'docs'], description: 'The Acme app' } });
+    expect(card.text).toContain('Scope: whole repository.');
+    expect(card.text).toContain('src/lib/util.ts');
+    expect(card.text).toContain('### README\n\n# Acme');
+    const snapshot = snapshotNode(card, [card]);
+    expect(snapshot).toMatchObject({ githubRepo: { repo: 'acme/app', ref: 'main', scope: [] }, fromGitHub: true });
+    expect(textOf(card)).toContain('github_read_file');
+  });
+
+  it('limits a repository card to folders and bumps its revision', async () => {
+    const { owner, board, connectAndLink } = await setup();
+    const linkId = await connectAndLink();
+    await owner.action(api.githubActions.addCard, { ...board, linkId, target: { kind: 'repo' }, key: 'gh-repo-1', x: 0, y: 0 });
+    expect(await owner.action(api.githubActions.setRepoScope, { ...board, nodeKey: 'gh-repo-1', folders: ['/src/'] })).toEqual({ changed: true });
+    const card = (await owner.query(api.boards.read, board)).nodes[0];
+    expect(card).toMatchObject({ revision: 2, github: { scope: ['src'], files: 2 } });
+    expect(card.text).toContain('Scope: only src/.');
+    expect(card.text).not.toContain('docs/guide.md');
+    await expect(owner.action(api.githubActions.setRepoScope, { ...board, nodeKey: 'gh-repo-1', folders: ['../etc'] })).rejects.toThrow(/Invalid folder/);
+    await expect(owner.action(api.githubActions.setRepoScope, { ...board, nodeKey: 'gh-repo-1', folders: ['nowhere'] })).rejects.toThrow(/No files found/);
+    // Clients can't widen the scope by patching the card.
+    await owner.mutation(api.boards.patchNodes, { ...board, changes: [{ id: 'gh-repo-1', patch: { github: { kind: 'repo', scope: [] } } }] });
+    expect((await owner.query(api.boards.read, board)).nodes[0].github.scope).toEqual(['src']);
+  });
+
+  it('lets a connected chat read the repository within the card’s folders', async () => {
+    vi.useFakeTimers();
+    const { t, owner, board, github, connectAndLink } = await setup();
+    vi.stubEnv('OPENAI_API_KEY', 'test-key');
+    const linkId = await connectAndLink();
+    await owner.action(api.githubActions.addCard, { ...board, linkId, target: { kind: 'repo' }, key: 'gh-repo-1', x: 0, y: 0 });
+    await owner.action(api.githubActions.setRepoScope, { ...board, nodeKey: 'gh-repo-1', folders: ['src'] });
+    let nodes = (await owner.query(api.boards.read, board)).nodes;
+    const context = snapshotNode(nodes[0], nodes);
+    await owner.mutation(api.boards.patchNodes, { ...board, changes: [{ id: 'chat-1', create: { type: 'thread', title: 'Ask', draft: 'What does main export?', x: 600, y: 0, contexts: [context] } }] });
+    const requests: any[] = [];
+    const outputs: any[][] = [
+      [{ type: 'function_call', name: 'github_read_file', call_id: 'read', arguments: JSON.stringify({ repo: 'acme/app', path: 'src/main.ts', start_line: null, end_line: null }) },
+       { type: 'function_call', name: 'github_read_file', call_id: 'outside', arguments: JSON.stringify({ repo: 'acme/app', path: 'docs/guide.md', start_line: null, end_line: null }) },
+       { type: 'function_call', name: 'github_list_files', call_id: 'list', arguments: JSON.stringify({ repo: 'acme/app', path: 'src' }) }],
+      [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'It exports answer = 42 (src/main.ts:1).' }] }],
+    ];
+    github.routes.openai = (body: any) => {
+      requests.push(body);
+      if (!body.stream) return new Response(JSON.stringify({ output: [] }));
+      return new Response('data: ' + JSON.stringify({ type: 'response.completed', response: { output: outputs.shift(), usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } }) + '\n\n');
+    };
+    await owner.mutation(api.chat.send, { ...board, nodeKey: 'chat-1', requestId: 'ask-1', expectedVersion: 0 });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    const streamed = requests.filter(r => r.stream);
+    expect(streamed).toHaveLength(2);
+    expect(streamed[0].tools.map((tool: any) => tool.name).filter(Boolean)).toEqual(expect.arrayContaining(['github_list_files', 'github_read_file', 'github_search_code']));
+    expect(streamed[0].tool_choice).toBe('auto');
+    const outputsSent = Object.fromEntries(streamed[1].input.filter((i: any) => i.type === 'function_call_output').map((i: any) => [i.call_id, JSON.parse(i.output)]));
+    expect(outputsSent.read).toMatchObject({ repo: 'acme/app', path: 'src/main.ts', content: '1\texport const answer = 42;\n2\t' });
+    expect(outputsSent.outside.error).toMatch(/outside this repository card/);
+    expect(outputsSent.list.entries.map((e: any) => e.path)).toEqual(['src/main.ts', 'src/lib']);
+    nodes = (await owner.query(api.boards.read, board)).nodes;
+    const reply = nodes.find((n: any) => n.id === 'chat-1')!.messages.at(-1);
+    expect(reply).toMatchObject({ text: 'It exports answer = 42 (src/main.ts:1).', githubReads: [{ repo: 'acme/app', path: 'src/main.ts' }] });
+  });
+
+  it('refuses repository tools once the repository is unlinked or was never connected', async () => {
+    const { t, owner, board, boardId, connectAndLink } = await setup();
+    const linkId = await connectAndLink();
+    await owner.action(api.githubActions.addCard, { ...board, linkId, target: { kind: 'repo' }, key: 'gh-repo-1', x: 0, y: 0 });
+    const nodes = (await owner.query(api.boards.read, board)).nodes;
+    await owner.mutation(api.boards.patchNodes, { ...board, changes: [{ id: 'chat-1', create: { type: 'thread', title: 'Ask', draft: 'Hi', x: 600, y: 0, contexts: [snapshotNode(nodes[0], nodes)] } }] });
+    const runId = await owner.mutation(api.chat.send, { ...board, nodeKey: 'chat-1', requestId: 'ask-1', expectedVersion: 0 });
+    await t.mutation(internal.chat.claim, { runId });
+    await expect(t.action(internal.githubActions.runTool, { runId, name: 'github_read_file', args: { repo: 'acme/other', path: 'x' } })).rejects.toThrow(/isn’t connected to this chat/);
+    await owner.mutation(api.github.unlinkRepo, { boardId, token: '', linkId });
+    await expect(t.action(internal.githubActions.runTool, { runId, name: 'github_list_files', args: { repo: 'acme/app', path: '' } })).rejects.toThrow(/no longer linked/);
+  });
 });

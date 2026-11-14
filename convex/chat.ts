@@ -7,6 +7,7 @@ import { internal } from './_generated/api';
 import { v, ConvexError } from 'convex/values';
 import { ASSISTANT_ROLE, WEB_INSTRUCTIONS, webOptions, citedText, reasoningOptions, activityForEvent } from '../collaboration/web-search.cjs';
 import { contextInput } from '../collaboration/context-input.cjs';
+import { githubTools, GITHUB_INSTRUCTIONS } from '../collaboration/github.cjs';
 import { hydrateVideos } from '../app/video-context.js';
 import { BOARD_TOOLS, PLAN_TOOL, CANVAS_TOOL, CANVAS_INSTRUCTIONS, PASSES, nodeArgs, researchSources } from '../collaboration/agent.cjs';
 import { place } from '../app/auto-layout.js';
@@ -164,8 +165,9 @@ export const generate = internalAction({
       const research=!!run.input.agent&&phase<2;
       if(run.input.agent&&!saved.continuing)input.push({role:'developer',content:PASSES[phase]});
       const options=webOptions(run.input.messages,run.input.contexts);
-      const tools=saved.turn>=18?[{type:'web_search'}]:[...options.tools,CANVAS_TOOL,PLAN_TOOL,...BOARD_TOOLS];
-      const request:any={ model:run.model, instructions:WEB_INSTRUCTIONS+CANVAS_INSTRUCTIONS, tools, tool_choice:run.input.agent&&saved.turn===0?{type:'function',name:'update_plan'}:run.input.agent&&saved.turn===1?{type:'function',name:'inspect_board'}:saved.turn===0&&options.tool_choice==='required'?{type:'web_search'}:'auto', include:['reasoning.encrypted_content','web_search_call.action.sources'], reasoning:reasoningOptions(run.input.modelStage), input, stream:true, store:false, max_output_tokens:12000, max_tool_calls:research?12:8 };
+      const repos=[...new Set((run.input.contexts||[]).filter((c:any)=>c.githubRepo).map((c:any)=>String(c.githubRepo.repo)))] as string[];
+      const tools=saved.turn>=18?[{type:'web_search'}]:[...options.tools,CANVAS_TOOL,PLAN_TOOL,...BOARD_TOOLS,...(repos.length?githubTools(repos):[])];
+      const request:any={ model:run.model, instructions:WEB_INSTRUCTIONS+CANVAS_INSTRUCTIONS+(repos.length?GITHUB_INSTRUCTIONS:''), tools, tool_choice:run.input.agent&&saved.turn===0?{type:'function',name:'update_plan'}:run.input.agent&&saved.turn===1?{type:'function',name:'inspect_board'}:saved.turn===0&&options.tool_choice==='required'?{type:'web_search'}:'auto', include:['reasoning.encrypted_content','web_search_call.action.sources'], reasoning:reasoningOptions(run.input.modelStage), input, stream:true, store:false, max_output_tokens:12000, max_tool_calls:research?12:8 };
       const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' }, body: JSON.stringify(connected?planRequest(request):request), signal: AbortSignal.timeout(150000) });
       if (!response.ok) throw Error(connected?providerError(response.status):'OpenAI request failed (' + response.status + ')');
       const reader = response.body!.getReader(); const decoder = new TextDecoder(); let buffer = ''; let complete = false;let sourceEvent=0;
@@ -187,7 +189,7 @@ export const generate = internalAction({
             const usage={input_tokens:(run.usage?.input_tokens||0)+(response.usage?.input_tokens||0),output_tokens:(run.usage?.output_tokens||0)+(response.usage?.output_tokens||0),total_tokens:(run.usage?.total_tokens||0)+(response.usage?.total_tokens||0)};
             const calls=(response.output||[]).filter((item:any)=>item.type==='function_call');
             const nextInput=[...input,...(response.output||[])];
-            for(const call of calls){let result;try{if(call.name==='update_plan'){const plan=JSON.parse(call.arguments);result=await ctx.runMutation(internal.chat.updatePlan,{runId:run._id,...plan});}else if(BOARD_TOOLS.some((tool:any)=>tool.name===call.name)){result=await ctx.runMutation(internal.chat.canvasActionTool,{runId:run._id,callId:call.call_id,name:call.name,args:JSON.parse(call.arguments)});}else {if(call.name!=='create_node')throw Error('Unknown tool');result=await ctx.runMutation(internal.chat.createNode,{runId:run._id,callId:call.call_id,node:nodeArgs(call.arguments)});}}catch(error:any){result={error:error.message};}nextInput.push({type:'function_call_output',call_id:call.call_id,output:JSON.stringify(result)});}
+            for(const call of calls){let result;try{if(call.name==='update_plan'){const plan=JSON.parse(call.arguments);result=await ctx.runMutation(internal.chat.updatePlan,{runId:run._id,...plan});}else if(repos.length&&String(call.name).startsWith('github_')){result=await ctx.runAction(internal.githubActions.runTool,{runId:run._id,name:call.name,args:JSON.parse(call.arguments)});}else if(BOARD_TOOLS.some((tool:any)=>tool.name===call.name)){result=await ctx.runMutation(internal.chat.canvasActionTool,{runId:run._id,callId:call.call_id,name:call.name,args:JSON.parse(call.arguments)});}else {if(call.name!=='create_node')throw Error('Unknown tool');result=await ctx.runMutation(internal.chat.createNode,{runId:run._id,callId:call.call_id,node:nodeArgs(call.arguments)});}}catch(error:any){result={error:error.message};}nextInput.push({type:'function_call_output',call_id:call.call_id,output:JSON.stringify(result)});}
             if((research||calls.length)&&saved.turn<19){
               await ctx.runMutation(internal.chat.checkpoint,{runId:run._id,checkpoint:{phase:calls.length?phase:phase+1,turn:saved.turn+1,input:nextInput,continuing:!!calls.length},usage});
               return;

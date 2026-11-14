@@ -1,22 +1,23 @@
 // Network side of the GitHub integration. User tokens are used once, to verify
 // which installations and repositories a person can see, then revoked. Reads
 // use short-lived installation tokens scoped to a single repository.
-import { action } from './_generated/server';
+import { action, internalAction } from './_generated/server';
 import type { ActionCtx } from './_generated/server';
 import { internal } from './_generated/api';
 import { v, ConvexError } from 'convex/values';
 import type { Id } from './_generated/dataModel';
 import { githubConfigured } from './github';
-import { appJWT, github, fileCard, issueCard, pullCard } from '../collaboration/github.cjs';
+import { appJWT, github, fileCard, issueCard, pullCard, repoCard, normalizeScope, inScope, scopeAllowsFolder, numberedFile, decodeFile } from '../collaboration/github.cjs';
 
 const MAX_REPOS = 500;
 const target = v.union(
   v.object({ kind: v.literal('file'), path: v.string() }),
   v.object({ kind: v.literal('issue'), number: v.number() }),
   v.object({ kind: v.literal('pull'), number: v.number() }),
+  v.object({ kind: v.literal('repo') }),
 );
 type Link = { linkId: Id<'boardRepos'>; fullName: string; repoId: number; installationId: number; defaultBranch: string };
-type Target = { kind: 'file'; path: string } | { kind: 'issue'; number: number } | { kind: 'pull'; number: number };
+type Target = { kind: 'file'; path: string } | { kind: 'issue'; number: number } | { kind: 'pull'; number: number } | { kind: 'repo'; scope?: string[] };
 
 function requireConfigured() { if (!githubConfigured()) throw new ConvexError('GitHub isn’t set up on this Branch yet.'); }
 // Errors reach the browser as messages people can act on.
@@ -102,9 +103,20 @@ export const items = action({
   }),
 });
 
+async function fetchRepoCard(link: Link, token: string, scope: string[]) {
+  const base = repoPath(link);
+  const info = await github(base, { token });
+  const [tree, readme] = await Promise.all([
+    github(base + '/git/trees/' + encodeURIComponent(info.default_branch) + '?recursive=1', { token }).catch(() => ({ tree: [], truncated: true })),
+    github(base + '/readme?ref=' + encodeURIComponent(info.default_branch), { token, accept: 'application/vnd.github.raw' }).catch(() => ''),
+  ]);
+  return repoCard(info, tree, typeof readme === 'string' ? readme : '', scope);
+}
+
 async function fetchCard(link: Link, item: Target) {
   const token = await repoToken(link);
   const base = repoPath(link);
+  if (item.kind === 'repo') return fetchRepoCard(link, token, normalizeScope(item.scope));
   if (item.kind === 'file') return fileCard(link.fullName, await github(base + '/contents/' + filePath(item.path) + '?ref=' + encodeURIComponent(link.defaultBranch), { token }), link.defaultBranch);
   if (item.kind === 'issue') {
     const issue = await github(base + '/issues/' + item.number, { token });
@@ -132,8 +144,61 @@ export const refreshCard = action({
   handler: (ctx, args): Promise<{ changed: boolean }> => friendly(async () => {
     requireConfigured();
     const { github: meta, link } = await ctx.runQuery(internal.github.cardForRefresh, args) as { github: any; link: Link };
-    const item: Target = meta.kind === 'file' ? { kind: 'file', path: meta.path } : { kind: meta.kind, number: meta.number };
+    const item: Target = meta.kind === 'repo' ? { kind: 'repo', scope: meta.scope || [] } : meta.kind === 'file' ? { kind: 'file', path: meta.path } : { kind: meta.kind, number: meta.number };
     const card = await fetchCard(link, item);
     return ctx.runMutation(internal.github.updateCard, { boardId: args.boardId, token: args.token, nodeKey: args.nodeKey, text: card.text, github: card.github });
   }),
+});
+
+// Limit a repository card (and every chat that later connects to it) to some folders.
+export const setRepoScope = action({
+  args: { boardId: v.id('boards'), token: v.string(), nodeKey: v.string(), folders: v.array(v.string()) },
+  handler: (ctx, args): Promise<{ changed: boolean }> => friendly(async () => {
+    requireConfigured();
+    const { github: meta, link } = await ctx.runQuery(internal.github.cardForRefresh, { boardId: args.boardId, token: args.token, nodeKey: args.nodeKey }) as { github: any; link: Link };
+    if (meta.kind !== 'repo') throw Error('Only repository cards have folder limits.');
+    const scope = normalizeScope(args.folders);
+    const card = await fetchCard(link, { kind: 'repo', scope });
+    if (scope.length && (card.github as any).files === 0) throw Error('No files found in ' + scope.map(f => f + '/').join(', ') + '.');
+    return ctx.runMutation(internal.github.updateCard, { boardId: args.boardId, token: args.token, nodeKey: args.nodeKey, text: card.text, github: card.github });
+  }),
+});
+
+// Read-only repository tools for chat runs. The run's initiator must still be
+// able to edit the board, the repository must still be linked to it, and every
+// path must fall inside the scope frozen into the chat's context.
+export const runTool = internalAction({
+  args: { runId: v.id('runs'), name: v.string(), args: v.any() },
+  handler: async (ctx, args): Promise<any> => {
+    requireConfigured();
+    const call = args.args || {};
+    const { link, scope } = await ctx.runQuery(internal.github.repoForRun, { runId: args.runId, repo: String(call.repo || '') }) as { link: Link; scope: string[] };
+    const token = await repoToken(link);
+    const base = repoPath(link);
+    const ref = '?ref=' + encodeURIComponent(link.defaultBranch);
+    const clean = (path: any) => String(path || '').trim().replace(/^\/+|\/+$/g, '');
+    if (args.name === 'github_list_files') {
+      const path = clean(call.path);
+      if (!scopeAllowsFolder(path, scope)) throw Error('That folder is outside this repository card’s limits: ' + scope.join(', '));
+      const entries = await github(base + '/contents/' + filePath(path) + ref, { token });
+      if (!Array.isArray(entries)) throw Error('That path is a file. Use github_read_file.');
+      return { repo: link.fullName, path, entries: entries.filter((e: any) => (e.type === 'dir' ? scopeAllowsFolder(e.path, scope) : inScope(e.path, scope))).map((e: any) => ({ type: e.type === 'dir' ? 'folder' : 'file', path: e.path, size: e.size })) };
+    }
+    if (args.name === 'github_read_file') {
+      const path = clean(call.path);
+      if (!path || !inScope(path, scope)) throw Error('That file is outside this repository card’s limits: ' + scope.join(', '));
+      const content = decodeFile(await github(base + '/contents/' + filePath(path) + ref, { token }));
+      await ctx.runMutation(internal.github.recordRead, { runId: args.runId, repo: link.fullName, path });
+      return { repo: link.fullName, ...numberedFile(path, content, call.start_line, call.end_line) };
+    }
+    if (args.name === 'github_search_code') {
+      const query = String(call.query || '').replace(/[\n\r]/g, ' ').trim().slice(0, 200);
+      if (!query) throw Error('Give a search query.');
+      let items: any[] = [];
+      try { items = (await github('/search/code?per_page=30&q=' + encodeURIComponent(query + ' repo:' + link.fullName), { token, accept: 'application/vnd.github.text-match+json' })).items || []; }
+      catch (error: any) { return { repo: link.fullName, results: [], note: 'Code search is unavailable right now (' + error.message + '). Browse with github_list_files instead.' }; }
+      return { repo: link.fullName, note: 'GitHub code search covers the default branch.', results: items.filter((i: any) => inScope(i.path, scope)).slice(0, 20).map((i: any) => ({ path: i.path, matches: (i.text_matches || []).map((m: any) => String(m.fragment || '').slice(0, 300)).slice(0, 3) })) };
+    }
+    throw Error('Unknown GitHub tool');
+  },
 });
