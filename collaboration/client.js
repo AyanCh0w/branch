@@ -1,6 +1,5 @@
 import {startCursors} from './cursors';
 import {avatarURL} from '../accounts/avatar';
-import { ConvexClient } from 'convex/browser';
 import * as Y from 'yjs';
 import { prepareLocalFiles } from './prepare-files.cjs';
 
@@ -225,7 +224,7 @@ window.addEventListener('pagehide',()=>{if(ready)client.mutation('collaboration:
 async function start(config){
   document.body.classList.add('shared-starting');status('Connecting shared board…');
   try{
-    credentials=config;client=config.client||new ConvexClient(config.url);writable=config.role!=='viewer';
+    credentials=config;client=config.client;if(!client)throw Error('Missing shared transport');writable=config.role!=='viewer';
     const snapshot=await client.query('boards:read',args());receive(snapshot);ready=true;connected=client.connectionState().isWebSocketConnected;
     subscriptions.push(client.onUpdate('boards:read',args(),receive,error=>{failure=error;document.body.classList.add('shared-starting');status('Access changed · return to your boards');host.notify('Access to this board changed. Return to your boards.');updateLocks();}));
     subscriptions.push(client.onUpdate('collaboration:editors',args(),value=>{rows=value;updateLocks();},()=>{}));

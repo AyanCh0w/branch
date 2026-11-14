@@ -1,0 +1,15 @@
+import * as boards from './functions/boards';
+import * as chatgptActions from './functions/chatgptActions';
+import * as invitations from './functions/invitations';
+import * as workspaceKeyActions from './functions/workspaceKeyActions';
+import * as collaboration from './functions/collaboration';
+import * as chatgpt from './functions/chatgpt';
+import * as people from './functions/people';
+import * as chat from './functions/chat';
+import * as teams from './functions/teams';
+import * as accounts from './functions/accounts';
+import * as library from './functions/library';
+import * as workspaceKeys from './functions/workspaceKeys';
+import * as files from './functions/files';
+import * as sharing from './functions/sharing';
+export const registry = {boards,chatgptActions,invitations,workspaceKeyActions,collaboration,chatgpt,people,chat,teams,accounts,library,workspaceKeys,files,sharing};

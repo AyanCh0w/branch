@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const {McpServer}=require('@modelcontextprotocol/sdk/server/mcp.js');
 const {StdioServerTransport}=require('@modelcontextprotocol/sdk/server/stdio.js');
-const {ConvexHttpClient}=require('convex/browser');
+const {BranchHttpClient}=require('../backend/http-client.cjs');
 const {z}=require('zod');
 
 function createServer(client, baseUrl='http://127.0.0.1:4387') {
@@ -17,9 +17,9 @@ function createServer(client, baseUrl='http://127.0.0.1:4387') {
  return server;
 }
 async function main(){
- const {BRANCH_CONVEX_URL,BRANCH_USERNAME,BRANCH_PASSWORD,BRANCH_AUTH_TOKEN,BRANCH_APP_URL}=process.env;
- if(!BRANCH_CONVEX_URL||(!BRANCH_AUTH_TOKEN&&(!BRANCH_USERNAME||!BRANCH_PASSWORD)))throw Error('Configure BRANCH_CONVEX_URL and BRANCH_USERNAME/BRANCH_PASSWORD (or BRANCH_AUTH_TOKEN).');
- const client=new ConvexHttpClient(BRANCH_CONVEX_URL,{logger:false});
+ const {BRANCH_USERNAME,BRANCH_PASSWORD,BRANCH_AUTH_TOKEN,BRANCH_APP_URL}=process.env;
+ if(!BRANCH_APP_URL||(!BRANCH_AUTH_TOKEN&&(!BRANCH_USERNAME||!BRANCH_PASSWORD)))throw Error('Configure BRANCH_APP_URL and BRANCH_USERNAME/BRANCH_PASSWORD (or BRANCH_AUTH_TOKEN).');
+ const client=new ConvexHttpClient({logger:false});
  if(BRANCH_AUTH_TOKEN)client.setAuth(BRANCH_AUTH_TOKEN);
  else {
   const result=await client.mutation('auth:signInWithUsernamePassword',{username:BRANCH_USERNAME,password:BRANCH_PASSWORD});

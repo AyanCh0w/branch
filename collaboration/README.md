@@ -1,3 +1,5 @@
+> **Supabase migration branch:** The current runtime is in `backend/`, using Supabase Auth/Postgres/Storage/Realtime and a Node job worker. Follow [the migration guide](../supabase/README.md). Convex-specific setup and test descriptions below document the preserved baseline; they are not current deployment instructions. Permission, Yjs, context, and canvas behavior described below remain requirements. Hosted Supabase integration and cutover are still pending.
+
 # Shared boards
 
 Run `npm run build && npm run dev` for the local frontend at http://127.0.0.1:4387. Configure your own Convex development project with `npx convex dev`; subsequent backend updates can deploy with `npx convex dev --once`. See the [root setup guide](../README.md) for environment configuration.

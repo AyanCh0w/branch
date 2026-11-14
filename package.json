@@ -4,13 +4,17 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "esbuild accounts/app.jsx --bundle --format=iife --define:process.env.NODE_ENV='\"production\"' --outfile=app/accounts.bundle.js && esbuild app/markdown-entry.js --bundle --format=iife --outfile=app/markdown.bundle.js && node app/build-math.cjs && node app/build-pdf.cjs && esbuild app/landing-shader.mjs --bundle --format=iife --minify --outfile=app/landing-shader.bundle.js",
+    "build": "npm run build:backend && esbuild --tsconfig=tsconfig.json accounts/app.jsx --bundle --format=iife --define:process.env.NODE_ENV='\"production\"' --outfile=app/accounts.bundle.js && esbuild --tsconfig=tsconfig.json app/markdown-entry.js --bundle --format=iife --outfile=app/markdown.bundle.js && node app/build-math.cjs && node app/build-pdf.cjs && esbuild --tsconfig=tsconfig.json app/landing-shader.mjs --bundle --format=iife --minify --outfile=app/landing-shader.bundle.js",
     "dev": "node app/server.cjs",
     "convex:dev": "convex dev",
-    "test": "node --test app/tests/*.test.cjs && vitest run",
-    "typecheck": "tsc --noEmit -p convex",
+    "test": "node --test app/tests/*.test.cjs && vitest run && npm run test:supabase",
+    "typecheck": "tsc --noEmit -p backend",
     "build:vercel": "npm run build && node scripts/build-public.cjs",
-    "mcp": "node mcp/server.cjs"
+    "mcp": "node mcp/server.cjs",
+    "build:backend": "esbuild --tsconfig=tsconfig.json backend/http.ts --bundle --platform=node --packages=external --outfile=backend/server.bundle.cjs && esbuild --tsconfig=tsconfig.json backend/worker.ts --bundle --platform=node --packages=external --outfile=backend/worker.bundle.cjs && esbuild --tsconfig=tsconfig.json backend/schema.ts --bundle --platform=node --outfile=backend/schema.bundle.cjs",
+    "worker": "node backend/worker.bundle.cjs",
+    "test:supabase": "vitest run --config vitest.supabase.config.ts",
+    "typecheck:legacy": "tsc --noEmit -p convex"
   },
   "keywords": [],
   "author": "",
@@ -18,15 +22,15 @@
   "type": "commonjs",
   "dependencies": {
     "@blobz/avatar-core": "^0.1.2",
-    "@convex-dev/auth": "^2.0.0",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@resvg/resvg-js": "^2.6.2",
-    "convex": "^1.49.0",
+    "@supabase/supabase-js": "^2.119.0",
     "dompurify": "^3.4.17",
     "jose": "^6.2.17",
     "katex": "^0.19.1",
     "marked": "^18.2.0",
     "pdfjs-dist": "^6.5.438",
+    "pg": "^8.23.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "yjs": "^13.6.33",
@@ -34,12 +38,16 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16",
     "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
     "convex-test": "^0.0.71",
     "esbuild": "^0.28.2",
     "jsdom": "^29.1.1",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.12"
+    "vitest": "^4.1.12",
+    "convex": "^1.49.0",
+    "@convex-dev/auth": "^2.0.0"
   },
   "private": true,
   "engines": {

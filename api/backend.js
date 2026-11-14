@@ -1,0 +1,4 @@
+const {createHandler}=require('../app/server.cjs');
+const handler=createHandler(process.env.OPENAI_API_KEY,{hosted:true});
+module.exports=handler;
+module.exports.config={api:{bodyParser:false}};

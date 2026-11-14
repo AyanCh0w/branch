@@ -29,6 +29,7 @@ function createHandler(apiKey,{fetchImpl=fetch,hosted=false}={}){
   const host=req.headers.host;if(hosted?!/^[a-z0-9.-]+(?::\d+)?$/i.test(host||''):![`127.0.0.1:${PORT}`,`localhost:${PORT}`].includes(host)){res.writeHead(403);return res.end();}
   const origin=(hosted?'https://':'http://')+host;
   const url=new URL(req.url,origin);
+  if(url.pathname==='/api/backend')return require('../backend/server.bundle.cjs').route(req,res,url);
   if(url.pathname==='/api/share-image'||(['/','/app','/app/'].includes(url.pathname)&&(url.searchParams.has('join')||url.searchParams.has('board'))))return require('./social-preview.cjs').servePreview(req,res,url,collaborationSession.socialPreview);
   if(url.pathname==='/api/chatgpt'){try{return await require('../collaboration/chatgpt/routes.cjs')(req,res,url,collaborationSession.chatgptClient(req),{hosted});}catch{res.writeHead(503,{'Content-Type':'application/json','Cache-Control':'no-store'});return res.end(JSON.stringify({error:'ChatGPT connection is unavailable. Try again later.'}));}}
   if(hosted&&['/api/claim','/api/collaboration'].includes(url.pathname)){res.writeHead(410);return res.end();}
