@@ -11,24 +11,12 @@
  const visibleNodes = () => state.nodes.filter(n => n.id !== panelNodeId && !collapsedAgentSource(n));
  const selectedNodes = () => visibleNodes().filter(n => selected.has(n.id));
  const glyph = name => icon(name) || `<img src="icons/${name}.svg" alt="" aria-hidden="true">`;
- const button = (action, name, label) => `<button type="button" data-selection-action="${action}" aria-label="${label}" data-tooltip="${label}">${glyph(name)}</button>`;
 
  const toolsBar = document.createElement('div');
  toolsBar.className = 'whiteboard-tools'; toolsBar.setAttribute('role', 'group'); toolsBar.setAttribute('aria-label', 'Canvas tools');
  toolsBar.innerHTML = `<button type="button" data-canvas-tool="select" aria-label="Select · V" data-tooltip="Select · V" aria-pressed="true">${glyph('cursor-pointer')}</button><button type="button" data-canvas-tool="hand" aria-label="Hand · H or hold Space" data-tooltip="Hand · H or hold Space" aria-pressed="false">${glyph('drag-hand-gesture')}</button><span class="dock-divider" aria-hidden="true"></span>`;
  creationDock.prepend(toolsBar);
  toolsBar.addEventListener('click', e => { const value = e.target.closest('[data-canvas-tool]')?.dataset.canvasTool; if(value) setTool(value); });
-
- const toolbar = document.createElement('nav');
- toolbar.id = 'selection-tools'; toolbar.hidden = true; toolbar.setAttribute('aria-label', 'Arrange selected cards');
- toolbar.innerHTML = '<span class="selection-count" aria-live="polite"></span>' +
-  button('tidy', 'view-grid', 'Tidy into a grid') + button('left', 'align-left-box', 'Align left') + button('top', 'align-top-box', 'Align top') +
- button('centerX', 'align-vertical-centers', 'Align horizontal centers') + button('centerY', 'align-horizontal-centers', 'Align vertical centers') +
- '<span class="dock-divider" aria-hidden="true"></span>' +
- button('spaceX', 'align-horizontal-spacing', 'Space evenly horizontally') + button('spaceY', 'align-vertical-spacing', 'Space evenly vertically') +
- '<span class="dock-divider" aria-hidden="true"></span>' +
- button('duplicate', 'copy', 'Duplicate · ⌘/Ctrl D') + button('fit', 'expand', 'Zoom to selection · Shift F') + button('clear', 'xmark', 'Clear selection · Esc');
- document.body.append(toolbar);
 
  const rectangle = document.createElement('div');
  rectangle.id = 'selection-marquee'; rectangle.hidden = true; rectangle.setAttribute('aria-hidden', 'true'); document.body.append(rectangle);
@@ -48,12 +36,6 @@
   const visible = new Set(visibleNodes().map(n => n.id));
   for(const key of selected) if(!visible.has(key)) selected.delete(key);
   for(const el of $$('#cards .card')) el.classList.toggle('board-selected', selected.has(el.dataset.node));
-  const count = selected.size;
-  toolbar.hidden = !count || !writable();
-  toolbar.querySelector('.selection-count').textContent = `${count} selected`;
-  for(const b of toolbar.querySelectorAll('[data-selection-action]')) {
-   b.disabled = ['tidy','left','top','centerX','centerY'].includes(b.dataset.selectionAction) ? count < 2 : ['spaceX','spaceY'].includes(b.dataset.selectionAction) ? count < 3 : false;
-  }
   empty.hidden = !!state.nodes.length || !writable();
  }
  function select(keys) { selected.clear(); for(const key of keys) selected.add(key); sync(); }
@@ -68,45 +50,6 @@
  function persistMovement(nodes, label) {
   for(const n of nodes) positionCard(n);
   window.BoardShared?.moveNodes?.(nodes); record(label); requestDraw(); sync();
- }
- function arrange(action) {
-  if(!writable()) return;
-  const nodes = selectedNodes(); if(nodes.length < (action.startsWith('space') ? 3 : 2)) return;
-  // An agent and its children form one moving unit, even when both are selected.
-  const roots = nodes.filter(n => !nodes.some(other => other.agent && n.autoGroup === other.id));
-  if(roots.length < (action.startsWith('space') ? 3 : 2)) return;
-  const boxes = roots.map(n => {
-   const members=n.agent?state.nodes.filter(member=>member.id===n.id||member.autoGroup===n.id):[n];
-   const visible=members.filter(member=>!collapsedAgentSource(member)).map(bounds);
-   if(n.agent&&agentSources(n).length&&!collapsedAgentWorkspaces.has(n.id)) {
-    const stack=agentStackBounds(n);visible.push({x:stack.x,y:stack.y,w:stack.w,h:stack.h});
-   }
-   const x=Math.min(...visible.map(b=>b.x)),y=Math.min(...visible.map(b=>b.y));
-   return {n,members,x,y,w:Math.max(...visible.map(b=>b.x+b.w))-x,h:Math.max(...visible.map(b=>b.y+b.h))-y};
-  });
-  if(action==='tidy') {
-   remember();const moved=new Map(),columns=Math.ceil(Math.sqrt(boxes.length));
-   const startX=Math.min(...boxes.map(b=>b.x));let x=startX,y=Math.min(...boxes.map(b=>b.y)),rowHeight=0;
-   boxes.sort((a,b)=>a.y-b.y||a.x-b.x).forEach((box,index)=>{
-    if(index&&index%columns===0){x=startX;y+=rowHeight+80;rowHeight=0;}
-    for(const n of box.members){n.x+=x-box.x;n.y+=y-box.y;moved.set(n.id,n);}
-    x+=box.w+64;rowHeight=Math.max(rowHeight,box.h);
-   });
-   persistMovement([...moved.values()],'Tidied cards');return;
-  }
-  const xAxis = ['left','centerX','spaceX'].includes(action), axis = xAxis ? 'x' : 'y', size = xAxis ? 'w' : 'h';
-  const low = Math.min(...boxes.map(b => b[axis])), high = Math.max(...boxes.map(b => b[axis] + b[size]));
-  const ordered = [...boxes].sort((a,b) => a[axis] - b[axis]);
-  const gap = (high - low - boxes.reduce((sum,b) => sum+b[size],0)) / (boxes.length-1);
-  let cursor = low;
-  remember(); const moved = new Map();
-  for(const box of ordered) {
-   const target = action.startsWith('space') ? cursor : action.startsWith('center') ? (low+high-box[size])/2 : low;
-   const delta = target-box[axis];
-   for(const n of box.members) { n[axis] += delta; moved.set(n.id,n); }
-   cursor += box[size]+gap;
-  }
-  persistMovement([...moved.values()], 'Arranged cards');
  }
  function duplicate() {
   if(!writable() || !selected.size) return;
@@ -139,11 +82,6 @@
   camera.y = (innerHeight-220-(bottom-top)*camera.z)/2-top*camera.z;
   applyCamera();
  }
- toolbar.onclick = e => {
-  const action = e.target.closest('[data-selection-action]')?.dataset.selectionAction;
-  if(action === 'duplicate') duplicate(); else if(action === 'fit') fitSelection(); else if(action === 'clear') select([]); else if(action) arrange(action);
- };
-
  function stop(e) { e.preventDefault(); e.stopImmediatePropagation(); }
  function cancelMarquee(restore=true) {
   if(!marquee) return;
@@ -199,7 +137,7 @@
   if(modifier||e.altKey)return;
   if(key==='v'||key==='h') {stop(e);setTool(key==='v'?'select':'hand');return;}
   if(!writable()) return;
-  if(selected.size && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key) && !e.target.closest('#selection-tools,#creation-dock,.resize-handle')) {
+  if(selected.size && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key) && !e.target.closest('#creation-dock,.resize-handle')) {
    stop(e);remember(); const step=e.shiftKey?10:1, dx=({ArrowLeft:-step,ArrowRight:step}[e.key]||0),dy=({ArrowUp:-step,ArrowDown:step}[e.key]||0);
    const nodes=moveMembers(); for(const n of nodes){n.x+=dx;n.y+=dy;} persistMovement(nodes,'Nudged cards');
   }
