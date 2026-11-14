@@ -8,11 +8,12 @@ export function ConnectChatGPT({ request }) {
   const [boardId, setBoardId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
   const editable = boards?.filter(board => board.role !== 'viewer');
 
   async function grant(event) {
     event.preventDefault();
-    if (!boardId || busy) return;
+    if (!boardId || !confirmed || busy) return;
     setBusy(true);
     setError('');
     try {
@@ -43,7 +44,8 @@ export function ConnectChatGPT({ request }) {
 
   return <main className="a-link-landing a-chatgpt-consent">
     <h1>Connect ChatGPT to Branch</h1>
-    <p>Choose the board where ChatGPT can save updates. Everyone with access to that board can open its shared context.</p>
+    <p>Approving lets the ChatGPT account that started this connection add updates to the board you choose, as you, until you disconnect it. Everyone with access to that board can read them.</p>
+    <p className="a-chatgpt-warning" role="note">Only continue if you started this connection from your own ChatGPT just now. If someone sent you this link, cancel.</p>
     <form onSubmit={grant}>
       <label className="a-field">Board
         <select value={boardId} onChange={event => setBoardId(event.target.value)} disabled={busy || !editable?.length} required>
@@ -52,8 +54,9 @@ export function ConnectChatGPT({ request }) {
         </select>
       </label>
       {editable?.length === 0 && <p>Create a board in Branch, then start the connection again.</p>}
+      <label className="a-chatgpt-confirm"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} disabled={busy} /><span>I started this from my own ChatGPT account{boardId ? ', and I want it to add updates to “' + (editable?.find(board => board.id === boardId)?.title || 'this board') + '”' : ''}.</span></label>
       {error && <p role="alert">{error}</p>}
-      <button className="a-primary" disabled={!boardId || busy}>{busy ? 'Connecting…' : 'Connect board'}</button>
+      <button className="a-primary" disabled={!boardId || !confirmed || busy}>{busy ? 'Connecting…' : 'Allow ChatGPT'}</button>
       <button type="button" className="a-secondary" onClick={cancel} disabled={busy}>Cancel</button>
     </form>
   </main>;

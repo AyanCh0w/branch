@@ -36,7 +36,28 @@ function excerpt(text: string, max: number) {
   return text.length <= max ? text : text.slice(0, max) + '\n[Remaining text omitted]';
 }
 
-async function snapshot(ctx: QueryCtx, boardId: Id<'boards'>, nodeKey: string) {
+// Who wrote what, so the person handing off (and the agent) can tell their own
+// words from collaborators', AI replies, and retrieved web or GitHub content.
+async function names(ctx: QueryCtx, ids: Iterable<string>) {
+  const out: string[] = [];
+  for (const raw of new Set(ids)) {
+    const id = ctx.db.normalizeId('users', raw);
+    const user = id ? await ctx.db.get(id) : null;
+    if (user) out.push((user.name || 'A collaborator').slice(0, 60));
+  }
+  return out.sort();
+}
+function originOf(data: any) {
+  if (!data) return 'unknown';
+  if (data.type === 'github') return 'github';
+  if (data.type === 'web' || data.researchSource) return 'web';
+  if (data.type === 'thread') return 'chat';
+  if (data.type === 'media') return data.mediaType === 'video' ? 'video' : 'image';
+  if (data.type === 'upload') return 'file';
+  return 'note';
+}
+
+async function snapshot(ctx: QueryCtx, boardId: Id<'boards'>, nodeKey: string, viewer: Id<'users'>) {
   const node = await card(ctx, boardId, nodeKey);
   const doc = loadDocument(node.textState);
   const { title, body, draft } = readText(doc);
@@ -44,18 +65,37 @@ async function snapshot(ctx: QueryCtx, boardId: Id<'boards'>, nodeKey: string) {
   const current = { ...node.data, title, body, draft };
   const text = [textOf(current), draft.trim() ? 'Unsent prompt:\n' + draft : ''].filter(Boolean).join('\n\n');
   const resolved = contextForChat(node.data.contexts || []).filter(source => source.text || source.quote || source.attachment);
-  const sources = resolved.slice(0, 20).map(source => ({
-    title: excerpt(String(source.title || 'Source'), 200),
-    text: excerpt(String(source.text || ''), 3_000),
-    quote: excerpt(String(source.quote || ''), 1_000),
-    fileOmitted: !!source.attachment,
-  }));
+  const sources = [];
+  for (const source of resolved.slice(0, 20)) {
+    const origin = source.source ? await ctx.db.query('nodes').withIndex('board_key', q => q.eq('boardId', boardId).eq('key', String(source.source))).unique() : null;
+    const writers = origin ? [String(origin.createdBy), String(origin.updatedBy)] : [];
+    sources.push({
+      title: excerpt(String(source.title || 'Source'), 200),
+      text: excerpt(String(source.text || ''), 3_000),
+      quote: excerpt(String(source.quote || ''), 1_000),
+      fileOmitted: !!source.attachment,
+      origin: originOf(origin?.data),
+      authors: await names(ctx, writers),
+      fromOthers: writers.some(id => id !== String(viewer)),
+    });
+  }
+  const messages = Array.isArray(current.messages) ? current.messages : [];
+  const cardWriters = [String(node.createdBy), String(node.updatedBy), ...messages.filter((m: any) => m.role === 'user' && m.sentBy).map((m: any) => String(m.sentBy))];
+  const origins = new Set([originOf(current), ...sources.map(s => s.origin)]);
+  const provenance = {
+    authors: await names(ctx, cardWriters),
+    fromOthers: cardWriters.some(id => id !== String(viewer)) || sources.some(s => s.fromOthers),
+    includesAI: messages.some((m: any) => m.role === 'assistant' && String(m.text || '').trim()),
+    includesWeb: origins.has('web') || messages.some((m: any) => m.role === 'assistant' && /\]\(https?:\/\//.test(String(m.text || ''))),
+    includesGitHub: origins.has('github'),
+  };
   const content = {
     title: excerpt(title || 'Untitled card', 200),
     text: excerpt(text, 32_000),
     fileOmitted: (current.type === 'upload' && !current.text) || (current.type === 'media' && current.mediaType !== 'video'),
     sources,
     omittedSources: resolved.length - sources.length,
+    provenance,
   };
   return { node, content, fingerprint: await tokenHash(JSON.stringify({ nodeId: node._id, content })) };
 }
@@ -93,8 +133,8 @@ export const configure = mutation({
 export const preview = query({
   args: cardScope,
   handler: async (ctx, args) => {
-    await editor(ctx, args);
-    const { content, fingerprint } = await snapshot(ctx, args.boardId, args.nodeKey);
+    const userId = await editor(ctx, args);
+    const { content, fingerprint } = await snapshot(ctx, args.boardId, args.nodeKey, userId);
     return { ...content, fingerprint };
   },
 });
@@ -104,7 +144,7 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const userId = await editor(ctx, args);
     if (!await connection(ctx, args.boardId, userId)) throw new ConvexError('Connect your coding agent first.');
-    const { node, content, fingerprint } = await snapshot(ctx, args.boardId, args.nodeKey);
+    const { node, content, fingerprint } = await snapshot(ctx, args.boardId, args.nodeKey, userId);
     if (fingerprint !== args.fingerprint) throw new ConvexError('The card changed. Review the updated preview before sending.');
     const selected = new Set(args.sources);
     if (args.sources.length > content.sources.length || [...selected].some(i => !Number.isInteger(i) || !content.sources[i])) {
@@ -122,7 +162,7 @@ export const create = mutation({
     const { title, text, fileOmitted } = content;
     const id = await ctx.db.insert('codingHandoffs', {
       boardId: args.boardId, userId, nodeId: node._id, nodeKey: args.nodeKey, expiresAt,
-      content: { title, text, fileOmitted, sources: content.sources.filter((_, i) => selected.has(i)) },
+      content: { title, text, fileOmitted, provenance: content.provenance, sources: content.sources.filter((_, i) => selected.has(i)) },
     });
     return { id, expiresAt };
   },

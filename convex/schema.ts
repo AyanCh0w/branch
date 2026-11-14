@@ -23,7 +23,9 @@ export default defineSchema({
     boardId: v.id('boards'), userId: v.id('users'), nodeId: v.id('nodes'), nodeKey: v.string(), expiresAt: v.number(),
     content: v.object({
       title: v.string(), text: v.string(), fileOmitted: v.boolean(),
-      sources: v.array(v.object({ title: v.string(), text: v.string(), quote: v.string(), fileOmitted: v.boolean() })),
+      // Optional so handoffs created before provenance tracking stay valid.
+      provenance: v.optional(v.object({ authors: v.array(v.string()), fromOthers: v.boolean(), includesAI: v.boolean(), includesWeb: v.boolean(), includesGitHub: v.boolean() })),
+      sources: v.array(v.object({ title: v.string(), text: v.string(), quote: v.string(), fileOmitted: v.boolean(), origin: v.optional(v.string()), authors: v.optional(v.array(v.string())), fromOthers: v.optional(v.boolean()) })),
     }),
     result: v.optional(v.string()),
   }).index('board_user', ['boardId', 'userId']).index('node_user', ['nodeId', 'userId']),

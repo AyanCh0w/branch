@@ -82,3 +82,16 @@ test('all local AI routes use the connected plan and never fall back after conne
  const request=route=>new Promise((resolve,reject)=>{const req=http.request({host:'127.0.0.1',port:server.address().port,path:route,method:'POST',headers:{host:'127.0.0.1:4387','content-type':'application/json'}},res=>{let body='';res.on('data',chunk=>body+=chunk);res.on('end',()=>resolve({status:res.statusCode,body}));});req.on('error',reject);req.end(JSON.stringify({text:'Generate a title',messages:[{role:'user',content:'Hello'}]}));});
  try{for(const route of ['/api/chat','/api/title','/api/expand']){const response=await request(route);assert.equal(response.status,401);assert.ok(!response.body.includes('workspace-test-key'));}assert.equal(calls,3);session.aiProvider=async()=>{throw Error('locked');};assert.equal((await request('/api/title')).status,503);assert.equal(calls,3);}finally{Object.assign(session,originals);await new Promise(resolve=>server.close(resolve));}
 });
+
+test('no page can be framed by another site', async()=>{
+ const http=require('node:http');const {createHandler}=require('../server.cjs');
+ const server=http.createServer(createHandler(undefined,{hosted:true}));
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ const get=path=>new Promise((resolve,reject)=>{const req=http.request({host:'127.0.0.1',port:server.address().port,path,method:'GET',headers:{host:'branch.example.com'}},res=>{res.resume();res.on('end',()=>resolve(res.headers));});req.on('error',reject);req.end();});
+ try{
+  for(const path of ['/','/app','/api/status']){const headers=await get(path);assert.equal(headers['x-frame-options'],'DENY');assert.equal(headers['content-security-policy'],"frame-ancestors 'none'");}
+ }finally{server.close();}
+ const vercel=require('../../vercel.json');
+ const rule=vercel.headers.find(h=>h.source==='/(.*)');
+ assert.deepEqual(Object.fromEntries(rule.headers.map(h=>[h.key,h.value])),{'X-Frame-Options':'DENY','Content-Security-Policy':"frame-ancestors 'none'"});
+});

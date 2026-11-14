@@ -26,6 +26,8 @@ async function* requestChunks(req){
 }
 function createHandler(apiKey,{fetchImpl=fetch,hosted=false}={}){
  return async(req,res)=>{
+  // Branch never needs to be framed by another site; this blocks clickjacking of approval pages.
+  res.setHeader('X-Frame-Options','DENY');res.setHeader('Content-Security-Policy',"frame-ancestors 'none'");
   const host=req.headers.host;if(hosted?!/^[a-z0-9.-]+(?::\d+)?$/i.test(host||''):![`127.0.0.1:${PORT}`,`localhost:${PORT}`].includes(host)){res.writeHead(403);return res.end();}
   const origin=(hosted?'https://':'http://')+host;
   const url=new URL(req.url,origin);

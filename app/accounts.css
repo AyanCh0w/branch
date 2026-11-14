@@ -386,3 +386,6 @@ html body #cards :is(.resize-handle,.add-file){display:grid;place-items:center}
 html body #cards .resize-handle{padding:0}
 html body #cards :is(.resize-handle,.add-file) .icon{display:block}
 html body :is(#fit,#zoom,#zoomin,#zoomout){display:inline-flex;align-items:center;justify-content:center}
+.a-chatgpt-warning{padding:9px 11px;border-radius:8px;border:1px solid color-mix(in srgb,#c58a1c 45%,transparent);background:color-mix(in srgb,#c58a1c 10%,transparent);font-size:13px;line-height:1.55}
+.a-chatgpt-confirm{display:flex;gap:9px;align-items:flex-start;margin:4px 0 14px;font-size:13px;line-height:1.5;text-align:left;cursor:pointer}
+.a-chatgpt-confirm input{width:auto;margin-top:3px;accent-color:var(--blue,#4879f5)}
