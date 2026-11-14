@@ -1,14 +1,14 @@
 # Supabase migration
 
-This branch replaces the active Convex runtime with Supabase Auth, private Postgres records, Storage, and Realtime invalidation. The original `convex/` tree and its tests remain as a rollback/parity reference; the running application does not import that tree.
+This branch replaces the active Convex runtime with Supabase Auth, typed private Postgres tables, Storage, and Realtime invalidation. The original `convex/` tree and its tests remain as a rollback/parity reference; the running application does not import that tree.
 
 ## Deployment status
 
-The free Branch project has been provisioned, the schema applied, and the local Convex export imported. Live checks cover Supabase Auth signup/sign-in, member isolation and revocation, concurrent Yjs writes, idempotent Send, private Storage, own-row RLS, Realtime notifications, browser editing/reload, and worker error handling. The original password hashes were preserved. Import counts are 2 accounts, 5 boards, 22 nodes, and 14 runs from the local Convex deployment; any separate hosted Convex database is not included. The temporary verification accounts and board were removed afterward. All 201 automated tests, backend type checking, and the production build passed. Actual AI responses remain unverified because this checkout has no provider key or ChatGPT connection. The frontend and worker currently run locally; hosted production cutover has not occurred.
+The free Branch project has been provisioned, the schema applied, and the local Convex export imported. Live checks cover Supabase Auth signup/sign-in, member isolation and revocation, concurrent Yjs writes, idempotent Send, private Storage, own-row RLS, Realtime notifications, browser editing/reload, and worker error handling. The original password hashes were preserved. Import counts are 2 accounts, 5 boards, 22 nodes, and 14 runs from the local Convex deployment; any separate hosted Convex database is not included. The temporary verification accounts and board were removed afterward. All 202 automated tests, backend type checking, and the production build passed. Actual AI responses remain unverified because this checkout has no provider key or ChatGPT connection. The frontend and worker currently run locally; hosted production cutover has not occurred.
 
 ## Configure and run
 
-1. Create a Supabase project and apply `migrations/202611140001_branch.sql` using its SQL editor or a trusted migration runner.
+1. Apply both numbered SQL files in `migrations/` in order. For an existing deployment using the first migration, run `node scripts/apply-relational-migration.cjs` to preview, then append `--apply`. It saves a private backup and atomically copies data into typed tables; field equality and foreign-key failures roll the migration back.
 2. In the ignored root `.env.local`, configure `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, and `SUPABASE_DB_URL`. Legacy anon/service-role key variable names are also accepted. Use the session pooler connection URL for IPv4-only environments. Keep TLS verification enabled with `sslmode=verify-full` and `sslrootcert` pointing to the official Supabase certificate in `backend/certs/supabase-ca.crt` (downloaded from the database settings link). Use the correct deployment-local certificate path.
 3. Preserve `OPENAI_API_KEY` and any existing `CHATGPT_*` server settings. Preserve the exact encryption key for imported personal ChatGPT connections; a new key cannot decrypt existing tokens.
 4. Run `npm ci`, `npm run build`, then `npm run dev` and `npm run worker` in separate terminals. The app defaults to `http://127.0.0.1:4387`.
@@ -33,6 +33,25 @@ node scripts/import-convex-to-supabase.cjs backups/convex-export --apply
 The private export and import manifest are ignored by Git. Original IDs and Yjs state are preserved. Username/password accounts move to Supabase Auth using their existing supported password hashes; usernames map to deterministic internal email identifiers, not deliverable email addresses. Existing login and guest sessions are intentionally not copied. Users sign in again and guests reopen invite links. In-flight generations stop rather than automatically reissuing paid requests. Imported personal provider connections still need their original encryption key and a compatible callback configuration.
 
 The importer is resumable for recorded Auth and Storage steps. If interrupted between an external create and manifest persistence, inspect the new project's Auth/Storage state before retrying; do not delete user records or reset passwords blindly. Verify counts and file checksums, account login, permissions, editing, and generation before switching deployments. Keep the original source read-only while validating so the export does not silently diverge.
+
+## Database layout
+
+All app tables live in `branch_private` and have RLS enabled with browser roles denied. The server verifies Supabase identity and board/team membership before each operation. Select **branch_private** in Supabase's Table Editor to view them; there is deliberately no public raw-data API.
+
+| Area | Dedicated tables |
+| --- | --- |
+| People and teams | `users`, `teams`, `team_members`, `team_invites` |
+| Boards and access | `boards`, `board_members`, `project_responsibilities`, `board_links`, `link_members` |
+| Canvas and generation | `nodes`, `runs`, `credit_ledger` |
+| Collaboration | `sessions`, `board_presence`, `cursors`, `editors` |
+| Files | `files`, `file_uploads`, `upload_tickets` |
+| Provider connections | `chatgpt_connections`, `chatgpt_transactions`, `workspace_keys` |
+
+Those 22 entity tables have typed columns, foreign keys, role/status checks, and indexes. Rich card contents, frozen AI input, and Yjs byte envelopes remain JSONB to preserve the app's document model. Chat messages live inside card content; they are not duplicated into an independently writable message table. Historical run connection IDs intentionally survive disconnecting the original provider connection.
+
+Supporting tables are `accounts` (Supabase Auth to app-user mapping), `jobs`, `rate_limits`, `record_ids`, and `runtime_lock`. `public.branch_revisions` holds only account-scoped invalidation counters. `records` is now a compatibility **view** with guarded write triggers, while indexed collection reads use entity tables directly. `records_legacy_backup` preserves the pre-upgrade snapshot privately; it is not kept in sync and is not the live data source. The database also has Supabase-managed Auth and Storage tables, which this migration does not replace.
+
+The second migration preserves every existing ID and compares every reconstructed record against the original JSON before committing. It does not erase old records or reset credentials. Never regenerate an already-deployed migration to add future fields: create a new numbered migration and update the entity mapping instead.
 
 ## Transactions and realtime
 

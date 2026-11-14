@@ -1,0 +1,762 @@
+{
+  "uploadTickets": {
+    "table": "upload_tickets",
+    "fields": {
+      "fileTicket": {
+        "column": "file_ticket",
+        "type": "text",
+        "optional": false
+      },
+      "boardId": {
+        "column": "board_id",
+        "type": "text",
+        "optional": false
+      },
+      "userId": {
+        "column": "user_id",
+        "type": "text",
+        "optional": false
+      },
+      "hash": {
+        "column": "hash",
+        "type": "text",
+        "optional": false
+      },
+      "expiresAt": {
+        "column": "expires_at",
+        "type": "double precision",
+        "optional": false
+      },
+      "used": {
+        "column": "used",
+        "type": "boolean",
+        "optional": false
+      }
+    }
+  },
+  "chatgptConnections": {
+    "table": "chatgpt_connections",
+    "fields": {
+      "userId": {
+        "column": "user_id",
+        "type": "text",
+        "optional": false
+      },
+      "ciphertext": {
+        "column": "ciphertext",
+        "type": "text",
+        "optional": false
+      },
+      "subject": {
+        "column": "subject",
+        "type": "text",
+        "optional": false
+      },
+      "clientId": {
+        "column": "client_id",
+        "type": "text",
+        "optional": false
+      },
+      "label": {
+        "column": "label",
+        "type": "text",
+        "optional": false
+      },
+      "models": {
+        "column": "models",
+        "type": "jsonb",
+        "optional": false
+      },
+      "selectedModel": {
+        "column": "selected_model",
+        "type": "text",
+        "optional": false
+      },
+      "expiresAt": {
+        "column": "expires_at",
+        "type": "double precision",
+        "optional": false
+      },
+      "revision": {
+        "column": "revision",
+        "type": "double precision",
+        "optional": false
+      },
+      "refreshLease": {
+        "column": "refresh_lease",
+        "type": "text",
+        "optional": true
+      },
+      "refreshUntil": {
+        "column": "refresh_until",
+        "type": "double precision",
+        "optional": true
+      }
+    }
+  },
+  "chatgptTransactions": {
+    "table": "chatgpt_transactions",
+    "fields": {
+      "userId": {
+        "column": "user_id",
+        "type": "text",
+        "optional": false
+      },
+      "consumed": {
+        "column": "consumed",
+        "type": "boolean",
+        "optional": true
+      },
+      "stateHash": {
+        "column": "state_hash",
+        "type": "text",
+        "optional": false
+      },
+      "browserHash": {
+        "column": "browser_hash",
+        "type": "text",
+        "optional": false
+      },
+      "ciphertext": {
+        "column": "ciphertext",
+        "type": "text",
+        "optional": false
+      },
+      "expiresAt": {
+        "column": "expires_at",
+        "type": "double precision",
+        "optional": false
+      },
+      "connectionId": {
+        "column": "connection_id",
+        "type": "text",
+        "optional": true
+      }
+    }
+  },
+  "workspaceKeys": {
+    "table": "workspace_keys",
+    "fields": {
+      "scope": {
+        "column": "scope",
+        "type": "text",
+        "optional": false
+      },
+      "ciphertext": {
+        "column": "ciphertext",
+        "type": "text",
+        "optional": false
+      },
+      "suffix": {
+        "column": "suffix",
+        "type": "text",
+        "optional": false
+      }
+    }
+  },
+  "fileUploads": {
+    "table": "file_uploads",
+    "fields": {
+      "boardId": {
+        "column": "board_id",
+        "type": "text",
+        "optional": false
+      },
+      "userId": {
+        "column": "user_id",
+        "type": "text",
+        "optional": false
+      },
+      "storageId": {
+        "column": "storage_id",
+        "type": "text",
+        "optional": true
+      }
+    }
+  },
+  "users": {
+    "table": "users",
+    "fields": {
+      "identityKey": {
+        "column": "identity_key",
+        "type": "text",
+        "optional": true
+      },
+      "name": {
+        "column": "name",
+        "type": "text",
+        "optional": false
+      },
+      "color": {
+        "column": "color",
+        "type": "text",
+        "optional": true
+      },
+      "background": {
+        "column": "background",
+        "type": "text",
+        "optional": true
+      },
+      "kind": {
+        "column": "kind",
+        "type": "text",
+        "optional": false
+      }
+    }
+  },
+  "teams": {
+    "table": "teams",
+    "fields": {
+      "name": {
+        "column": "name",
+        "type": "text",
+        "optional": false
+      },
+      "description": {
+        "column": "description",
+        "type": "text",
+        "optional": true
+      },
+      "ownerId": {
+        "column": "owner_id",
+        "type": "text",
+        "optional": false
+      }
+    }
+  },
+  "teamMembers": {
+    "table": "team_members",
+    "fields": {
+      "teamId": {
+        "column": "team_id",
+        "type": "text",
+        "optional": false
+      },
+      "userId": {
+        "column": "user_id",
+        "type": "text",
+        "optional": false
+      },
+      "role": {
+        "column": "role",
+        "type": "text",
+        "optional": false
+      },
+      "responsibility": {
+        "column": "responsibility",
+        "type": "text",
+        "optional": true
+      }
+    }
+  },
+  "teamInvites": {
+    "table": "team_invites",
+    "fields": {
+      "teamId": {
+        "column": "team_id",
+        "type": "text",
+        "optional": false
+      },
+      "tokenHash": {
+        "column": "token_hash",
+        "type": "text",
+        "optional": false
+      },
+      "invitedBy": {
+        "column": "invited_by",
+        "type": "text",
+        "optional": false
+      },
+      "role": {
+        "column": "role",
+        "type": "text",
+        "optional": false
+      },
+      "expiresAt": {
+        "column": "expires_at",
+        "type": "double precision",
+        "optional": false
+      },
+      "acceptedBy": {
+        "column": "accepted_by",
+        "type": "text",
+        "optional": true
+      }
+    }
+  },
+  "boards": {
+    "table": "boards",
+    "fields": {
+      "projectPlan": {
+        "column": "project_plan",
+        "type": "jsonb",
+        "optional": true
+      },
+      "projectVersion": {
+        "column": "project_version",
+        "type": "double precision",
+        "optional": true
+      },
+      "repository": {
+        "column": "repository",
+        "type": "text",
+        "optional": true
+      },
+      "title": {
+        "column": "title",
+        "type": "text",
+        "optional": false
+      },
+      "ownerId": {
+        "column": "owner_id",
+        "type": "text",
+        "optional": false
+      },
+      "teamId": {
+        "column": "team_id",
+        "type": "text",
+        "optional": true
+      },
+      "development": {
+        "column": "development",
+        "type": "boolean",
+        "optional": false
+      },
+      "initialized": {
+        "column": "initialized",
+        "type": "boolean",
+        "optional": false
+      },
+      "updatedAt": {
+        "column": "updated_at",
+        "type": "double precision",
+        "optional": true
+      },
+      "archived": {
+        "column": "archived",
+        "type": "boolean",
+        "optional": true
+      }
+    }
+  },
+  "boardMembers": {
+    "table": "board_members",
+    "fields": {
+      "boardId": {
+        "column": "board_id",
+        "type": "text",
+        "optional": false
+      },
+      "userId": {
+        "column": "user_id",
+        "type": "text",
+        "optional": false
+      },
+      "role": {
+        "column": "role",
+        "type": "text",
+        "optional": false
+      },
+      "responsibility": {
+        "column": "responsibility",
+        "type": "text",
+        "optional": true
+      }
+    }
+  },
+  "projectResponsibilities": {
+    "table": "project_responsibilities",
+    "fields": {
+      "boardId": {
+        "column": "board_id",
+        "type": "text",
+        "optional": false
+      },
+      "userId": {
+        "column": "user_id",
+        "type": "text",
+        "optional": false
+      },
+      "responsibility": {
+        "column": "responsibility",
+        "type": "text",
+        "optional": false
+      }
+    }
+  },
+  "sessions": {
+    "table": "sessions",
+    "fields": {
+      "tokenHash": {
+        "column": "token_hash",
+        "type": "text",
+        "optional": false
+      },
+      "userId": {
+        "column": "user_id",
+        "type": "text",
+        "optional": false
+      },
+      "expiresAt": {
+        "column": "expires_at",
+        "type": "double precision",
+        "optional": false
+      }
+    }
+  },
+  "nodes": {
+    "table": "nodes",
+    "fields": {
+      "boardId": {
+        "column": "board_id",
+        "type": "text",
+        "optional": false
+      },
+      "key": {
+        "column": "key",
+        "type": "text",
+        "optional": false
+      },
+      "data": {
+        "column": "data",
+        "type": "jsonb",
+        "optional": false
+      },
+      "textState": {
+        "column": "text_state",
+        "type": "jsonb",
+        "optional": false
+      },
+      "textVersion": {
+        "column": "text_version",
+        "type": "double precision",
+        "optional": false
+      },
+      "createdBy": {
+        "column": "created_by",
+        "type": "text",
+        "optional": false
+      },
+      "updatedBy": {
+        "column": "updated_by",
+        "type": "text",
+        "optional": false
+      },
+      "deleted": {
+        "column": "deleted",
+        "type": "boolean",
+        "optional": false
+      },
+      "deletion": {
+        "column": "deletion",
+        "type": "jsonb",
+        "optional": true
+      }
+    }
+  },
+  "boardPresence": {
+    "table": "board_presence",
+    "fields": {
+      "boardId": {
+        "column": "board_id",
+        "type": "text",
+        "optional": false
+      },
+      "userId": {
+        "column": "user_id",
+        "type": "text",
+        "optional": false
+      },
+      "tabId": {
+        "column": "tab_id",
+        "type": "text",
+        "optional": false
+      },
+      "expiresAt": {
+        "column": "expires_at",
+        "type": "double precision",
+        "optional": false
+      }
+    }
+  },
+  "cursors": {
+    "table": "cursors",
+    "fields": {
+      "boardId": {
+        "column": "board_id",
+        "type": "text",
+        "optional": false
+      },
+      "userId": {
+        "column": "user_id",
+        "type": "text",
+        "optional": false
+      },
+      "tabId": {
+        "column": "tab_id",
+        "type": "text",
+        "optional": false
+      },
+      "x": {
+        "column": "x",
+        "type": "double precision",
+        "optional": false
+      },
+      "y": {
+        "column": "y",
+        "type": "double precision",
+        "optional": false
+      },
+      "expiresAt": {
+        "column": "expires_at",
+        "type": "double precision",
+        "optional": false
+      }
+    }
+  },
+  "editors": {
+    "table": "editors",
+    "fields": {
+      "boardId": {
+        "column": "board_id",
+        "type": "text",
+        "optional": false
+      },
+      "nodeKey": {
+        "column": "node_key",
+        "type": "text",
+        "optional": false
+      },
+      "field": {
+        "column": "field",
+        "type": "text",
+        "optional": false
+      },
+      "tabId": {
+        "column": "tab_id",
+        "type": "text",
+        "optional": false
+      },
+      "userId": {
+        "column": "user_id",
+        "type": "text",
+        "optional": false
+      },
+      "expiresAt": {
+        "column": "expires_at",
+        "type": "double precision",
+        "optional": false
+      }
+    }
+  },
+  "runs": {
+    "table": "runs",
+    "fields": {
+      "boardId": {
+        "column": "board_id",
+        "type": "text",
+        "optional": false
+      },
+      "nodeKey": {
+        "column": "node_key",
+        "type": "text",
+        "optional": false
+      },
+      "status": {
+        "column": "status",
+        "type": "text",
+        "optional": false
+      },
+      "initiatedBy": {
+        "column": "initiated_by",
+        "type": "text",
+        "optional": false
+      },
+      "billedUserId": {
+        "column": "billed_user_id",
+        "type": "text",
+        "optional": false
+      },
+      "model": {
+        "column": "model",
+        "type": "text",
+        "optional": false
+      },
+      "provider": {
+        "column": "provider",
+        "type": "text",
+        "optional": true
+      },
+      "connectionId": {
+        "column": "connection_id",
+        "type": "text",
+        "optional": true
+      },
+      "providerUserId": {
+        "column": "provider_user_id",
+        "type": "text",
+        "optional": true
+      },
+      "requestId": {
+        "column": "request_id",
+        "type": "text",
+        "optional": false
+      },
+      "input": {
+        "column": "input",
+        "type": "jsonb",
+        "optional": false
+      },
+      "assistantId": {
+        "column": "assistant_id",
+        "type": "text",
+        "optional": false
+      },
+      "checkpoint": {
+        "column": "checkpoint",
+        "type": "jsonb",
+        "optional": true
+      },
+      "error": {
+        "column": "error",
+        "type": "text",
+        "optional": true
+      },
+      "usage": {
+        "column": "usage",
+        "type": "jsonb",
+        "optional": true
+      },
+      "createdAt": {
+        "column": "run_created_at",
+        "type": "double precision",
+        "optional": false
+      }
+    }
+  },
+  "boardLinks": {
+    "table": "board_links",
+    "fields": {
+      "boardId": {
+        "column": "board_id",
+        "type": "text",
+        "optional": false
+      },
+      "tokenHash": {
+        "column": "token_hash",
+        "type": "text",
+        "optional": false
+      },
+      "role": {
+        "column": "role",
+        "type": "text",
+        "optional": false
+      },
+      "expiresAt": {
+        "column": "expires_at",
+        "type": "double precision",
+        "optional": true
+      },
+      "revoked": {
+        "column": "revoked",
+        "type": "boolean",
+        "optional": false
+      },
+      "label": {
+        "column": "label",
+        "type": "text",
+        "optional": true
+      },
+      "lastGuestAt": {
+        "column": "last_guest_at",
+        "type": "double precision",
+        "optional": true
+      }
+    }
+  },
+  "linkMembers": {
+    "table": "link_members",
+    "fields": {
+      "boardId": {
+        "column": "board_id",
+        "type": "text",
+        "optional": false
+      },
+      "linkId": {
+        "column": "link_id",
+        "type": "text",
+        "optional": false
+      },
+      "userId": {
+        "column": "user_id",
+        "type": "text",
+        "optional": false
+      }
+    }
+  },
+  "creditLedger": {
+    "table": "credit_ledger",
+    "fields": {
+      "ownerId": {
+        "column": "owner_id",
+        "type": "text",
+        "optional": false
+      },
+      "boardId": {
+        "column": "board_id",
+        "type": "text",
+        "optional": false
+      },
+      "runId": {
+        "column": "run_id",
+        "type": "text",
+        "optional": false
+      },
+      "amount": {
+        "column": "amount",
+        "type": "double precision",
+        "optional": false
+      },
+      "kind": {
+        "column": "kind",
+        "type": "text",
+        "optional": false
+      }
+    }
+  },
+  "_storage": {
+    "table": "files",
+    "fields": {
+      "path": {
+        "column": "path",
+        "type": "text",
+        "optional": false
+      },
+      "size": {
+        "column": "size",
+        "type": "double precision",
+        "optional": false
+      },
+      "contentType": {
+        "column": "content_type",
+        "type": "text",
+        "optional": true
+      },
+      "ticket": {
+        "column": "ticket",
+        "type": "text",
+        "optional": true
+      },
+      "boardId": {
+        "column": "board_id",
+        "type": "text",
+        "optional": true
+      },
+      "userId": {
+        "column": "user_id",
+        "type": "text",
+        "optional": true
+      }
+    }
+  }
+}

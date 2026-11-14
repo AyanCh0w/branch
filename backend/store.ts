@@ -1,5 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import schema from './schema';
+import entities from './entities.json';
 import {encode,decode} from './codec';
 export class Store {
  affectedUsers=new Set<string>();affectedBoards=new Set<string>();affectedTeams=new Set<string>();
@@ -21,9 +22,18 @@ export class Store {
    withIndex:(_name:string,fn?:any)=>{if(fn){const q:any={eq:(key:string,value:any)=>{clauses.push([key,value]);return q;}};fn(q);}return build;},
    filter:(fn:any)=>{fn({field:(key:string)=>key,eq:(key:string,value:any)=>clauses.push([key,value])});return build;},
    collect:async()=>{
-    const values:any[]=[collection];let where='collection=$1';
-    for(const [key,value] of clauses){values.push(key,JSON.stringify(encode(value)));where+=` and data->$${values.length-1} = $${values.length}::jsonb`;}
-    const {rows}=await this.sql.query(`select * from branch_private.records where ${where} order by created_at,id`,values);
+    const entity=(entities as any)[collection];
+    const values:any[]=[];const where:string[]=[];
+    for(const [key,value] of clauses){
+     const field=entity.fields[key];if(!field)throw Error('Unknown indexed field');
+     values.push(field.type==='jsonb'?JSON.stringify(encode(value)):value);
+     where.push(`"${field.column}" is not distinct from $${values.length}::${field.type}`);
+    }
+    const projection=Object.entries(entity.fields).map(([key,field]:[string,any])=>{
+     const expression=`jsonb_build_object('${key}',"${field.column}")`;
+     return field.optional?`case when "${field.column}" is null then '{}'::jsonb else ${expression} end`:expression;
+    }).join(' || ');
+    const {rows}=await this.sql.query(`select id,created_at,(${projection}) as data from branch_private."${entity.table}"${where.length?' where '+where.join(' and '):''} order by created_at,id`,values);
     return rows.map((r:any)=>({...decode(r.data),_id:r.id,_creationTime:r.created_at}));
    },
    first:async()=> (await build.collect())[0]||null,

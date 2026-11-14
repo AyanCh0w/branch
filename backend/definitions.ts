@@ -6,5 +6,5 @@ export type Definition = {kind:'query'|'mutation'|'action';internal:boolean;args
 const define=(kind:Definition['kind'],internal=false)=>(spec:any):Definition=>({kind,internal,args:v.object(spec.args||{}),handler:spec.handler});
 export const query=define('query'),mutation=define('mutation'),action=define('action');
 export const internalQuery=define('query',true),internalMutation=define('mutation',true),internalAction=define('action',true);
-export const defineTable=(shape:Record<string,Validator>)=>({validator:v.object(shape),indexes:{} as Record<string,string[]>,index(name:string,fields:string[]){this.indexes[name]=fields;return this;}});
+export const defineTable=(shape:Record<string,Validator>)=>({shape,validator:v.object(shape),indexes:{} as Record<string,string[]>,index(name:string,fields:string[]){this.indexes[name]=fields;return this;}});
 export const defineSchema=<T>(tables:T)=>tables;
