@@ -44,6 +44,7 @@ it('research schedules three passes, preserves reasoning/tool results and accoun
  const requests:any[]=[];
  const outputs:any[][]=[
   [{type:'function_call',name:'update_plan',call_id:'plan',arguments:JSON.stringify({goal:'Find organizers',steps:[{title:'Verify people',status:'working',detail:'Check public sources'}]})}],
+  [{type:'function_call',name:'inspect_board',call_id:'inspect',arguments:JSON.stringify({query:'',offset:0})}],
   [{type:'reasoning',id:'r1',encrypted_content:'encrypted'},{type:'message',role:'assistant',content:[{type:'output_text',text:'Discovery notes'}]}],
   [{type:'message',role:'assistant',content:[{type:'output_text',text:'Verified findings'}]}],
   [{type:'function_call',name:'create_node',call_id:'save',arguments:JSON.stringify({kind:'note',title:'People',content:'Ada — judge. [Team](https://example.com/team)',url:''})}],
@@ -57,11 +58,13 @@ it('research schedules three passes, preserves reasoning/tool results and accoun
  }));
  await t.finishAllScheduledFunctions(vi.runAllTimers);
  const run=(await t.run(ctx=>ctx.db.get(runId)))!;
- expect(run.status).toBe('complete');expect(run.usage.total_tokens).toBe(75);expect(run.billedUserId).toBe(user.userId);
- const streamed=requests.filter(r=>r.stream);expect(streamed).toHaveLength(5);expect(streamed[0].tool_choice).toEqual({type:'function',name:'update_plan'});
+ expect(run.status).toBe('complete');expect(run.usage.total_tokens).toBe(90);expect(run.billedUserId).toBe(user.userId);
+ const streamed=requests.filter(r=>r.stream);expect(streamed).toHaveLength(6);expect(streamed[0].tool_choice).toEqual({type:'function',name:'update_plan'});
+ expect(streamed[1].tool_choice).toEqual({type:'function',name:'inspect_board'});
+ expect(streamed[2].input.some((i:any)=>i.call_id==='inspect'&&i.output?.includes('Existing work'))).toBe(true);
  expect(streamed.every(r=>r.model==='gpt-5.4-mini'&&r.store===false)).toBe(true);
- expect(streamed[2].input.some((i:any)=>i.encrypted_content==='encrypted')).toBe(true);
- expect(streamed[4].input.some((i:any)=>i.type==='function_call_output'&&i.call_id==='save'&&i.output.includes('People'))).toBe(true);
+ expect(streamed[3].input.some((i:any)=>i.encrypted_content==='encrypted')).toBe(true);
+ expect(streamed[5].input.some((i:any)=>i.type==='function_call_output'&&i.call_id==='save'&&i.output.includes('People'))).toBe(true);
  const board=await t.query(api.boards.read,auth);expect(board.nodes.find(n=>n.id==='agent')!.messages.at(-1).text).toBe('Ada is a judge.');expect(board.nodes.find(n=>n.title==='People')).toBeDefined();
 });
 it('live plans preserve manual edits, reject stale versions and stop with their run',async()=>{
@@ -88,4 +91,38 @@ it('external cards are idempotent, validate sources and preserve existing cards'
  const board=await t.query(api.boards.read,auth);expect(board.nodes.filter(n=>n.id===card.id)).toHaveLength(1);expect(board.nodes.find(n=>n.id===card.id)?.contexts[0].body).toBe('Do not overwrite');
  await expect(t.mutation(api.boards.addAgentCard,{...args,cardId:'bad',sourceIds:['missing']})).rejects.toThrow('Source card not found');
  await expect(t.mutation(api.boards.addAgentCard,{...args,token:'invalid',cardId:'private'})).rejects.toThrow();
+});
+it('agents inspect real chats, create exact excerpts and branch at a frozen message point',async()=>{
+ const {t,auth,runId}=await setup();await t.mutation(internal.chat.claim,{runId});
+ await t.mutation(api.boards.patchNodes,{...auth,changes:[{id:'conversation',create:{type:'thread',title:'Product discussion',x:100,y:1800,contexts:[{source:'obstacle',title:'Brief',body:'Frozen upstream',enabled:true}],messages:[{id:'ask',role:'user',text:'Compare the two options',context:[{source:'obstacle',title:'Brief',body:'Frozen upstream',enabled:true}]},{id:'answer',role:'assistant',text:'Option A is faster. Option B costs less.'},{id:'later',role:'assistant',text:'Later unrelated detail'}]}},{id:'sibling',create:{type:'thread',title:'Sibling',x:100,y:2600,messages:[{id:'sibling-message',role:'assistant',text:'Sibling secret context'}]}}]});
+ const call=(name:string,args:any,callId=name)=>t.mutation(internal.chat.canvasActionTool,{runId,callId,name,args});
+ const listing:any=await call('inspect_board',{query:'Product',offset:0});expect(listing.nodes.map((n:any)=>n.id)).toEqual(['conversation']);
+ const read:any=await call('read_node',{nodeId:'conversation',messageId:'answer',offset:0});expect(read.text).toContain('Option A');expect(read.messages[0].id).toBe('ask');
+ const excerpt:any=await call('create_excerpt',{sourceId:'conversation',messageId:'answer',quote:'Option B costs less.',title:'Cost evidence'});
+ expect(await call('create_excerpt',{sourceId:'conversation',messageId:'answer',quote:'Option B costs less.',title:'Cost evidence'})).toEqual(excerpt);
+ await expect(call('create_excerpt',{sourceId:'conversation',messageId:'answer',quote:'Option C is best.',title:'Fake'},'fake')).rejects.toThrow('exact excerpt');
+ const branch:any=await call('branch_chat',{sourceId:'conversation',messageId:'answer',quote:'',title:'Explore tradeoffs',prompt:'Test the tradeoffs'});
+ const userBranch:any=await call('branch_chat',{sourceId:'conversation',messageId:'ask',quote:'',title:'Retry question',prompt:'Override'},'user-branch');
+ const board=await t.query(api.boards.read,auth),note=board.nodes.find(n=>n.id===excerpt.id)!,chat=board.nodes.find(n=>n.id===branch.id)!;
+ expect(note.body).toBe('Option B costs less.');expect(note.contexts[0]).toMatchObject({source:'conversation',cutoff:'answer',excerptOnly:true,body:'Option B costs less.'});
+ expect(chat.contexts[0].body).toContain('Compare the two options');expect(chat.contexts[0].body).not.toContain('Later unrelated');expect(JSON.stringify(chat.contexts)).not.toContain('Sibling secret');expect(chat.contexts[0].inherited[0].body).toBe('Frozen upstream');expect(chat.activeRun).toBeUndefined();
+ const retry=board.nodes.find(n=>n.id===userBranch.id)!;expect(retry.draft).toBe('Compare the two options');expect(retry.contexts[0].body).toBe('');
+ await expect(call('create_excerpt',{sourceId:'agent',messageId:'research-assistant',quote:'anything',title:'Partial'},'partial')).rejects.toThrow('finish');
+});
+it('agent connections, edits and arrangement are bounded to its own results and stop after cancellation',async()=>{
+ const {t,auth,runId}=await setup();await t.mutation(internal.chat.claim,{runId});
+ const result=await t.mutation(internal.chat.createNode,{runId,callId:'note',node:{kind:'note',title:'Finding',content:'First finding',url:''}});
+ const call=(name:string,args:any,callId=name)=>t.mutation(internal.chat.canvasActionTool,{runId,callId,name,args});
+ await call('connect_nodes',{sourceId:'obstacle',targetId:result.id});await call('connect_nodes',{sourceId:'obstacle',targetId:result.id});
+ await call('update_note',{nodeId:result.id,expectedVersion:0,title:'Verified finding',content:'Updated evidence'});
+ await expect(call('update_note',{nodeId:result.id,expectedVersion:0,title:'Stale',content:'Stale'})).rejects.toThrow('changed');
+ await call('arrange_nodes',{nodes:[{id:result.id,x:1200,y:200}]});
+ let board=await t.query(api.boards.read,auth),note=board.nodes.find(n=>n.id===result.id)!;expect(note.title).toBe('Verified finding');expect(note.body).toBe('Updated evidence');expect(note.x).toBe(1200);expect(note.contexts.filter((c:any)=>c.source==='obstacle')).toHaveLength(1);
+ await expect(call('update_note',{nodeId:'obstacle',expectedVersion:0,title:'Bad',content:'Bad'})).rejects.toThrow('this run');
+ await expect(call('arrange_nodes',{nodes:[{id:'obstacle',x:0,y:0}]})).rejects.toThrow('this run');
+ await t.mutation(api.collaboration.focus,{...auth,nodeKey:result.id,field:'body',tabId:'human'});
+ await expect(call('update_note',{nodeId:result.id,expectedVersion:1,title:'Bad',content:'Bad'})).rejects.toThrow('editing');
+ await t.mutation(api.chat.stop,{...auth,nodeKey:'agent'});
+ await expect(call('inspect_board',{query:'',offset:0})).rejects.toThrow('no longer active');
+ await expect(call('arrange_nodes',{nodes:[{id:result.id,x:0,y:0}]})).rejects.toThrow('no longer active');
 });
