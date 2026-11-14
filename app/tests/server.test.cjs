@@ -49,6 +49,7 @@ test('public landing and workspace routes stay separate without exposing private
    const script=await read('/'+src);assert.equal(script.status,200,`${src} must be served for workspace startup`);assert.ok(script.body.trim(),`${src} must not be empty`);
   }
   assert.match((await read('/reactive-grid.js')).body,/window.createReactiveGrid/);
+  assert.match((await read('/whiteboard.css')).body,/#selection-tools/);
   assert.match((await read('/landing.js')).body,/location.replace\('\/app'/);
   for(const route of ['/.env.local','/server.cjs','/../accounts/app.jsx'])assert.equal((await read(route)).status,404);
  }finally{await new Promise(resolve=>server.close(resolve));}

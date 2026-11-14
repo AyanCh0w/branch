@@ -185,15 +185,15 @@ test('board menu creates at the click, navigates with keys and dismisses without
  try{
   const board=d.querySelector('#board'),menu=d.querySelector('#create-menu');
   const open=()=>board.dispatchEvent(new w.MouseEvent('contextmenu',{clientX:420,clientY:300,bubbles:true,cancelable:true}));
-  open();assert.equal(menu.hidden,false);assert.equal(menu.querySelector('button span').textContent,'New node');
+  open();assert.equal(menu.hidden,false);assert.equal(menu.querySelector('button span').textContent,'New note');
   assert.equal(d.activeElement,menu.querySelector('button'));
   d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
-  assert.equal(d.activeElement.dataset.create,'plan');
+  assert.equal(d.activeElement.dataset.create,'thread');
   const count=w.BranchHost.getState().nodes.length;
   d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown',{key:'n',bubbles:true}));
   assert.equal(w.BranchHost.getState().nodes.length,count);
   menu.querySelector('button').click();
-  const node=w.BranchHost.getState().nodes.at(-1);assert.equal(node.type,'thread');assert.equal(node.x,420);assert.equal(node.y,300);assert.equal(menu.hidden,true);
+  const node=w.BranchHost.getState().nodes.at(-1);assert.equal(node.type,'plan');assert.equal(node.x,420);assert.equal(node.y,300);assert.equal(menu.hidden,true);
   open();d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));assert.equal(menu.hidden,true);
   open();board.dispatchEvent(new w.Event('pointerdown',{bubbles:true}));assert.equal(menu.hidden,true);
   w.BoardShared={enabled:true,writable:false};open();assert.equal(menu.hidden,true);
