@@ -854,6 +854,86 @@
       }
     }
   },
+  "githubConnections": {
+    "table": "github_connections",
+    "fields": {
+      "userId": {
+        "column": "user_id",
+        "type": "text",
+        "optional": false
+      },
+      "githubId": {
+        "column": "github_id",
+        "type": "text",
+        "optional": false
+      },
+      "login": {
+        "column": "login",
+        "type": "text",
+        "optional": false
+      },
+      "avatarUrl": {
+        "column": "avatar_url",
+        "type": "text",
+        "optional": false
+      },
+      "repos": {
+        "column": "repos",
+        "type": "jsonb",
+        "optional": false
+      },
+      "updatedAt": {
+        "column": "updated_at",
+        "type": "double precision",
+        "optional": false
+      }
+    }
+  },
+  "boardRepos": {
+    "table": "board_repos",
+    "fields": {
+      "boardId": {
+        "column": "board_id",
+        "type": "text",
+        "optional": false
+      },
+      "repoId": {
+        "column": "repo_id",
+        "type": "double precision",
+        "optional": false
+      },
+      "fullName": {
+        "column": "full_name",
+        "type": "text",
+        "optional": false
+      },
+      "private": {
+        "column": "private",
+        "type": "boolean",
+        "optional": false
+      },
+      "defaultBranch": {
+        "column": "default_branch",
+        "type": "text",
+        "optional": false
+      },
+      "installationId": {
+        "column": "installation_id",
+        "type": "double precision",
+        "optional": false
+      },
+      "addedBy": {
+        "column": "added_by",
+        "type": "text",
+        "optional": false
+      },
+      "createdAt": {
+        "column": "run_created_at",
+        "type": "double precision",
+        "optional": false
+      }
+    }
+  },
   "creditLedger": {
     "table": "credit_ledger",
     "fields": {

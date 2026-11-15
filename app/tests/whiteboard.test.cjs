@@ -21,7 +21,7 @@ test('notes are the default creation action and use a single plaintext editor wi
  const dom=boot(),w=dom.window,d=w.document;
  try{
   assert.equal(d.querySelector('[data-create]').dataset.create,'plan');assert.equal(d.querySelector('[data-dock]').dataset.dock,'plan');
-  assert.deepEqual(Array.from(d.querySelectorAll('[data-dock]'),el=>el.dataset.dock),['plan','image','file','website','video','search','thread','agent']);
+  assert.deepEqual(Array.from(d.querySelectorAll('[data-dock]'),el=>el.dataset.dock),['plan','image','file','website','github','video','search','thread','agent']);
   assert.equal(d.querySelector('#empty-note').hidden,false);d.querySelector('#empty-note').click();
   const n=w.BranchHost.getState().nodes[0];assert.equal(n.type,'plan');assert.equal(n.body,'');assert.equal(d.activeElement.getAttribute('aria-label'),'Note text');
   assert.equal(d.querySelector('.plan-body').getAttribute('contenteditable'),'plaintext-only');
@@ -101,4 +101,21 @@ test('Space drag pans and ordinary trackpad scroll still pans without moving car
 test('remote deletion prunes local selection and never resurrects a removed node',()=>{
  const dom=boot([note('a',100,100),note('b',500,200)]),w=dom.window,d=w.document;
  try{selectAll(w);w.BranchHost.receive({title:'Test',nodes:[note('b',500,200)]});assert.equal(d.querySelectorAll('.board-selected').length,1);key(w,'d',{ctrlKey:true});assert.equal(w.BranchHost.getState().nodes.length,2);assert.equal(w.BranchHost.getState().nodes.some(n=>n.id==='a'),false);}finally{w.dispatchEvent(new w.Event('pagehide'));w.close();}
+});
+
+test('empty-note action preserves undo and cannot mutate view-only boards',()=>{
+ const dom=boot(),w=dom.window,d=w.document;
+ try {
+  d.querySelector('#empty-note').click();
+  assert.equal(w.BranchHost.getState().nodes.length,1);
+  assert.equal(w.BranchHost.getState().nodes[0].type,'plan');
+  assert.ok(d.activeElement.matches('.plan-body'));
+  d.querySelector('#undo').click();
+  assert.equal(w.BranchHost.getState().nodes.length,0);
+  assert.equal(d.querySelector('#empty-note').hidden,false);
+  w.BoardShared={enabled:true,writable:false};w.BranchWhiteboard.sync();
+  assert.equal(d.querySelector('#empty-note').hidden,true);
+  d.querySelector('#empty-note').click();
+  assert.equal(w.BranchHost.getState().nodes.length,0);
+ } finally {w.dispatchEvent(new w.Event('pagehide'));w.close();}
 });

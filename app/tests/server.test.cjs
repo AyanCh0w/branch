@@ -40,7 +40,7 @@ test('public landing and workspace routes stay separate without exposing private
   }).on('error',reject);
  });
  try{
-  assert.match((await read('/')).body,/Think with AI/);
+  assert.match((await read('/')).body,/class="landing-page"/);
   for(const route of ['/app','/app?auth=signup','/?board=example']){
    const response=await read(route);assert.equal(response.status,200);assert.match(response.body,/id="account-app"/);
   }

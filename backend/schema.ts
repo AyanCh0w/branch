@@ -47,5 +47,7 @@ export default defineSchema({
   // Reserved foundations: no public guest-link or billing endpoints yet.
   boardLinks: defineTable({ boardId: v.id('boards'), tokenHash: v.string(), role: v.union(v.literal('viewer'), v.literal('editor')), expiresAt: v.optional(v.number()), revoked: v.boolean(), label:v.optional(v.string()), lastGuestAt:v.optional(v.number()) }).index('token', ['tokenHash']).index('board',['boardId']),
   linkMembers: defineTable({boardId:v.id('boards'),linkId:v.id('boardLinks'),userId:v.id('users')}).index('board_user',['boardId','userId']).index('user',['userId']),
+  githubConnections: defineTable({userId:v.id('users'),githubId:v.string(),login:v.string(),avatarUrl:v.string(),repos:v.array(v.object({id:v.number(),fullName:v.string(),private:v.boolean(),defaultBranch:v.string(),installationId:v.number()})),updatedAt:v.number()}).index('user',['userId']),
+  boardRepos: defineTable({boardId:v.id('boards'),repoId:v.number(),fullName:v.string(),private:v.boolean(),defaultBranch:v.string(),installationId:v.number(),addedBy:v.id('users'),createdAt:v.number()}).index('board',['boardId']).index('added_by',['addedBy']),
   creditLedger: defineTable({ ownerId: v.id('users'), boardId: v.id('boards'), runId: v.id('runs'), amount: v.number(), kind: v.string() }).index('owner', ['ownerId']),
 });

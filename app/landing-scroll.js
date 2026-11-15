@@ -17,7 +17,7 @@
   function reveal(element) {element.classList.add('is-arrived');}
   const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{
     if(entry.isIntersecting){reveal(entry.target);observer.unobserve(entry.target);}
-  }),{threshold:.08,rootMargin:'0px 0px -32px 0px'});
+  }),{threshold:.04,rootMargin:'0px'});
   function render() {
     frame=0;if(!enabled)return;
     const progress=ease(clamp(window.scrollY/travel));
@@ -49,8 +49,8 @@
     arrivals.forEach((element,index)=>{
       element.classList.remove('scroll-arrival');
       if(enabled){
-        element.style.setProperty('--arrival-delay',`${element.matches('.feature-grid article')?(index%3)*55:0}ms`);
-        if(element.getBoundingClientRect().top<innerHeight-32)reveal(element);
+        element.style.setProperty('--arrival-delay',`${element.matches('.feature-grid article')?(index%3)*35:0}ms`);
+        if(element.getBoundingClientRect().top<innerHeight)reveal(element);
         element.classList.add('scroll-arrival');
         observer.observe(element);
       }

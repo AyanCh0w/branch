@@ -14,13 +14,13 @@
 </button></div></header>
 <main id="board" aria-label="Workspace canvas"><svg id="board-grid" aria-hidden="true"><defs><pattern id="dot-grid" patternUnits="userSpaceOnUse" width="24" height="24"><circle id="grid-dot" cx="12" cy="12" r=".7" fill="#989b9f" fill-opacity=".5"/></pattern></defs><rect width="100%" height="100%" fill="url(#dot-grid)"/></svg><div id="world"><div id="cards"></div><div id="branch-ghost" hidden aria-hidden="true"></div></div><svg id="wires" aria-hidden="true"><g id="permanent-wires"></g><path id="live-wire"/><circle id="wire-end" r="4"/></svg></main>
 
-<footer><div><button id="fit" title="Fit all cards · F"><svg class="icon" aria-hidden="true" width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<footer><div><button id="fit" aria-label="Overview · fit all cards" data-tooltip="See every thread · F"><svg class="icon" aria-hidden="true" width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M9 9L4 4M4 4V8M4 4H8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M15 9L20 4M20 4V8M20 4H16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M9 15L4 20M4 20V16M4 20H8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M15 15L20 20M20 20V16M20 20H16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
-</button><button id="zoomout" aria-label="Zoom out"><svg class="icon" aria-hidden="true" width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<span>Overview</span></button><button id="zoomout" aria-label="Zoom out"><svg class="icon" aria-hidden="true" width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M6 12H18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
 </button><button id="zoom" title="Reset zoom">100%</button><button id="zoomin" aria-label="Zoom in"><svg class="icon" aria-hidden="true" width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

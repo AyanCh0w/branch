@@ -4,20 +4,12 @@
 (() => {
   const host = document.getElementById('paper-background');
   if (!host) return;
-  const toggle = document.getElementById('paper-background-on');
-  const strength = document.getElementById('paper-background-strength');
-  const output = document.getElementById('paper-background-value');
-  const status = document.getElementById('paper-background-status');
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const contrast = matchMedia('(prefers-contrast: more)');
+  const mobile = matchMedia('(max-width: 600px)');
   const fine = matchMedia('(hover: hover) and (pointer: fine)');
-  const key = 'branch.paper-background.v1';
-  let enabled = true, amount = 45;
-  try {
-    const saved = JSON.parse(localStorage.getItem(key));
-    if (typeof saved?.enabled === 'boolean') enabled = saved.enabled;
-    if (Number.isFinite(saved?.amount)) amount = Math.max(0, Math.min(100, saved.amount));
-  } catch {}
+  const amounts = { mobile: 22, desktop: 45 };
+  const mode = () => mobile.matches ? 'mobile' : 'desktop';
   const canvas = document.createElement('canvas');
   canvas.className = 'vortex-material';
   host.append(canvas);
@@ -40,16 +32,16 @@
   let gl, program, buffer, uniforms;
   let width = 1, height = 1, radiusX = 1, radiusY = 1, centerY = 1;
   let frame = 0, last = 0, phase = 0, disposed = false, visible = true;
+  let scene = [1,0,0], sceneStarts = [700,2200];
   const pointer = {x: 0, y: 0, tx: 0, ty: 0};
   const vertex = `attribute vec2 position; void main(){gl_Position=vec4(position,0.,1.);}`;
   const fragment = `
     precision highp float;
     uniform vec2 resolution, center, radius, pointer;
     uniform float phase, dark;
+    uniform vec3 scenes;
     float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
-    void main(){
-      vec2 pixel=vec2(gl_FragCoord.x,resolution.y-gl_FragCoord.y);
-      vec2 q=(pixel-center-pointer)/radius;
+    vec4 material(vec2 q){
       float a=atan(q.y,q.x);
       // Asymmetric folds travel around the loop, rather than translating the page.
       float r=length(q);
@@ -66,7 +58,23 @@
       // The soft skirt is the reference's defocused edge, without a CSS blur pass.
       float skirt=exp(-pow((r-.86-ripple)/(.14+thickness*.5),2.))* .09;
       float alpha=max(edge*.66,skirt);
-      gl_FragColor=vec4(vec3(clamp(tone,0.,1.)),alpha);
+      return vec4(vec3(clamp(tone,0.,1.)),alpha);
+    }
+    void main(){
+      vec2 pixel=vec2(gl_FragCoord.x,resolution.y-gl_FragCoord.y);
+      vec2 uv=pixel/resolution;
+      vec4 hero=material((pixel-center-pointer)/radius);
+      // Wide side loops keep the shared-work section open and quiet in the center.
+      vec4 left=material((uv-vec2(-.15,.52)-pointer/resolution)/vec2(.46,.9));
+      vec4 right=material((uv-vec2(1.14,.55)+pointer/resolution)/vec2(.43,.92));
+      vec4 sides=mix(left,right,smoothstep(.35,.65,uv.x));
+      // A lower, broader arc closes the narrative without another busy focal point.
+      vec4 quiet=material((uv-vec2(.72,1.12)-pointer/resolution*.4)/vec2(.95,.78));
+      float readingMask=mix(.16,1.,smoothstep(.22,.48,abs(uv.x-.5)));
+      sides.a*=readingMask;
+      quiet.a*=readingMask*.8;
+      vec4 result=hero*scenes.x+sides*scenes.y+quiet*scenes.z;
+      gl_FragColor=result;
     }`;
   function compile(type, source) {
     const shader = gl.createShader(type);
@@ -87,7 +95,7 @@
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]), gl.STATIC_DRAW);
       const position = gl.getAttribLocation(program, 'position');
       gl.enableVertexAttribArray(position); gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
-      uniforms = Object.fromEntries(['resolution','center','radius','pointer','phase','dark'].map(name=>[name,gl.getUniformLocation(program,name)]));
+      uniforms = Object.fromEntries(['resolution','center','radius','pointer','phase','dark','scenes'].map(name=>[name,gl.getUniformLocation(program,name)]));
       host.dataset.renderer = 'webgl';
     } catch {
       gl = null; host.dataset.renderer = 'fallback';
@@ -104,7 +112,12 @@
     host.style.setProperty('--vortex-x', `${radiusX*1.72}px`);
     host.style.setProperty('--vortex-y', `${radiusY*1.72}px`);
     host.style.setProperty('--vortex-center', `${centerY}px`);
-    draw();
+    const sectionY = (selector,fallback) => {
+      const element=document.querySelector(selector);
+      return element ? element.getBoundingClientRect().top+window.scrollY : fallback;
+    };
+    sceneStarts=[sectionY('#together',700),sectionY('#features',2200)];
+    syncOpacity();draw();
   }
   function draw() {
     if (disposed) return;
@@ -117,8 +130,10 @@
       gl.uniform2f(uniforms.radius,radiusX*scale,radiusY*scale);
       gl.uniform2f(uniforms.pointer,pointer.x*scale,pointer.y*scale);
       gl.uniform1f(uniforms.phase,phase); gl.uniform1f(uniforms.dark,dark ? 1 : 0);
+      gl.uniform3f(uniforms.scenes,...scene);
       gl.drawArrays(gl.TRIANGLES,0,6);
     }
+    svg.style.opacity=String(.38*scene[0]+.08*(1-scene[0]));
     vertices.forEach((p,i)=>{
       const a=p.angle+phase*.13, r=.82+.03*Math.sin(a*3+phase);
       p.x=width*.5+Math.cos(a)*radiusX*r+pointer.x;
@@ -127,7 +142,7 @@
     });
     edges.forEach(([a,b],i)=>paths[i].setAttribute('d',`M${vertices[a].x.toFixed(2)},${vertices[a].y.toFixed(2)}L${vertices[b].x.toFixed(2)},${vertices[b].y.toFixed(2)}`));
   }
-  function canAnimate() {return !disposed && enabled && amount>0 && visible && !document.hidden && !reduced.matches && !contrast.matches && host.dataset.renderer==='webgl';}
+  function canAnimate() {return !disposed && amounts[mode()]>0 && visible && !document.hidden && !reduced.matches && !contrast.matches && host.dataset.renderer==='webgl';}
   function stop() {cancelAnimationFrame(frame); frame=0; last=0;}
   function tick(time) {
     frame=0;
@@ -142,12 +157,23 @@
     frame=requestAnimationFrame(tick);
   }
   function wake() {if (!frame && canAnimate()) frame=requestAnimationFrame(tick);}
-  function save() {try {localStorage.setItem(key,JSON.stringify({enabled,amount}));} catch {}}
+  // One viewport-sized GPU surface crossfades scenes; no full-page canvas or scroll lock.
+  function syncOpacity() {
+    const progress = Math.max(0, Math.min(1, window.scrollY / Math.max(400, window.innerHeight * .8)));
+    const eased = progress * progress * (3 - 2 * progress);
+    const fade = 1 - .42 * eased;
+    const smooth = (start,end) => {const t=Math.max(0,Math.min(1,(window.scrollY-start)/(end-start)));return t*t*(3-2*t);};
+    const middle=smooth(sceneStarts[0]-height*.8,sceneStarts[0]-height*.15);
+    const closing=smooth(sceneStarts[1]-height*.65,sceneStarts[1]+height*.15);
+    scene=[1-middle,middle*(1-closing),middle*closing];
+    host.dataset.scene=scene[0]>.5?'hero':scene[1]>.5?'shared-work':'quiet';
+    host.style.opacity = !contrast.matches ? String(amounts[mode()] / 100 * fade) : '0';
+    host.style.setProperty('--background-reading',String(1-scene[0]));
+    if (!canAnimate()) draw();
+  }
   function sync() {
-    toggle.checked=enabled; strength.value=amount; strength.disabled=!enabled; output.value=`${amount}%`;
-    host.style.opacity=enabled && !contrast.matches ? String(amount/100) : '0';
+    syncOpacity();
     host.dataset.motion=reduced.matches ? 'static' : 'animated';
-    status.textContent=reduced.matches ? 'Monochrome · Still vortex' : 'Monochrome · Connected vortex';
     stop(); draw(); wake();
   }
   initialize(); resize(); host.dataset.ready='true'; sync();
@@ -156,6 +182,11 @@
   const themeObserver=new MutationObserver(draw);
   themeObserver.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
   new ResizeObserver(resize).observe(host);
+  document.fonts?.ready.then(resize);
+  window.addEventListener('scroll',syncOpacity,{passive:true});
+  window.addEventListener('resize',syncOpacity,{passive:true});
+  window.addEventListener('pageshow',syncOpacity);
+  mobile.addEventListener('change',sync);
   window.addEventListener('pointermove',event=>{
     if (event.pointerType!=='mouse' || !fine.matches || reduced.matches) return;
     const rect=host.getBoundingClientRect();
@@ -172,8 +203,4 @@
   contrast.addEventListener('change',sync);
   canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();stop();host.dataset.renderer='fallback';});
   canvas.addEventListener('webglcontextrestored',()=>{initialize();resize();sync();});
-  toggle.addEventListener('change',()=>{enabled=toggle.checked;sync();save();});
-  strength.addEventListener('input',()=>{amount=Number(strength.value);sync();});
-  strength.addEventListener('change',save);
-  document.getElementById('nav-appearance-reset')?.addEventListener('click',()=>{enabled=true;amount=45;sync();save();});
 })();

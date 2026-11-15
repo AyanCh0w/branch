@@ -25,7 +25,7 @@
  empty.id = 'empty-note'; empty.type = 'button';
  empty.innerHTML = glyph('page') + '<span>Start with a note</span><kbd>N</kbd>';
  empty.addEventListener('pointerdown', e => e.stopPropagation());
- empty.onclick = () => { if(!writable()) return; const n = newCard('plan', boardInsertPoint()); cardEl(n.id)?.querySelector('.plan-body')?.focus({preventScroll:true}); };
+ empty.onclick = () => { if(!active()||!writable()) return; const n = newCard('plan', boardInsertPoint()); cardEl(n.id)?.querySelector('.plan-body')?.focus({preventScroll:true}); };
  document.body.append(empty);
 
  function setTool(value) {

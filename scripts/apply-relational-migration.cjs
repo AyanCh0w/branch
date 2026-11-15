@@ -24,9 +24,13 @@ async function main() {
    console.log('Applied atomic migration; private backup: '+filename);
   } else if(kind==='r') return;
   const tables=(await db.query("select c.relname as name,c.relrowsecurity as rls from pg_class c join pg_namespace n on c.relnamespace=n.oid where n.nspname='branch_private' and c.relkind='r' order by c.relname")).rows;
-  const {rows:[features]}=await db.query("select to_regclass('branch_private.chatgpt_threads') is not null as agent_context");
+  const {rows:[features]}=await db.query("select to_regclass('branch_private.chatgpt_threads') is not null as agent_context, to_regclass('branch_private.github_connections') is not null as github");
   const pendingContextTables = new Set(['chatgptBrowserGrants','chatgptThreads','chatgptUpdates','codingConnections','codingHandoffs']);
-  for(const [name,entity] of Object.entries(entities))if((features.agent_context||!pendingContextTables.has(name)) &&!tables.some(t=>t.name===entity.table&&t.rls))throw Error('Missing protected table: '+entity.table);
+  const pendingGitHubTables = new Set(['githubConnections','boardRepos']);
+  for(const [name,entity] of Object.entries(entities)){
+   if((!features.agent_context&&pendingContextTables.has(name))||(!features.github&&pendingGitHubTables.has(name)))continue;
+   if(!tables.some(t=>t.name===entity.table&&t.rls))throw Error('Missing protected table: '+entity.table);
+  }
   if(tables.some(t=>!t.rls))throw Error('Unprotected private table');
   const constraints=(await db.query("select contype,count(*)::int as count from pg_constraint where connamespace='branch_private'::regnamespace group by contype order by contype")).rows;
   const after=(await db.query('select collection,count(*)::int as count from branch_private.records group by collection order by collection')).rows;

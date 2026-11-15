@@ -16,6 +16,8 @@ let lastState, timer, failure = null;
 let writable=true;const subscriptions=[];
 const uploadedFiles = new Map();
 const docs = new Map(), pending = new Map(), overlays = new Map(), sending = new Set();
+// Cards removed locally while the server deletion is still in flight.
+const hidden = new Set();
 const deletedNodes = [], restoredNodes = [];
 let deletionQueue = Promise.resolve();
 
@@ -33,8 +35,22 @@ function nodeHistoryAction(work) {
   }).catch(error => host.notify(error.message)).finally(updateUndoButton);
   return deletionQueue;
 }
+// Remove a card from the canvas at once. The previous synced state drops it too,
+// so the next flush doesn't send it as a plain removal and skip undo/cleanup.
+function hideNode(key) {
+  if (!ready || !writable) return;
+  hidden.add(key);
+  applying = true;
+  try {
+    const state = host.getState();
+    host.receive({ title: state.title, nodes: state.nodes.filter(n => n.id !== key) });
+    if (lastState) lastState = { ...lastState, nodes: lastState.nodes.filter(n => n.id !== key) };
+  } finally { applying = false; }
+}
 function deleteNode(key) {
-  return nodeHistoryAction(async () => {
+  hideNode(key);
+  let removed = false;
+  const done = nodeHistoryAction(async () => {
     if (active?.key === key) {
       await focusTask;
       await client.mutation('collaboration:release', args({ tabId, nodeKey: key }));
@@ -42,10 +58,16 @@ function deleteNode(key) {
     }
     const entry = { nodeKey: key, operationId: crypto.randomUUID() };
     await client.mutation('boards:deleteNode', args(entry));
+    removed = true;
     deletedNodes.push(entry);
     if (deletedNodes.length > 70) deletedNodes.shift();
     restoredNodes.length = 0;
     host.notify('Card removed · undo available');
+  });
+  return done.finally(async () => {
+    hidden.delete(key);
+    // The server refused or never ran the deletion: show the card again.
+    if (!removed && ready) { try { receive(await client.query('boards:read', args())); } catch {} }
   });
 }
 function undoDeletion(redo) {
@@ -163,7 +185,7 @@ function receive(snapshot){
   try{
     const nodes=[];const seen=new Set();
     for(const remote of snapshot.nodes){
-      seen.add(remote.id);const overlay=overlays.get(remote.id);if(overlay?.remove)continue;
+      seen.add(remote.id);const overlay=overlays.get(remote.id);if(overlay?.remove||hidden.has(remote.id))continue;
       const item=makeDoc(remote.id,remote.sharedTextState,remote.draftEpoch||0);Y.applyUpdate(item.doc,new Uint8Array(remote.sharedTextState),'remote');item.epoch=remote.draftEpoch||0;
       const data={...remote,...overlay?.patch};delete data.sharedTextState;
       for(const field of fields)data[field]=item.doc.getText(field).toString();
@@ -171,7 +193,7 @@ function receive(snapshot){
     }
     for(const [key,overlay]of overlays)if(!seen.has(key)&&overlay.create)nodes.push(copy(overlay.create));
     // Retire deleted documents before undo can restore their canonical text.
-    for (const key of docs.keys()) if (!seen.has(key) && !overlays.get(key)?.create) forgetDeletedNode(key);
+    for (const key of docs.keys()) if (!seen.has(key) && !overlays.get(key)?.create && !hidden.has(key)) forgetDeletedNode(key);
     host.receive({title:snapshot.title,nodes});lastState=copy(host.getState());restoreCaret(caret);updateLocks();
   }finally{applying=false;}
 }

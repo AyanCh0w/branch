@@ -669,6 +669,57 @@ body.account-mode .human-cursors,body.shared-starting .human-cursors{display:non
 .model-account{display:block;width:100%;margin-top:8px;padding:6px 4px;border:0;background:none;color:var(--theme-muted,#68707b);font:inherit;font-size:11px;text-align:left;cursor:pointer}
 .model-account:focus-visible{outline:2px solid var(--theme-accent,#4879f5);outline-offset:2px}
 .model-slider-row[hidden]{display:none}
+/* GitHub cards: server-fetched files, issues and pull requests. */
+.github-content{padding:14px 16px 10px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.gh-head{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--theme-muted, #777d85);min-width:0}
+.gh-head .icon{width:16px;height:16px;flex-shrink:0;color:var(--theme-ink, #373940)}
+.gh-repo{font-weight:500;color:var(--theme-ink, #373940);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gh-kind{white-space:nowrap}
+.gh-state{margin-left:auto;padding:2px 8px;border-radius:999px;font-size:11px;text-transform:capitalize;border:1px solid var(--theme-line, #dcdfe3);color:var(--theme-muted, #6a7079)}
+.gh-state[data-state=open]{color:#1f7a3d;border-color:#1f7a3d55}.gh-state[data-state=merged]{color:#7146b8;border-color:#7146b855}.gh-state[data-state=closed]{color:#a23b3b;border-color:#a23b3b55}
+.gh-meta{font-size:12px;color:var(--theme-muted, #777d85);line-height:1.5}
+.gh-label{display:inline-block;padding:0 6px;border-radius:6px;background:var(--theme-raised, #f0f2f5);font-size:11px}
+.gh-add{color:#1f7a3d}.gh-del{color:#a23b3b}
+.gh-code{margin:0;max-height:340px;overflow:auto;padding:10px 12px;border-radius:10px;background:var(--theme-canvas, #f8f9fb);border:1px solid var(--theme-line, #e3e5e8);font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;tab-size:2}
+.gh-body{max-height:340px;overflow:auto;font-size:13px;line-height:1.65}
+.gh-body pre{white-space:pre;overflow-x:auto;font-size:11px}
+.gh-note{margin:0;font-size:11px;color:var(--theme-muted, #858b93)}
+.gh-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:var(--theme-muted, #858b93)}
+.gh-actions{display:flex;align-items:center;gap:4px}
+.gh-actions a,.gh-actions button{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:8px;font:inherit;color:var(--theme-ink, #4a4f57);background:none;border:0;cursor:pointer;text-decoration:none}
+.gh-actions .icon{width:13px;height:13px}
+.gh-actions a:hover,.gh-actions button:hover{background:var(--theme-raised, #f0f2f5)}
+.gh-actions button:disabled{opacity:.5;cursor:default}
+/* Repository cards */
+.github-repo .gh-desc{margin:0;font-size:13px;line-height:1.55;color:var(--theme-ink, #4a4f57)}
+.gh-meta .icon{width:13px;height:13px;vertical-align:-2px;margin-right:4px}
+.gh-scope{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12px}
+.gh-scope-label{color:var(--theme-muted, #858b93);margin-right:2px}
+.gh-scope-chip{padding:2px 8px;border-radius:999px;background:var(--theme-raised, #f0f2f5);color:var(--theme-ink, #373940);font:11px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace}
+.gh-scope-chip.gh-scope-all{font-family:inherit;font-size:12px}
+.gh-scope-edit,.gh-scope-actions button{font:inherit;font-size:12px;padding:4px 9px;border-radius:8px;border:1px solid var(--theme-line, #dcdfe3);background:var(--theme-surface, #fff);color:var(--theme-ink, #373940);cursor:pointer}
+.gh-scope-edit{margin-left:auto}
+.gh-scope-editor{display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid var(--theme-line, #e3e5e8);border-radius:10px;background:var(--theme-canvas, #f8f9fb)}
+.gh-scope-editor p{margin:0;font-size:12px;line-height:1.5;color:var(--theme-muted, #6a7079)}
+.gh-scope-options{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:2px 8px;max-height:150px;overflow:auto}
+.gh-scope-options label{display:flex;align-items:center;gap:6px;padding:3px 2px;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer;min-width:0}
+.gh-scope-options label span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gh-scope-editor input[name=custom]{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;padding:7px 9px;border-radius:8px;border:1px solid var(--theme-line, #dcdfe3);background:var(--theme-surface, #fff);color:inherit}
+.gh-scope-actions{display:flex;justify-content:flex-end;gap:6px}
+.gh-scope-actions .gh-scope-save{background:var(--theme-control, #373a40);color:var(--theme-on-control, #fff);border-color:transparent}
+.gh-scope-actions button:disabled{opacity:.55;cursor:default}
+.gh-scope-error{color:var(--theme-danger, #b33c3c)!important}
+.gh-readme summary,.gh-reads summary{cursor:pointer;font-size:12px;color:var(--theme-muted, #6a7079);display:flex;align-items:center;gap:6px;list-style:none}
+.gh-readme summary::-webkit-details-marker,.gh-reads summary::-webkit-details-marker{display:none}
+.gh-readme[open] .gh-body{margin-top:8px}
+.gh-reads{margin-top:8px}.gh-reads summary .icon{width:13px;height:13px}
+.gh-reads ul{margin:6px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:3px}
+.gh-reads li{display:flex;gap:8px;align-items:baseline;font-size:12px;min-width:0}
+.gh-reads a{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--theme-ink, #373940);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gh-reads li span{color:var(--theme-muted, #858b93);font-size:11px;white-space:nowrap}
+html body #cards .gh-scope-options input[type=checkbox]{width:14px;height:14px;min-width:14px;flex:none;margin:0;padding:0;display:inline-block}
+html body #cards .gh-scope-options label span{flex:1 1 auto;min-width:0}
+
 
 
 /* Coding handoffs stay with their source card. */

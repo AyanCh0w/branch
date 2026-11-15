@@ -17,6 +17,10 @@
 @media (hover:hover) and (pointer:fine) {
  #empty-note:hover { background: var(--theme-raised, #f0f2f5); }
 }
+body:not(.account-mode) #fit { display: inline-flex; align-items: center; gap: 6px; width: auto; padding: 6px 9px; font-size: 12px; }
+@media(min-width:900px) { #creation-dock button[data-dock=plan],#creation-dock button[data-dock=thread] { width: auto; display: flex; gap: 7px; padding: 0 12px; font-size: 12px; } }
+.dock-label { display: none; }
+@media(min-width:900px) { .dock-label { display: inline; } }
 @media (prefers-contrast:more) { #cards .card.board-selected { outline-width: 2px; outline-color: #2458b3; } }
 @media (max-width:600px) {
  #creation-dock { max-width: calc(100vw - 16px); gap: 0; padding: 4px; }
