@@ -52,6 +52,8 @@ Save the local stack's API URL, publishable key, secret key, and database URL un
 
 In Chrome, load the unpacked extension from `extensions/branch-sync` (version `0.2.0`), then reload ChatGPT. Use a new local Branch account and board. Open an ordinary ChatGPT conversation, send a baseline message, then choose the test board from the **Branch sync** badge. Two new replies should show up on one card in **Context** and survive a reload. The baseline and any replies sent after **Stop syncing** should stay out of Branch.
 
+For regular ChatGPT in the macOS app, [Branch Desktop Probe](../desktop/README.md) checks whether the selected chat exposes completed replies. The probe is read-only and does not connect to Supabase.
+
 ## Data and account migration
 
 Create a fresh backup from the actual source deployment. Coordinate a write freeze for a final cutover, or explicitly record the snapshot time and that later source writes are not synchronized. Keep the old deployment intact until validation and rollback decisions are complete. The original importer below requires an empty target database and never overwrites newer data.
