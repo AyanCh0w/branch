@@ -6,3 +6,8 @@ node_modules
 app/tests
 collaboration/*.test.ts
 app/previews
+
+backups/
+.wrangler/
+.worker-build/
+.dev.vars*

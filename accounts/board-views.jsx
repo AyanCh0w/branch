@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ContextCanvas } from './context-canvas';
+import { useQuery, api } from '../backend/react';
 
 const modes = [
   { id: 'visualization', title: 'Visualization', icon: 'git-branch', panel: 'board' },
@@ -14,6 +15,8 @@ export function BoardViews({ boardId, token }) {
   const tabs = useRef({});
   const slot = document.getElementById('board-view-slot');
   const showingContext = mode === 'context';
+  // Loaded only while the Context view is open: who may close work, area summaries and the board setting.
+  const work = useQuery(api.work.forBoard, showingContext ? { boardId, token } : 'skip');
 
   useEffect(() => {
     const openCard = event => {
@@ -51,8 +54,12 @@ export function BoardViews({ boardId, token }) {
     if (!showingContext) return;
     const receive = () => {
       const next = window.BranchHost.getState().nodes
-        .filter(node => node.chatgptSynced)
-        .map(node => ({ id: node.id, title: node.title || 'Untitled card', owner: node.chatgptSyncOwner || '', latest: node.chatgptLatestUpdate || 0 }));
+        .filter(node => node.chatgptSynced || node.workItem)
+        .map(node => ({ id: node.id, title: node.title || 'Untitled card',
+          // A synced ChatGPT conversation keeps its own update log even when it also counts as work.
+          kind: node.chatgptSynced ? 'chatgpt' : 'work', status: node.workItem ? node.workStatus || 'active' : '', areas: node.workScope?.areas || [],
+          owner: node.chatgptSynced ? node.chatgptSyncOwner || '' : node.workOwner?.name || '',
+          latest: node.chatgptSynced ? node.chatgptLatestUpdate || 0 : node.workLatest?.at(-1)?.at || 0 }));
       setSelection(previous => next.some(card => card.id === previous) ? previous : next[0]?.id || '');
       setCards(previous => {
         const byId = new Map(next.map(card => [card.id, card]));
@@ -63,7 +70,8 @@ export function BoardViews({ boardId, token }) {
         }).concat([...byId.values()]);
         return previous.length === ordered.length && previous.every((card, index) =>
           card.id === ordered[index].id && card.title === ordered[index].title &&
-          card.owner === ordered[index].owner && card.latest === ordered[index].latest) ? previous : ordered;
+          card.owner === ordered[index].owner && card.latest === ordered[index].latest && card.kind === ordered[index].kind &&
+          card.status === ordered[index].status && card.areas.join() === ordered[index].areas.join()) ? previous : ordered;
       });
     };
     window.addEventListener('branch:board-updated', receive);
@@ -90,7 +98,7 @@ export function BoardViews({ boardId, token }) {
         dangerouslySetInnerHTML={{ __html: window.Iconoir[view.icon] }} />)}
     </div>, slot)}
     <main id="board-context" role="tabpanel" aria-labelledby="context-tab" tabIndex={0} hidden={!showingContext}>
-      <ContextCanvas active={showingContext} boardId={boardId} token={token} cards={cards}
+      <ContextCanvas active={showingContext} boardId={boardId} token={token} cards={cards} work={work}
         selection={selection} onSelect={setSelection} />
     </main>
   </>;

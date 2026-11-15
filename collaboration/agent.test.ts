@@ -126,3 +126,22 @@ it('agent connections, edits and arrangement are bounded to its own results and 
  await expect(call('inspect_board',{query:'',offset:0})).rejects.toThrow('no longer active');
  await expect(call('arrange_nodes',{nodes:[{id:result.id,x:0,y:0}]})).rejects.toThrow('no longer active');
 });
+it('server edits bump the card revision so attached chats show as stale, and bindings record that revision',async()=>{
+ const {t,auth,runId}=await setup();await t.mutation(internal.chat.claim,{runId});
+ const revision=async(id:string)=>(await t.query(api.boards.read,auth)).nodes.find(n=>n.id===id)!.revision;
+ const steps=[{title:'Verify the team',status:'working' as const,detail:'Check public evidence'}];
+ const plan=await t.mutation(api.boards.updatePlan,{...auth,planId:'stale',goal:'Compare options',steps,expectedVersion:-1});
+ expect(await revision(plan.id)).toBe(1);
+ await t.mutation(api.boards.updatePlan,{...auth,planId:'stale',goal:'Compare options',steps:[{...steps[0],status:'done'}],expectedVersion:0});
+ expect(await revision(plan.id)).toBe(2);
+ // Rewriting identical content is not a change for readers.
+ await t.mutation(api.boards.updatePlan,{...auth,planId:'stale',goal:'Compare options',steps:[{...steps[0],status:'done'}],expectedVersion:1});
+ expect(await revision(plan.id)).toBe(2);
+ const note=await t.mutation(internal.chat.createNode,{runId,callId:'note',node:{kind:'note',title:'Finding',content:'First finding',url:''}});
+ await t.mutation(internal.chat.canvasActionTool,{runId,callId:'edit',name:'update_note',args:{nodeId:note.id,expectedVersion:0,title:'Finding',content:'Updated evidence'}});
+ expect(await revision(note.id)).toBe(2);
+ // A binding stores the source card's revision, not its text version, so it is not stale on arrival.
+ const card=await t.mutation(api.boards.addAgentCard,{...auth,cardId:'linked',kind:'note',title:'Linked',content:'Evidence',url:'',sourceIds:[plan.id]});
+ const board=await t.query(api.boards.read,auth);
+ expect(board.nodes.find(n=>n.id===card.id)!.contexts[0].revision).toBe(board.nodes.find(n=>n.id===plan.id)!.revision);
+});

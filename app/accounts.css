@@ -389,3 +389,16 @@ html body :is(#fit,#zoom,#zoomin,#zoomout){display:inline-flex;align-items:cente
 .a-chatgpt-warning{padding:9px 11px;border-radius:8px;border:1px solid color-mix(in srgb,#c58a1c 45%,transparent);background:color-mix(in srgb,#c58a1c 10%,transparent);font-size:13px;line-height:1.55}
 .a-chatgpt-confirm{display:flex;gap:9px;align-items:flex-start;margin:4px 0 14px;font-size:13px;line-height:1.5;text-align:left;cursor:pointer}
 .a-chatgpt-confirm input{width:auto;margin-top:3px;accent-color:var(--blue,#4879f5)}
+
+/* Context view: area filter, summaries and controls for live work. */
+.context-bar{position:absolute;z-index:2;top:112px;left:16px;right:16px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;cursor:auto;pointer-events:none}
+.context-bar>*{pointer-events:auto}
+.context-areas{display:flex;flex-wrap:wrap;gap:4px}
+.context-areas button{padding:3px 10px;border:1px solid var(--theme-line,#e3e5e8);border-radius:999px;background:var(--theme-surface,#fff);font-size:11px;color:var(--muted)}
+.context-areas button[aria-pressed=true]{border-color:var(--blue);color:var(--theme-ink,#171717)}
+.context-setting{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-size:11px;color:var(--muted)}
+.context-digest{flex-basis:100%;max-width:640px;max-height:132px;overflow:auto;margin:0;padding:10px 12px;border:1px solid var(--theme-line,#e3e5e8);border-radius:10px;background:var(--theme-surface,#fff);font-size:11.5px;line-height:1.5;color:var(--muted);white-space:pre-wrap;overflow-wrap:anywhere}
+.context-actions{position:absolute;z-index:2;left:16px;bottom:20px;display:flex;align-items:center;gap:10px;cursor:auto}
+.context-new{display:inline-block;width:6px;height:6px;margin-left:6px;border-radius:50%;background:var(--blue);vertical-align:middle}
+.a-presence-work{flex:1 1 100%;min-width:0;margin-left:30px;font-style:normal;font-size:10.5px;line-height:1.3;color:var(--theme-muted,#7b8290);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.a-board-presence li{flex-wrap:wrap}

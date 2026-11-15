@@ -7,6 +7,7 @@ const MODEL='gpt-5.4-mini';
 const PORT=Number(process.env.PORT || 4387);
 if (!Number.isInteger(PORT) || PORT<1 || PORT>65535) throw Error('Invalid PORT');
 const collaborationSession=require('../collaboration/server.cjs');
+const AGENT_PATHS=['/api/mcp','/api/chatgpt/mcp','/api/chatgpt/authorize','/api/chatgpt/token','/api/github/webhook','/.well-known/oauth-protected-resource','/.well-known/oauth-protected-resource/api/chatgpt/mcp','/.well-known/oauth-authorization-server'];
 const {ASSISTANT_ROLE,WEB_INSTRUCTIONS:INSTRUCTIONS,webOptions,citedText,reasoningOptions,activityForEvent}=require('../collaboration/web-search.cjs');
 const {contextInput}=require('../collaboration/context-input.cjs');
 function buildRequest(body){
@@ -31,6 +32,9 @@ function createHandler(apiKey,{fetchImpl=fetch,hosted=false}={}){
   const host=req.headers.host;if(hosted?!/^[a-z0-9.-]+(?::\d+)?$/i.test(host||''):![`127.0.0.1:${PORT}`,`localhost:${PORT}`].includes(host)){res.writeHead(403);return res.end();}
   const origin=(hosted?'https://':'http://')+host;
   const url=new URL(req.url,origin);
+  if(url.pathname==='/api/backend')return require('../backend/server.bundle.cjs').route(req,res,url);
+  // Coding agents, the ChatGPT connector and GitHub webhooks: programs, not the browser app.
+  if(AGENT_PATHS.includes(url.pathname))return require('../backend/server.bundle.cjs').agentRoute(req,res,url);
   if(url.pathname==='/api/share-image'||(['/','/app','/app/'].includes(url.pathname)&&(url.searchParams.has('join')||url.searchParams.has('board'))))return require('./social-preview.cjs').servePreview(req,res,url,collaborationSession.socialPreview);
   if(url.pathname==='/api/chatgpt'){try{return await require('../collaboration/chatgpt/routes.cjs')(req,res,url,collaborationSession.chatgptClient(req),{hosted});}catch{res.writeHead(503,{'Content-Type':'application/json','Cache-Control':'no-store'});return res.end(JSON.stringify({error:'ChatGPT connection is unavailable. Try again later.'}));}}
   if(hosted&&['/api/claim','/api/collaboration'].includes(url.pathname)){res.writeHead(410);return res.end();}
@@ -86,7 +90,7 @@ function createHandler(apiKey,{fetchImpl=fetch,hosted=false}={}){
   if(name==='app'||name==='app/')name='index.html';
   const pdfAsset=/^pdfjs\/(?:pdf(?:\.worker)?\.mjs|(?:cmaps|standard_fonts|wasm)\/[a-zA-Z0-9_.-]+)$/.test(name);
   const mathAsset=/^katex\/(?:katex\.min\.css|fonts\/[a-zA-Z0-9_-]+\.(?:woff2?|ttf))$/.test(name);
-  const allowed=mathAsset||pdfAsset||['favicon.ico','favicon.svg','landing.html','landing.css','landing.js','landing-shader.bundle.js','landing-theme.css','index.html','app.js','whiteboard.js','whiteboard.css','coding.js','reactive-grid.js','markdown.bundle.js','context.js','video-context.js','auto-layout.js','media.js','pdf-viewer.js','icons.js','style.css','collaboration.bundle.js','accounts.bundle.js','accounts.css','tooltips.js','tooltips.css','theme.js','theme.css'].includes(name)||/^(fonts|icons)\/[a-zA-Z0-9_.-]+\.(woff2|svg)$/.test(name);
+  const allowed=mathAsset||pdfAsset||['favicon.ico','favicon.svg','landing.html','landing.css','landing.js','landing-shader.bundle.js','landing-theme.css','index.html','app.js','whiteboard.js','whiteboard.css','coding.js','reactive-grid.js','markdown.bundle.js','context.js','work-scope.js','video-context.js','auto-layout.js','media.js','pdf-viewer.js','icons.js','style.css','collaboration.bundle.js','accounts.bundle.js','accounts.css','tooltips.js','tooltips.css','theme.js','theme.css'].includes(name)||/^(fonts|icons)\/[a-zA-Z0-9_.-]+\.(woff2|svg)$/.test(name);
   if(!allowed){res.writeHead(404);return res.end();}
   const mime={'.ico':'image/x-icon','.mjs':'text/javascript','.wasm':'application/wasm','.bcmap':'application/octet-stream','.ttf':'font/ttf','.pfb':'application/octet-stream','.html':'text/html','.js':'text/javascript','.css':'text/css','.woff':'font/woff','.woff2':'font/woff2','.svg':'image/svg+xml'};
   try{const file=fs.readFileSync(path.join(__dirname,name));res.writeHead(200,{'Content-Type':mime[path.extname(name)],'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});res.end(req.method==='HEAD'?undefined:file);}catch{res.writeHead(404);res.end();}

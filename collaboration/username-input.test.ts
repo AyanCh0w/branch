@@ -3,7 +3,7 @@ import React,{act} from 'react';
 import {createRoot} from 'react-dom/client';
 import {it,expect,vi} from 'vitest';
 const {query,client}=vi.hoisted(()=>{const query=vi.fn();return {query,client:{query}};});
-vi.mock('convex/react',()=>({useConvex:()=>client}));
+vi.mock('../backend/react',()=>({useBackend:()=>client,api:{invitations:{suggestions:'invitations:suggestions'}}}));
 import {UsernameInput} from '../accounts/username-input';
 it('supports keyboard selection without submitting, Escape dismissal and manual-entry fallback',async()=>{
  (globalThis as any).IS_REACT_ACT_ENVIRONMENT=true;

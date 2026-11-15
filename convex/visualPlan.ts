@@ -20,7 +20,9 @@ export async function writePlan(ctx:MutationCtx, boardId:Id<'boards'>, userId:Id
   // Never overwrite manual edits, even after the editor lease has expired.
   if(text.toString()!==row.data.planBody){doc.destroy();throw Error('Plan was manually edited. Create a new plan to preserve those edits.');}
   text.delete(0,text.length);text.insert(0,body);
-  await patchNode(ctx,row,{textState:encodeDocument(doc),textVersion:row.textVersion+1,data:{...row.data,planBody:body},updatedBy:userId});doc.destroy();
+  // A new revision marks chats holding the old plan snapshot as stale; they refresh explicitly.
+  const revision=(row.data.revision||1)+(body!==row.data.planBody?1:0);
+  await patchNode(ctx,row,{textState:encodeDocument(doc),textVersion:row.textVersion+1,data:{...row.data,planBody:body,revision},updatedBy:userId});doc.destroy();
   await touchBoard(ctx,boardId);return {id:key,version:row.textVersion+1};
  }
  if(expectedVersion!==undefined&&expectedVersion!==-1)throw Error('Plan not found');

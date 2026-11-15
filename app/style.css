@@ -757,3 +757,30 @@ html body #cards .gh-scope-options label span{flex:1 1 auto;min-width:0}
 .coding-warning{margin:0;padding:9px 11px;border-radius:8px;border:1px solid color-mix(in srgb,#c58a1c 45%,transparent);background:color-mix(in srgb,#c58a1c 10%,transparent);color:var(--theme-ink,#373940);font-size:12px;line-height:1.55}
 .coding-source summary small{color:var(--muted);font-size:11px;font-weight:400}
 .coding-source summary small.coding-source-external{color:#a8761a}
+
+/* Live work: status, owner and scope on plan cards an agent is building from. */
+.work-strip{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;padding:12px 18px 0;font-size:11px;line-height:1.4;color:var(--theme-muted, #6d7178)}
+.work-status{display:inline-flex;align-items:center;gap:6px;font-weight:500;color:var(--theme-ink, #171717)}
+.work-status i{width:7px;height:7px;border-radius:50%;background:#2f9e62}
+.work-strip[data-work-status=idle] .work-status i{background:#c9922b}
+.work-strip[data-work-status=done] .work-status i{background:var(--blue)}
+.work-strip[data-work-status=abandoned] .work-status i{background:var(--theme-muted, #9a9da3)}
+.work-owner{display:inline-flex;align-items:center;gap:5px}.work-owner img{width:16px;height:16px;border-radius:50%}
+.work-scope{display:flex;flex-wrap:wrap;gap:4px;min-width:0}
+.work-chip{max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:1px 7px;border:1px solid var(--theme-line, #e3e5e9);border-radius:999px;font-size:10.5px;color:var(--theme-muted, #6d7178)}
+.work-chip.area{color:var(--theme-ink, #171717);background:var(--theme-raised, #f4f5f7);border-color:transparent}
+.work-end,.work-fold{margin-left:auto;border:1px solid var(--theme-line, #e3e5e9);border-radius:999px;background:none;color:var(--theme-muted, #6d7178);font:inherit;font-size:10.5px;cursor:pointer}
+.work-end{display:grid;place-items:center;width:22px;height:22px;padding:0}.work-end .icon{width:13px;height:13px}.work-fold{padding:2px 9px}
+.work-overlap{display:flex;align-items:flex-start;gap:7px;margin:10px 14px 0;padding:7px 10px;border:1px solid #e9c27a;border-radius:9px;background:#fdf6e7;color:#6b4a0c;font:inherit;font-size:11.5px;line-height:1.4;text-align:left;cursor:pointer}
+.work-overlap .icon{flex:none;width:14px;height:14px;margin-top:1px}.work-overlap strong{font-weight:600}
+:root[data-theme=dark] .work-overlap{border-color:#6d5524;background:#2b2413;color:#f0d9a6}
+.work-latest{padding:0 18px 14px;font-size:11.5px;line-height:1.45;color:var(--theme-muted, #6d7178)}
+.work-latest-title{display:block;margin-bottom:4px;font-size:10px;letter-spacing:.04em;text-transform:uppercase}
+.work-latest ul{margin:0;padding:0;list-style:none;display:grid;gap:3px}.work-latest li{display:grid;grid-template-columns:62px 1fr;gap:8px}
+.work-latest b{font-weight:500;color:var(--theme-ink, #171717)}
+.card.work-folded .card-main,.card.work-folded .work-latest{display:none}.card.work-folded .work-strip{padding-bottom:12px}
+/* A followed source is re-read automatically at Send. */
+.context-chip.following{border-style:dashed}.context-chip.following .source-updated{background:var(--blue)}
+.context-news{margin-top:8px;font-size:11px;line-height:1.45;color:var(--theme-muted, #6d7178)}.context-news>span{font-size:10px;letter-spacing:.04em;text-transform:uppercase}
+.context-news ul{margin:3px 0 0;padding:0;list-style:none;display:grid;gap:2px}.context-news b{font-weight:500;color:var(--theme-ink, #171717)}
+@media(hover:hover) and (pointer:fine){.work-end:hover,.work-fold:hover{color:var(--theme-ink, #171717);border-color:var(--theme-muted, #9a9da3)}.work-overlap:hover{background:#fbedcf}:root[data-theme=dark] .work-overlap:hover{background:#352c16}}

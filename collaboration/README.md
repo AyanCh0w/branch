@@ -1,3 +1,5 @@
+> **Supabase migration branch:** The current runtime is in `backend/`, using Supabase Auth/Postgres/Storage/Realtime and a Node job worker. Follow [the migration guide](../supabase/README.md). Convex-specific setup and test descriptions below document the preserved baseline; they are not current deployment instructions. Permission, Yjs, context, and canvas behavior described below remain requirements. Hosted Supabase integration and cutover are still pending.
+
 # Shared boards
 
 Run `npm run build && npm run dev` for the local frontend at http://127.0.0.1:4387. Configure your own Convex development project with `npx convex dev`; subsequent backend updates can deploy with `npx convex dev --once`. See the [root setup guide](../README.md) for environment configuration.
@@ -161,12 +163,12 @@ These tools are part of the browser shared-chat backend; users need no MCP insta
 
 ## Coding agent handoffs
 
-Branch exposes a Streamable HTTP MCP endpoint at `/mcp` on the Convex site URL. Codex and Claude Code connect from their existing clients and keep their own provider sign-in and billing. Branch issues one revocable MCP key per account and board, and stores only its hash. Guests and viewers cannot create handoffs. The endpoint checks current editing access on every request, including when returning a draft.
+Branch exposes a Streamable HTTP MCP endpoint at `/api/mcp` on the application's own origin. The same endpoint carries the [live coordination](../docs/live-coordination.md) tools. Codex and Claude Code connect from their existing clients and keep their own provider sign-in and billing. Branch issues one revocable MCP key per account and board, and stores only its hash. Guests and viewers cannot create handoffs. The endpoint checks current editing access on every request, including when returning a draft.
 
 Handoffs use acknowledged card text and explicitly selected text sources. The preview is fingerprinted so a concurrent edit requires another review. Files and images are omitted as attachments, and long text is capped with a visible omission marker. New handoffs are readable for one hour. Returned drafts stay private to the initiator until published or discarded. Card deletion revokes its handoffs, even if the card is later restored. Publishing updates only the card's result field and rejects an overwrite if the previously reviewed shared result changed.
 
 ## ChatGPT conversation sync
 
-ChatGPT discovers the separate `/chatgpt/mcp` plugin without credentials. Its profile and sync tools require OAuth. The authorization flow accepts ChatGPT's stable client metadata ID and callback, uses S256 PKCE, binds tokens to the connector resource and a board chosen by a signed-in editor, and rechecks edit access on every save. Disconnect removes the grant and unredeemed codes. Only token and code hashes are stored.
+ChatGPT discovers the separate `/api/chatgpt/mcp` plugin without credentials. Its profile and sync tools require OAuth. The authorization flow accepts ChatGPT's stable client metadata ID and callback, uses S256 PKCE, binds tokens to the connector resource and a board chosen by a signed-in editor, and rechecks edit access on every save. Disconnect removes the grant and unredeemed codes. Only token and code hashes are stored.
 
 The sync tool hashes ChatGPT's conversation metadata and uses it with the connected board and user to find or create one canvas card. Each completed update is stored separately with an idempotency key. The card and board previews omit update bodies. The board header switches between Visualization and Context. Context lays out synced conversations as a graph and loads updates for the selected branch on demand under the ordinary board read permissions. Connection owners and last update times are available in the board snapshot so simultaneous activity is visible across branches without loading their contents. The canvas keeps its pan and zoom while Context is open. No transcript or hidden reasoning is pulled from ChatGPT, and sync does not invoke Branch's AI runs.

@@ -83,7 +83,9 @@ export async function canvasAction(ctx:MutationCtx, runId:Id<'runs'>, callId:str
   if(node.body!==row.data.body||node.title!==row.data.title)throw Error('A person edited this card; create a new note to preserve their work');
   const title=string(args.title,'title',100),body=string(args.content,'content',24000,true),doc=loadDocument(row.textState);
   for(const [field,value] of [['title',title],['body',body]]){const text=doc.getText(field);text.delete(0,text.length);text.insert(0,value);}
-  await patchNode(ctx,row,{textState:encodeDocument(doc),textVersion:row.textVersion+1,data:{...row.data,title,body},updatedBy:run.initiatedBy});doc.destroy();
+  // A new revision marks chats holding the old note snapshot as stale; they refresh explicitly.
+  const revision=(row.data.revision||1)+(title!==row.data.title||body!==row.data.body?1:0);
+  await patchNode(ctx,row,{textState:encodeDocument(doc),textVersion:row.textVersion+1,data:{...row.data,title,body,revision},updatedBy:run.initiatedBy});doc.destroy();
   await touchBoard(ctx,run.boardId);return {id:node.id,version:row.textVersion+1};
  }
  if(name==='arrange_nodes'){

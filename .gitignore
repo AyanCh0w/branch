@@ -21,3 +21,11 @@ coverage/
 # Deployment output and local Vercel project metadata
 public/
 .vercel/
+
+backend/*.bundle.cjs
+supabase/.temp/
+backups/
+
+.wrangler/
+.worker-build/
+.dev.vars*

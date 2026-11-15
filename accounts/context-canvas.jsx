@@ -1,22 +1,37 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { usePaginatedQuery } from 'convex/react';
-import { api } from '../convex/_generated/api';
+import { usePaginatedQuery, useMutation, api } from '../backend/react';
 
 const stepX = 378;
 const stepY = 174;
 const cardWidth = 306;
 const cardHeight = 130;
 const shortDate = timestamp => new Date(timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+const statusLabel = { active: 'Active', idle: 'Idle', done: 'Done', abandoned: 'Closed' };
+const kindLabel = { decision: 'Decision', interface: 'Interface change', blocker: 'Blocker', progress: 'Progress', done: 'Done', landed: 'Landed on GitHub' };
 const initialCamera = () => ({ x: 32, y: 145, z: Math.min(1, Math.max(.25, (innerWidth - 64) / cardWidth)) });
 
-export function ContextCanvas({ active, boardId, token, cards, selection, onSelect }) {
+export function ContextCanvas({ active, boardId, token, cards: allCards, work, selection, onSelect }) {
   const surface = useRef(null);
   const gesture = useRef(null);
   const [camera, setCamera] = useState(initialCamera);
   const [openUpdate, setOpenUpdate] = useState('');
+  const [area, setArea] = useState('');
+  const endWork = useMutation(api.work.end), setWorkContext = useMutation(api.work.setContext);
+  // "New" means newer than the last time this person left the Context view in this browser.
+  const seenKey = 'branch-context-seen-' + boardId;
+  const [seen, setSeen] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    try { setSeen(Number(localStorage.getItem(seenKey)) || 0); } catch {}
+    return () => { try { localStorage.setItem(seenKey, String(Date.now())); } catch {} };
+  }, [active, seenKey]);
+  const areas = [...new Set(allCards.flatMap(card => card.areas))].sort();
+  const filter = areas.includes(area) ? area : '';
+  const cards = filter ? allCards.filter(card => card.areas.includes(filter)) : allCards;
+  const digest = filter ? work?.digests.find(item => item.area === filter) : null;
   const selected = cards.find(card => card.id === selection) ?? cards[0];
   const row = cards.findIndex(card => card.id === selected?.id);
-  const { results, status, loadMore } = usePaginatedQuery(api.chatgptSync.read,
+  const { results, status, loadMore } = usePaginatedQuery(selected?.kind === 'work' ? api.work.updates : api.chatgptSync.read,
     active && selected ? { boardId, token, nodeKey: selected.id } : 'skip', { initialNumItems: 10 });
 
   function zoom(factor, x, y) {
@@ -88,7 +103,18 @@ export function ContextCanvas({ active, boardId, token, cards, selection, onSele
   return <div ref={surface} className="context-canvas"
     style={{ '--context-grid': gridStep + 'px', backgroundPosition: camera.x + 'px ' + camera.y + 'px' }}
     onPointerDown={startPan} onPointerMove={movePan} onLostPointerCapture={stopPan}>
-    {!cards.length && <p className="context-canvas-empty">Updates from connected ChatGPT chats will appear here.</p>}
+    {!allCards.length && <p className="context-canvas-empty">Plans and updates from coding agents and connected ChatGPT chats will appear here.</p>}
+    {(areas.length > 0 || work?.canConfigure) && <div className="context-bar" onPointerDown={event => event.stopPropagation()}>
+      {areas.length > 0 && <div className="context-areas" role="group" aria-label="Filter by project area">
+        <button type="button" aria-pressed={!filter} onClick={() => setArea('')}>All</button>
+        {areas.map(name => <button key={name} type="button" aria-pressed={filter === name} onClick={() => { setOpenUpdate(''); setArea(name); }}>{name}</button>)}
+      </div>}
+      {work?.canConfigure && <label className="context-setting" data-tooltip="Adds a short list of other people's active work to every chat sent on this board">
+        <input type="checkbox" checked={work.workContext} onChange={event => setWorkContext({ boardId, token, enabled: event.target.checked }).catch(error => window.BranchHost.notify(error.message))} />
+        <span>Tell chats about active work</span>
+      </label>}
+      {digest && <p className="context-digest">{digest.text}</p>}
+    </div>}
     <div className="context-world" style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.z})` }}>
       <svg className="context-wires" aria-hidden="true">
         {results.map((item, index) => {
@@ -105,7 +131,7 @@ export function ContextCanvas({ active, boardId, token, cards, selection, onSele
         className="card context-node context-source" onFocus={revealFocused} aria-pressed={card.id === selected?.id}
         style={{ left: 0, top: index * stepY, width: cardWidth }}
         onClick={() => { setOpenUpdate(''); onSelect(card.id); }}>
-        <span className="context-node-kind">ChatGPT {card.owner ? '· ' + card.owner : ''}</span>
+        <span className="context-node-kind">{card.kind === 'work' ? statusLabel[card.status] || 'Active' : 'ChatGPT'} {card.owner ? '· ' + card.owner : ''}{seen > 0 && card.latest > seen && <i className="context-new" aria-label="New since your last visit" />}</span>
         <strong>{card.title}</strong>
         {card.latest > 0 && <time dateTime={new Date(card.latest).toISOString()}>{shortDate(card.latest)}</time>}
         {card.id === selected?.id && status === 'LoadingFirstPage' && <span role="status">Loading updates…</span>}
@@ -114,12 +140,16 @@ export function ContextCanvas({ active, boardId, token, cards, selection, onSele
         style={{ left: (index + 1) * stepX, top: y, width: cardWidth }}
         aria-expanded={item.id === update?.id} onClick={() => setOpenUpdate(item.id === update?.id ? '' : item.id)}>
         <time dateTime={new Date(item.timestamp).toISOString()}>{shortDate(item.timestamp)}</time>
-        <strong>{item.prompt || 'Shared update'}</strong>
+        <strong>{item.prompt || (item.kind ? (kindLabel[item.kind] || 'Update') + (item.source === 'github' ? ' · GitHub' : '') : 'Shared update')}</strong>
         <span className="context-update-excerpt">{item.result}</span>
       </button>)}
       {(status === 'CanLoadMore' || status === 'LoadingMore') && <button type="button" className="context-load a-secondary" onFocus={revealFocused} disabled={status === 'LoadingMore'}
         style={{ left: (results.length + 1) * stepX, top: y + 38 }} onClick={() => loadMore(10)}>{status === 'LoadingMore' ? 'Loading…' : 'Load older updates'}</button>}
     </div>
+    {selected?.kind === 'work' && work?.items.find(item => item.nodeKey === selected.id)?.canEnd && <div className="context-actions" onPointerDown={event => event.stopPropagation()}>
+      <button type="button" className="a-secondary" onClick={() => endWork({ boardId, token, nodeKey: selected.id, outcome: 'done' }).catch(error => window.BranchHost.notify(error.message))}>Mark done</button>
+      <button type="button" className="a-text-button" onClick={() => endWork({ boardId, token, nodeKey: selected.id, outcome: 'abandoned' }).catch(error => window.BranchHost.notify(error.message))}>Close without finishing</button>
+    </div>}
     {update && <article className="context-reader card" aria-label="Shared update">
       <header><time dateTime={new Date(update.timestamp).toISOString()}>{shortDate(update.timestamp)}</time>
         <button type="button" aria-label="Close update" onClick={() => setOpenUpdate('')}>×</button></header>

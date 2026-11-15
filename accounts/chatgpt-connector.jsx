@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { useMutation, useQuery } from 'convex/react';
-import { api } from '../convex/_generated/api';
+import { useMutation, useQuery, api } from '../backend/react';
 
 export function ConnectChatGPT({ request }) {
   const boards = useQuery(api.library.list, {});

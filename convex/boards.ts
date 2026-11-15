@@ -187,7 +187,7 @@ export const addAgentCard = mutation({
    const doc=loadDocument(row.textState),text=readText(doc);doc.destroy();
    // External plan/finding links are frozen text snapshots, never fabricated page retrieval.
    if(!['plan','web'].includes(row.data.type))throw Error('Connect a note or website source');
-   return {id:key+'-'+source,source,title:text.title,body:(row.data.url?'Website URL: '+row.data.url+'\nCollaborator notes:\n':'')+text.body,revision:row.textVersion+1,enabled:true};
+   return {id:key+'-'+source,source,title:text.title,body:(row.data.url?'Website URL: '+row.data.url+'\nCollaborator notes:\n':'')+text.body,revision:row.data.revision||1,enabled:true};
   });
   const location=place(rows.filter(n=>!n.deleted).map(n=>n.data),{x:600,y:80},440,420);
   const data={id:key,type:a.kind==='note'?'plan':a.kind==='chat'?'thread':'web',title:a.title,...location,width:440,revision:1,contexts,...(a.kind==='chat'?{draft:a.content,messages:[]}: {body:a.content}),...(a.kind==='website'?{url:a.url}:{})};

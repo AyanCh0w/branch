@@ -25,7 +25,7 @@ Open https://github.com/settings/apps/new. To have an organization own the app, 
 | Enable Device Flow | Leave unchecked |
 | Setup URL | `https://branch-eta-pink.vercel.app/app?github=installed` |
 | Redirect on update | Check it |
-| Webhook → Active | **Uncheck** it (Branch doesn't use webhooks yet) |
+| Webhook → Active | **Check** it to let GitHub confirm finished work and refresh file cards (optional). Webhook URL: `<your Branch origin>/api/github/webhook`. Set a long random **Webhook secret** and keep it for step 3. After creating the app, open **Permissions & events** and subscribe to **Pull request** and **Push**. |
 
 **Permissions**
 
@@ -63,7 +63,9 @@ Run them once against each deployment you use:
 - **Local development**: run them as they are. They target the local backend in `.env.local`.
 - **Hosted site** (`expert-mallard-315`): the Convex project owner runs them against that deployment, for example with `--prod` if it's the production deployment. **Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` there before deploying this code.** The deployment refuses the new configuration without them.
 
-Nothing needs restarting. The GitHub button in the dock and "Continue with GitHub" on the sign-in screen switch on as soon as all four values are set.
+On the Supabase backend these are ordinary server environment variables (`.env.local` locally, Worker secrets on Cloudflare) rather than Convex settings, and the `oauth/github/callback` URLs above are no longer used. If you enabled the webhook, also set `GITHUB_WEBHOOK_SECRET` to the secret from step 1; the webhook endpoint stays off without it.
+
+The GitHub button in the dock switches on once all four values are set. "Continue with GitHub" on the sign-in screen is not available on the Supabase backend yet.
 
 ### 4. Try it
 
@@ -101,3 +103,13 @@ GitHub allows only one Setup URL, and it points at the hosted site. When you tes
 - `accounts/app.jsx`: the GitHub panel, return-from-GitHub page and sign-in button.
 - `app/app.js`: GitHub cards, the dock button and drag-and-drop.
 - Tests: `collaboration/github.test.ts`.
+
+## Webhooks
+
+With the webhook enabled, GitHub tells Branch when a linked repository changes:
+
+- A pull request opened from a branch an agent named in its plan is noted on that plan.
+- A merged pull request marks that work done and records the files it changed.
+- A push to the default branch refreshes file cards whose files changed, so chats holding the old version show as out of date.
+
+Branch verifies every delivery's signature, keeps only the repository, branch, pull request number, state, title and changed paths, and ignores repositories that are not linked to a board. See [live coordination](live-coordination.md).

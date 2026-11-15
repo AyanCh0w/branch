@@ -1,9 +1,8 @@
 import React,{useState,useEffect,useId} from 'react';
-import {useConvex} from 'convex/react';
-import {api} from '../convex/_generated/api';
+import {useBackend,api} from '../backend/react';
 
 export function UsernameInput({value,onChange,disabled,boardId,teamId,label='Add people by username'}){
- const client=useConvex(),id=useId();
+ const client=useBackend(),id=useId();
  const [focused,setFocused]=useState(false),[dismissed,setDismissed]=useState(false),[active,setActive]=useState(-1),[result,setResult]=useState(null);
  const prefix=value.trim().replace(/^@/,'').toLowerCase();
  const open=focused&&!dismissed&&!disabled&&prefix.length>=2;

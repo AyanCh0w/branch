@@ -1,6 +1,5 @@
 import {startCursors} from './cursors';
 import {avatarURL} from '../accounts/avatar';
-import { ConvexClient } from 'convex/browser';
 import * as Y from 'yjs';
 import { prepareLocalFiles } from './prepare-files.cjs';
 
@@ -76,8 +75,11 @@ function enqueue(work) {
 // keystroke on one card sends only that card's text to everyone else.
 const textSubs = new Map();
 let lastSnapshot = null, rerenderQueued = false;
+// A polling client re-runs every subscription on each change, so one feed that
+// includes card text is cheaper there than one subscription per card.
+let perCardText = true;
 function watchText(key) {
-  if (textSubs.has(key) || !client) return;
+  if (textSubs.has(key) || !client || !perCardText) return;
   textSubs.set(key, client.onUpdate('collaboration:text', args({ nodeKey: key }), value => applyText(key, value), () => {}));
 }
 function unwatchText(key) { const stop = textSubs.get(key); textSubs.delete(key); try { stop?.(); } catch {} }
@@ -139,7 +141,7 @@ function changeText(text, value) {
   if(old.length-left-right)text.delete(left,old.length-left-right);
   if(value.length-left-right)text.insert(left,value.slice(left,value.length-right));
 }
-function metadata(node) { const result = copy(node); for(const key of [...fields,'sharedVersion','sharedTextState','activeRun','activity','draftEpoch','messages','authorProfile','codingResult','chatgptSynced','chatgptSyncOwner','chatgptLatestUpdate']) delete result[key]; return result; }
+function metadata(node) { const result = copy(node); for(const key of [...fields,'sharedVersion','sharedTextState','activeRun','activity','draftEpoch','messages','authorProfile','codingResult','chatgptSynced','chatgptSyncOwner','chatgptLatestUpdate','workItem','workStatus','workOwner','workOwnerId','workScope','workLatest','workPull','workRepo','workFinishedAt','areaDigest','digestBody','planBody','visualPlan']) delete result[key]; return result; }
 // Typing is saved after a short pause (or at least every 1.5 s while typing),
 // not per keystroke. Blur, Send and navigation flush immediately.
 let firstScheduled = 0;
@@ -271,7 +273,7 @@ const coding = {
     nodeKey, handoffId, publish, ...(expectedPublishedId ? { expectedPublishedId } : {}),
   })),
 };
-window.BoardShared={coding,connect:start,async disconnect(){window.BranchCoding?.reset();await deletionQueue;if(ready&&writable&&!failure){try{await flush();await focusTask;await client.mutation('collaboration:release',args({tabId}));}catch{keepRecovery();}}ready=false;active=null;clearTimeout(timer);stopCoding();for(const key of [...textSubs.keys()])unwatchText(key);for(const key of [...streams.keys()])unwatchStream(key);lastSnapshot=null;for(const off of subscriptions.splice(0))off();docs.clear();uploadedFiles.clear();pending.clear();overlays.clear();},get writable(){return writable;},headers(){return {'X-Board-Id':credentials?.boardId||'','X-Board-Token':credentials?.token||'',...(window.BranchAccount?.token?{Authorization:'Bearer '+window.BranchAccount.token}:{})};},get enabled(){return ready;},get applying(){return applying;},saveState,edit,send,deleteNode,moveNodes,async stop(key){try{await client.mutation('chat:stop',args({nodeKey:key}));}catch(error){host.notify(error.message);}},async uploadFile(file){
+window.BoardShared={coding,connect:start,async disconnect(){window.BranchCoding?.reset();await deletionQueue;if(ready&&writable&&!failure){try{await flush();await focusTask;await client.mutation('collaboration:release',args({tabId}));}catch{keepRecovery();}}ready=false;active=null;clearTimeout(timer);stopCoding();for(const key of [...textSubs.keys()])unwatchText(key);for(const key of [...streams.keys()])unwatchStream(key);lastSnapshot=null;for(const off of subscriptions.splice(0))off();docs.clear();uploadedFiles.clear();pending.clear();overlays.clear();},get writable(){return writable;},headers(){return {'X-Board-Id':credentials?.boardId||'','X-Board-Token':credentials?.token||'',...(window.BranchAccount?.token?{Authorization:'Bearer '+window.BranchAccount.token}:{})};},get enabled(){return ready;},get applying(){return applying;},saveState,edit,send,deleteNode,moveNodes,async endWork(nodeKey,outcome){try{await client.mutation('work:end',args({nodeKey,outcome}));host.notify(outcome==='done'?'Marked done':'Work closed');}catch(error){host.notify(error.message);}},async stop(key){try{await client.mutation('chat:stop',args({nodeKey:key}));}catch(error){host.notify(error.message);}},async uploadFile(file){
  const scope=args();const {ticket,url}=await client.mutation('files:uploadUrl',scope);
  const response=await fetch(url,{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream'},body:file});
  if(!response.ok)throw Error('File upload failed');
@@ -281,7 +283,7 @@ document.addEventListener('keydown',e=>{if(ready&&(e.metaKey||e.ctrlKey)&&e.key.
 document.addEventListener('focusin',e=>focusEditor(e.target));
 document.addEventListener('focusout',e=>blurEditor(e.target));
 setInterval(()=>{updateLocks();if(active&&connected){const current=active;focusTask=focusTask.catch(()=>{}).then(async()=>{if(active!==current)return;const result=await client.mutation('collaboration:focus',args({nodeKey:current.key,field:current.field,tabId}));if(result.deleted){if(active===current)active=null;}else current.expiresAt=result.expiresAt;}).catch(error=>{failure=error;updateLocks();});}},8000);
-document.addEventListener('click',e=>{if(ready&&!writable&&e.target.closest('#cards,#chat-panel')&&!e.target.closest('[data-shared-context],[data-source-info],[data-context],[data-play-video],.resource,[data-media-credit],.collapse-card,.chat-preview-toggle,.open-chat-panel,[data-close-chat-panel]')){e.preventDefault();e.stopImmediatePropagation();}},true);
+document.addEventListener('click',e=>{if(ready&&!writable&&e.target.closest('#cards,#chat-panel')&&!e.target.closest('[data-shared-context],[data-work-overlap],[data-work-fold],[data-source-info],[data-context],[data-play-video],.resource,[data-media-credit],.collapse-card,.chat-preview-toggle,.open-chat-panel,[data-close-chat-panel]')){e.preventDefault();e.stopImmediatePropagation();}},true);
 document.addEventListener('submit',e=>{if(ready&&!writable&&e.target.closest('#cards,#chat-panel')){e.preventDefault();e.stopImmediatePropagation();}},true);
 document.addEventListener('click',async e=>{const link=e.target.closest('a[href]');if(!ready||!link||e.defaultPrevented||e.metaKey||e.ctrlKey)return;const target=new URL(link.href,location.href);if(target.origin!==location.origin||target.pathname!=='/')return;e.preventDefault();await window.BoardShared.disconnect();location.assign(target.href);});
 window.addEventListener('pagehide',()=>{if(ready)client.mutation('collaboration:release',args({tabId})).catch(()=>{});});
@@ -289,9 +291,9 @@ window.addEventListener('pagehide',()=>{if(ready)client.mutation('collaboration:
 async function start(config){
   document.body.classList.add('shared-starting');status('Connecting shared board…');
   try{
-    credentials=config;client=config.client||new ConvexClient(config.url);writable=config.role!=='viewer';
+    credentials=config;client=config.client;if(!client)throw Error('Missing shared transport');perCardText=!client.supabase;writable=config.role!=='viewer';
     const snapshot=await client.query('boards:read',args());receive(snapshot);ready=true;connected=client.connectionState().isWebSocketConnected;
-    subscriptions.push(client.onUpdate('boards:live',args(),receive,error=>{failure=error;window.BranchCoding?.reset();document.body.classList.add('shared-starting');status('Access changed · return to your boards');host.notify('Access to this board changed. Return to your boards.');updateLocks();}));
+    subscriptions.push(client.onUpdate(perCardText?'boards:live':'boards:read',args(),receive,error=>{failure=error;window.BranchCoding?.reset();document.body.classList.add('shared-starting');status('Access changed · return to your boards');host.notify('Access to this board changed. Return to your boards.');updateLocks();}));
     subscriptions.push(client.onUpdate('collaboration:editors',args(),value=>{rows=value;updateLocks();},()=>{}));
     subscriptions.push(client.subscribeToConnectionState(state=>{connected=state.isWebSocketConnected;status(connected?'Shared · saved':'Reconnecting · Send paused');updateLocks();}));
     watchCoding();
