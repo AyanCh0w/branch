@@ -3,8 +3,8 @@ import React, {act} from 'react';
 import {createRoot} from 'react-dom/client';
 import {afterEach,expect,it,vi} from 'vitest';
 const {query,mutate}=vi.hoisted(()=>({query:vi.fn(),mutate:vi.fn()}));
-vi.mock('../backend/react',()=>({api:{library:{list:'library:list'},chatgptBrowser:{connect:'connect',connectDesktop:'connectDesktop'}},useQuery:()=>query(),useMutation:()=>mutate}));
-import {ConnectChatGPTSync} from '../accounts/chrome-sync';
+vi.mock('../backend/react',()=>({api:{library:{list:'library:list'},chatgptBrowser:{connect:'connect',connectDesktop:'connectDesktop',count:'count',disconnectBoard:'disconnectBoard'}},useQuery:()=>query(),useMutation:()=>mutate}));
+import {ChromeSyncSettings,ConnectChatGPTSync} from '../accounts/chrome-sync';
 vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);
 afterEach(()=>{vi.clearAllMocks();});
 it.each(['chosen','viewer','missing'])('preselects only editable destination %s and waits for explicit approval',async(hint)=>{
@@ -21,7 +21,34 @@ it.each(['chosen','viewer','missing'])('preselects only editable destination %s 
    await act(async()=>container.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
    expect(mutate).toHaveBeenCalledWith({boardId:'chosen',conversationId:'a'.repeat(64),keyHash:'b'.repeat(64)});
    expect(container.textContent).toContain('Board approved');
-   expect(container.querySelector('a[href="joinbranch://connect"]')).not.toBeNull();
+   expect(container.querySelector('a.a-primary[href="/app?board=chosen"]')?.textContent).toContain('Open this board');
+   expect(container.querySelector('a.a-muted[href="joinbranch://connect"]')?.textContent).toContain('Return to Branch for Mac');
   }else expect((container.querySelector('button.a-primary') as HTMLButtonElement).disabled).toBe(true);
  }finally{await act(async()=>root.unmount());container.remove();}
+});
+
+it('copies the board setup from the only setup action and shows a visible confirmation',async()=>{
+ query.mockReturnValue(0);
+ const writeText=vi.fn().mockResolvedValue(undefined);
+ const previousClipboard=Object.getOwnPropertyDescriptor(navigator,'clipboard');
+ Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText}});
+ const container=document.createElement('div');document.body.append(container);const root=createRoot(container);
+ const Dialog=({children}:{children:React.ReactNode})=>React.createElement('section',null,children);
+ try{
+  await act(async()=>root.render(React.createElement(ChromeSyncSettings,{boardId:'chosen',Dialog,onClose:vi.fn()})));
+  const buttons=container.querySelectorAll('button');
+  expect(buttons).toHaveLength(1);
+  expect(buttons[0].textContent).toBe('Set up with your agent');
+  expect(container.querySelector('a')).toBeNull();
+  await act(async()=>buttons[0].click());
+  expect(buttons[0].textContent).toContain('Copied to clipboard');
+  expect(container.querySelector('[role="status"]')?.textContent).toContain('Paste the instructions');
+  const [[prompt]]=writeText.mock.calls;
+  expect(prompt).toContain('https://joinbranch.dev/app?board=chosen#mac-sync=open');
+  expect(prompt).not.toMatch(/github|swift|clone|build-probe/i);
+ }finally{
+  await act(async()=>root.unmount());container.remove();
+  if(previousClipboard)Object.defineProperty(navigator,'clipboard',previousClipboard);
+  else Reflect.deleteProperty(navigator,'clipboard');
+ }
 });

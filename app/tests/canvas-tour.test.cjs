@@ -86,11 +86,12 @@ test('installation handoff contains setup and only the board destination, not UR
   assert.match(copied,/https:\/\/joinbranch.dev\/mac-setup.html/);
   assert.match(copied,/software catalog or IT/);
   assert.match(copied,/https:\/\/joinbranch.dev\/app\?board=boards_test/);assert.doesNotMatch(copied,/private-test-token|#secret|branch_desktop_launch_/);
-  assert.match(copied,/#mac-sync=1/);
-  assert.match(copied,/this chat’s exact title/);assert.match(copied,/Connect a conversation/);assert.match(copied,/ChatGPT desktop app/);
+  assert.match(copied,/#mac-sync=open/);
+  assert.match(copied,/this chat’s exact title/);assert.match(copied,/Open Branch for Mac/);assert.match(copied,/ChatGPT desktop app/);
   assert.doesNotMatch(copied,/github|swift|build-probe|checkout|pairing prompt|baseline prompt/i);
   assert.equal(d.querySelector('details').open,false);assert.equal(d.querySelector('[data-setup-fallback]').hidden,true);
-  assert.match(d.querySelector('.tour-setup-link').href,/mac-setup.html\?board=boards_test/);
+  assert.equal(d.querySelector('[data-tour="copy-setup"]').textContent,'✓ Copied to clipboard');
+  assert.match(d.querySelector('.tour-connection-status').textContent,/Paste the instructions/);
  }finally{dom.window.close();}
 });
 test('Mac launch link encodes the selected chat and keeps the launch ticket out of copied setup',()=>{
@@ -129,7 +130,7 @@ test('employee setup shows a download only when the first-party installer is pub
    const published=manifest?.installer==='/downloads/branch-for-mac.dmg';
    assert.equal(w.document.getElementById('direct-install').hidden,!published);
    assert.equal(w.document.getElementById('managed-install').hidden,published);
-   assert.equal(w.document.getElementById('open-mac').href,'https://joinbranch.dev/app?board=boards_test#mac-sync=1');
+   assert.equal(w.document.getElementById('open-mac').href,'https://joinbranch.dev/app?board=boards_test#mac-sync=open');
   }finally{dom.window.close();}
  }
 });
