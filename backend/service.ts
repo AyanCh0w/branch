@@ -1,11 +1,12 @@
 import {Pool} from 'pg';
 import {AsyncLocalStorage} from 'node:async_hooks';
-import {createClient} from '@supabase/supabase-js';
+import {createClient,isAuthSessionMissingError} from '@supabase/supabase-js';
 import {createHash,randomUUID} from 'node:crypto';
 import {Engine} from './engine';
 import {Store} from './store';
 import config from './config.cjs';
 import {guardConnection} from './connection';
+import {SessionError} from './session-error';
 // Socket pools must never cross Cloudflare request/event lifetimes.
 const runtime=new AsyncLocalStorage<{pool:Pool,notify?:()=>Promise<void>,barrier?:(boards:string[],xid:string)=>Promise<void>,changed?:(change:any)=>Promise<void>}>();
 let localPool:Pool|undefined;
@@ -31,11 +32,15 @@ export const engine=new Engine(pool,admin?.storage,undefined,async()=>{await run
 export const publicConfig=()=>({provider:'supabase',url:config.url,publishableKey:config.key,legacy:[]});
 export async function identity(token=''){
  if(!token)return {};
- if(!admin)throw Error('Account service unavailable');
+ if(!admin)throw new SessionError(503,'Account service unavailable');
  const {data,error}=await admin.auth.getUser(token);
- if(error||!data.user)throw Error('Sign in again');
+ if(error){
+  if(isAuthSessionMissingError(error)||error.status===401||['bad_jwt','session_expired','session_not_found','user_not_found','user_banned'].includes(error.code||''))throw new SessionError(401,'Sign in again');
+  throw new SessionError(503,'Account service unavailable');
+ }
+ if(!data.user)throw new SessionError(401,'Sign in again');
  const {rows}=await pool.query('select user_id from branch_private.accounts where auth_id=$1',[data.user.id]);
- if(!rows[0])throw Error('Account migration is required');
+ if(!rows[0])throw new SessionError(401,'Account migration is required');
  return {userId:rows[0].user_id,authId:data.user.id};
 }
 export const tokenFrom=(req:any)=>/^Bearer (\S+)$/.exec(req.headers.authorization||'')?.[1]||'';

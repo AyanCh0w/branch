@@ -52,10 +52,22 @@ export class BranchClient {
  setBoardLive(boardId,ready){if(ready)this.liveBoards.add(boardId);else this.liveBoards.delete(boardId);}
  connectionState(){return {isWebSocketConnected:this.online};}
  subscribeToConnectionState(fn){this.connectionListeners.add(fn);return()=>this.connectionListeners.delete(fn);}
+ async recoverSession(token){
+  if(this.closed||this.session?.access_token!==token)return;
+  if(this.rejectedSession?.token===token)return this.rejectedSession.task;
+  const task=this.supabase.auth.signOut({scope:'local'}).catch(()=>{}).then(()=>{
+   // A rejected token should never leave the UI signed in, even if revocation fails.
+   if(this.session?.access_token===token)this.acceptSession(null);
+  });
+  this.rejectedSession={token,task};
+  try{await task;}finally{if(this.rejectedSession?.task===task)this.rejectedSession=null;}
+ }
  async call(kind,name,args,signal,onDependencies){
   const token=this.session?.access_token;let r;
   try{r=await fetch('/api/backend',{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(encode({kind,name:String(name),args})),signal:signal||AbortSignal.timeout(kind==='action'?180000:30000)});}catch(e){if(!signal?.aborted)this.state(false);e.retryable=true;throw e;}
-  const data=decode(await r.json());if(!r.ok){const error=Error(data.error||'Request failed');error.retryable=r.status>=500||r.status===429||data.error==='Could not complete this request.';if(error.retryable)this.state(false);throw error;}this.state(true);if(kind==='query')onDependencies?.(data.dependencies);if(kind!=='query'){const collection={'collaboration:point':'cursors','collaboration:attend':'boardPresence','collaboration:focus':'editors','collaboration:release':'editors','collaboration:updateText':'nodes'}[name];// The committed Supabase revision already refreshes these subscriptions.
+  const data=decode(await r.json());if(!r.ok){const error=Error(data.error||'Request failed');
+   if(r.status===401&&token){await this.recoverSession(token);error.retryable=true;throw error;}
+   error.retryable=r.status>=500||r.status===429||data.error==='Could not complete this request.';if(error.retryable)this.state(false);throw error;}this.state(true);if(kind==='query')onDependencies?.(data.dependencies);if(kind!=='query'){const collection={'collaboration:point':'cursors','collaboration:attend':'boardPresence','collaboration:focus':'editors','collaboration:release':'editors','collaboration:updateText':'nodes'}[name];// The committed Supabase revision already refreshes these subscriptions.
    // Avoid a second read for the same keystroke/lease/presence write.
    if(!this.realtimeReady||!collection)this.invalidate(false,collection?{collections:[collection],boards:[args.boardId]}:null);}return data.value;
  }
