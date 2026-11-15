@@ -335,3 +335,8 @@ button.a-gh-row{cursor:pointer}button.a-gh-row:hover,button.a-gh-row:focus-visib
 .a-github-panel>.a-error,.a-github-panel>.a-share-status{margin:0;padding:0 16px 12px;font-size:12px}
 .a-gh-pick{display:flex;flex-direction:column;gap:8px}
 .a-gh-header .a-gh-switch{min-height:30px;padding:5px 10px;font-size:12px;margin-left:auto}.a-gh-header h2+.a-gh-switch{margin-left:0}
+
+/* Projects are the workspace entry point; profile remains in Account. */
+.a-project-library .a-library-heading { align-items: flex-start; }
+.a-project-library .a-team-description { max-width: 440px; }
+.topbar .top-meta .a-share-trigger { width: auto; padding-inline: 8px; }

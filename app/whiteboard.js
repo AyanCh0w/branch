@@ -21,11 +21,22 @@
  const rectangle = document.createElement('div');
  rectangle.id = 'selection-marquee'; rectangle.hidden = true; rectangle.setAttribute('aria-hidden', 'true'); document.body.append(rectangle);
 
- const empty = document.createElement('button');
- empty.id = 'empty-note'; empty.type = 'button';
- empty.innerHTML = glyph('page') + '<span>Start with a note</span><kbd>N</kbd>';
+ const empty = document.createElement('section');
+ empty.id = 'empty-note'; empty.setAttribute('aria-label','Start your board');
+ empty.innerHTML = '<h1>Give your team a starting point.</h1><p>Plan here, share context, and see everyone’s threads on one canvas.</p><div class="empty-actions"><button type="button" data-start="brief">'+glyph('page')+'<span>Add a project brief</span></button><button type="button" data-start="chat">'+glyph('chat-bubble')+'<span>Start a chat</span></button></div><small>Add files and links from the dock. Board owners can invite teammates with Share.</small>';
  empty.addEventListener('pointerdown', e => e.stopPropagation());
- empty.onclick = () => { if(!writable()) return; const n = newCard('plan', boardInsertPoint()); cardEl(n.id)?.querySelector('.plan-body')?.focus({preventScroll:true}); };
+ empty.onclick = e => {
+  const action=e.target.closest('[data-start]')?.dataset.start;
+  if(!action||!active()||!writable()) return;
+  const n = newCard(action==='brief'?'plan':'thread', boardInsertPoint());
+  if(action==='brief') {
+   n.title='Project brief';n.titleEdited=true;
+   n.body='Goal\n\nConstraints & shared context\n\nDecisions\n\nNext steps & owners\n';
+   refreshCard(n);save();
+  }
+  revealDockNode(n);
+  cardEl(n.id)?.querySelector(action==='brief'?'.plan-body':'[data-prompt]')?.focus({preventScroll:true});
+ };
  document.body.append(empty);
 
  function setTool(value) {
