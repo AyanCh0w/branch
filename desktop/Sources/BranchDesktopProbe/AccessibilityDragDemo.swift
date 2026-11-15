@@ -7,13 +7,14 @@ final class AccessibilityDragDemo: NSView {
     private let openHand = NSCursor.openHand.image
     private let closedHand = NSCursor.closedHand.image
     private let dropTime = 2.35
-    private let endTime = 3.55
+    private let cycleDuration = 3.55
     private var startTime: TimeInterval?
     private var elapsed: TimeInterval = 0
     private var timer: Timer?
 
-    var onMotionPreferenceChange: (() -> Void)?
+    var onPlaybackChange: (() -> Void)?
     var canAnimate: Bool { !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+    var isPlaying: Bool { timer != nil }
 
     init(icon: NSImage) {
         self.icon = icon
@@ -33,44 +34,42 @@ final class AccessibilityDragDemo: NSView {
     // Only the actual app tile should respond to a drag.
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    /// Plays one short demonstration, then leaves the result visible.
+    /// Repeats the demonstration from the current frame while the panel is visible.
     func play() {
-        stop()
-        needsDisplay = true
-        guard canAnimate else { return }
-        startTime = ProcessInfo.processInfo.systemUptime
+        guard canAnimate, !isPlaying, window?.isVisible == true else { return }
+        startTime = ProcessInfo.processInfo.systemUptime - elapsed
         timer = Timer.scheduledTimer(timeInterval: 1.0 / 30, target: self,
                                      selector: #selector(updateFrame(_:)), userInfo: nil, repeats: true)
         timer?.tolerance = 0.005
+        onPlaybackChange?()
     }
 
-    func stop() {
+    /// Holds the current frame so the gesture can be inspected or resumed.
+    func pause() {
         timer?.invalidate()
         timer = nil
         startTime = nil
+        onPlaybackChange?()
+    }
+
+    func stop() {
         elapsed = 0
+        pause()
+        needsDisplay = true
     }
 
     @objc nonisolated private func motionPreferenceChanged(_ notification: Notification) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            if !canAnimate {
-                stop()
-                needsDisplay = true
-            }
-            onMotionPreferenceChange?()
+            if !canAnimate { stop() }
+            else { onPlaybackChange?() }
         }
     }
 
     @objc private func updateFrame(_ timer: Timer) {
         guard let startTime, window?.isVisible == true else { stop(); return }
-        elapsed = min(endTime, ProcessInfo.processInfo.systemUptime - startTime)
+        elapsed = (ProcessInfo.processInfo.systemUptime - startTime).truncatingRemainder(dividingBy: cycleDuration)
         needsDisplay = true
-        if elapsed >= endTime {
-            timer.invalidate()
-            self.timer = nil
-            self.startTime = nil
-        }
     }
 
     override func draw(_ dirtyRect: NSRect) {

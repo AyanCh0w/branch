@@ -30,14 +30,15 @@ final class AccessibilitySetupPanel: NSPanel {
         let demoLabel = NSTextField(labelWithString: "Drag demo")
         demoLabel.font = BranchSyncTheme.font(12, strong: true)
         demoLabel.textColor = BranchSyncTheme.muted
-        let replay = NSButton(title: "Replay demo", target: self, action: #selector(replayDemo))
-        replay.controlSize = .small
-        replay.bezelStyle = .inline
-        replay.isHidden = !dragDemo.canAnimate
-        dragDemo.onMotionPreferenceChange = { [weak dragDemo, weak replay] in
-            replay?.isHidden = dragDemo?.canAnimate != true
+        let playback = NSButton(title: "Play demo", target: self, action: #selector(toggleDemoPlayback))
+        playback.controlSize = .small
+        playback.bezelStyle = .inline
+        playback.isHidden = !dragDemo.canAnimate
+        dragDemo.onPlaybackChange = { [weak dragDemo, weak playback] in
+            playback?.isHidden = dragDemo?.canAnimate != true
+            playback?.title = dragDemo?.isPlaying == true ? "Pause demo" : "Play demo"
         }
-        let demoHeader = NSStackView(views: [demoLabel, replay])
+        let demoHeader = NSStackView(views: [demoLabel, playback])
         demoHeader.orientation = .horizontal
         demoHeader.alignment = .centerY
         demoHeader.distribution = .equalSpacing
@@ -66,14 +67,15 @@ final class AccessibilitySetupPanel: NSPanel {
 
     /// Opens the system permission pane and keeps the drag source alongside it.
     func show(on screen: NSScreen?) {
-        if !isVisible, let frame = screen?.visibleFrame {
+        let opening = !isVisible
+        if opening, let frame = screen?.visibleFrame {
             setFrameTopLeftPoint(NSPoint(x: frame.minX + 20, y: frame.maxY - 70))
         }
         if let settings = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(settings)
         }
         makeKeyAndOrderFront(nil)
-        dragDemo.play()
+        if opening { dragDemo.play() }
     }
 
     override func close() {
@@ -81,8 +83,9 @@ final class AccessibilitySetupPanel: NSPanel {
         super.close()
     }
 
-    @objc private func replayDemo() {
-        dragDemo.play()
+    @objc private func toggleDemoPlayback() {
+        if dragDemo.isPlaying { dragDemo.pause() }
+        else { dragDemo.play() }
     }
 
     /// Reveals the same running bundle for the System Settings Add button or a Finder drag.
