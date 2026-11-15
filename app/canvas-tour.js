@@ -38,6 +38,16 @@
   <div class="tour-controls"><button type="button" data-tour="back">Back</button><div class="tour-dots" aria-hidden="true"></div><button type="button" data-tour="next">Next</button></div>`;
  document.body.append(dialog);
  let index=0,returnFocus=null,viewer=false,savedView=null,cameraFrame=null,highlighted=null,samples=null;
+ const seenUsers=new Set();
+ const seenKey=userId=>`branch:canvas-tour:seen:${userId}`;
+ function hasSeen(userId){
+  if(seenUsers.has(userId))return true;
+  try{return localStorage.getItem(seenKey(userId))==='1';}catch{return false;}
+ }
+ function markSeen(userId){
+  seenUsers.add(userId);
+  try{localStorage.setItem(seenKey(userId),'1');}catch{}
+ }
  let provider='chatgpt', baselinePrompt='';
  const connections=dialog.querySelector('.tour-connections');
  const promptField=dialog.querySelector('textarea');
@@ -162,13 +172,13 @@
  function start({userId,force=false,role,scene}={}){
   if(!userId||document.body.classList.contains('account-mode'))return false;
   if(!force&&new URLSearchParams(location.search).has('context'))return false;
-  // Replay on every canvas entry while the introduction is being refined.
-  if(dialog.open)return false;
+  // Show automatically once per person on this browser. Account can reopen it.
+  if(dialog.open||(!force&&hasSeen(userId)))return false;
   savedView=window.BranchHost?.captureView?.()||null;index=scene==='connections'?slides.length-1:0;provider='chatgpt';viewer=role==='viewer'||!!document.querySelector('.a-viewer-label');returnFocus=document.activeElement;
   const guide=dialog.querySelector('.tour-guide'),avatar=document.querySelector('.dock-agent-avatar img');guide.replaceChildren();
   if(avatar){const image=avatar.cloneNode(true);image.alt='';guide.append(image);}
   else {const url=window.BranchAvatar?.('Canvas guide','#6685cf',true);if(url){const image=document.createElement('img');image.src=url;image.alt='';guide.append(image);}}
-  render();document.body.classList.add('canvas-tour-open');dialog.showModal();guideStep();
+  render();document.body.classList.add('canvas-tour-open');dialog.showModal();markSeen(userId);guideStep();
   (scene==='connections'?connections.querySelector('[aria-pressed="true"]'):dialog.querySelector('[data-tour="next"]')).focus();
   return true;
  }
