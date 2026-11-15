@@ -1,1 +1,14 @@
-(()=>{document.getElementById('open-mac').href=window.BranchMacSetup.appURL(new URLSearchParams(location.search).get('board'));const button=document.getElementById('copy-setup'),status=document.getElementById('copy-status'),fallback=document.getElementById('setup-fallback');button.addEventListener('click',async()=>{const text=window.BranchMacSetup.handoff(new URLSearchParams(location.search).get('board'));try{await navigator.clipboard.writeText(text);fallback.hidden=true;status.textContent='Copied. Paste this into your coding agent on your Mac.';}catch{fallback.value=text;fallback.hidden=false;fallback.focus();fallback.select();status.textContent='Copy the selected instructions and paste them into your coding agent.';}});})();
+(() => {
+ const boardId = new URLSearchParams(location.search).get('board');
+ document.getElementById('open-mac').href = window.BranchMacSetup.boardSetupURL(boardId);
+
+ // The deployment includes this manifest only when it ships a verified installer.
+ fetch('/downloads/mac-release.json', { redirect: 'error' })
+  .then(response => response.ok ? response.json() : null)
+  .then(release => {
+   if (release?.installer !== '/downloads/branch-for-mac.dmg') return;
+   document.getElementById('direct-install').hidden = false;
+   document.getElementById('managed-install').hidden = true;
+  })
+  .catch(() => {});
+})();

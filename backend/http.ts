@@ -37,12 +37,15 @@ export async function route(req:any,res:any,url:URL){
   if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
   if (!req.headers['content-type']?.startsWith('application/json')) return json(415, { error: 'JSON required' });
   const operation = url.searchParams.get(desktop ? 'desktop' : 'chrome');
-  if (operation !== 'status' && operation !== 'save' && operation !== 'stop') return json(400, { error: 'Invalid operation' });
+  if (operation !== 'status' && operation !== 'save' && operation !== 'stop' && (!desktop || operation !== 'redeem')) return json(400, { error: 'Invalid operation' });
   try {
    await rateLimit('chrome:'+createHash('sha256').update(String(req.socket?.remoteAddress || 'local')).digest('hex'), 600, 60);
    const body = await requestBody(req, 128 * 1024);
    if (body === null) return json(413, { error: 'Request too large' });
-   const { key, updateId, title, result } = JSON.parse(body);
+   const { key, updateId, title, result, ticket, boardId, conversationId } = JSON.parse(body);
+   if (operation === 'redeem') {
+    return json(200, { value: await engine.call('chatgptBrowser:redeemDesktop', { key, ticket, boardId, conversationId }, {}, 'mutation', true) });
+   }
    const args = operation === 'save' ? { key, updateId, title, result } : { key };
    return json(200, { value: await engine.call('chatgptBrowser:' + operation, desktop ? { ...args, source: 'desktop' } : args, {},
     operation === 'status' ? 'query' : 'mutation', true) });

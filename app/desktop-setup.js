@@ -1,20 +1,27 @@
 (function(root){
- function appURL(boardId){return "joinbranch://connect"+(/^[A-Za-z0-9_-]{1,160}$/.test(boardId||'')?"?board="+encodeURIComponent(boardId):"");}
- function handoff(boardId){
-  const board=/^[A-Za-z0-9_-]{1,160}$/.test(boardId||'')?'https://joinbranch.dev/app?board='+encodeURIComponent(boardId):'https://joinbranch.dev/app';
-  return `Help me install and set up Branch for Mac so new completed replies from a ChatGPT conversation can sync to my Branch board.
-
-Repository: https://github.com/AyanCh0w/branch
-Setup guide: https://joinbranch.dev/mac-setup.html
-Destination: ${board}
-
-1. Check that this is macOS 14 or newer with Swift 6.1 or newer. Find an existing Branch checkout or clone the repository. Preserve uncommitted work; use a separate checkout if needed. Read AGENTS.md and desktop/README.md before changing anything.
-2. Review the desktop source and build scripts. In the repository, run swift test --package-path desktop and sh desktop/build-probe.sh. A configured Apple signing identity builds Branch for Mac; otherwise the local preview is named Branch Desktop Probe. Do not invent a signed or notarized release, disable Gatekeeper, remove quarantine flags, or change system security settings to make it open.
-3. Open the built app with my approval where required. Guide me through macOS Accessibility permission, explaining that it allows the app to read screen text. Keep this permission limited to this app; do not enable unrelated permissions. If system authentication or a security warning requires me, pause there.
-4. Open the destination in Branch and let me sign in. Click Open Branch for Mac to carry the board choice into the companion. It finds chat windows automatically after Accessibility approval. Let me choose the ChatGPT Mac conversation, click Connect chat, and confirm the preselected destination board in the browser. Use the app's pairing prompt only if it needs to identify the conversation; a baseline prompt alone is not installation or pairing. Never request my passwords, API keys, or existing chat history.
-5. Wait for the app to say Syncing, then test with one new non-sensitive reply. Verify it appears in the board's Context view without refreshing. Existing replies are a baseline, not an automatic history import. Verify Stop syncing or Disconnect revokes future writes. If you cannot control ChatGPT, ask me to send the test message rather than working around that restriction.
-6. Tell me the installed app's exact location, how to reopen it, and what was actually verified. Do not call it connected until the new reply arrives. If building or permission approval is blocked, explain that specific next step.`;
+ const validBoard = id => /^[A-Za-z0-9_-]{1,160}$/.test(id || '');
+ function appURL(boardId, {ticket, chatTitle} = {}) {
+  const params = new URLSearchParams();
+  if (validBoard(boardId)) params.set('board', boardId);
+  if (params.has('board') && /^branch_desktop_launch_[0-9]{13}_[a-f0-9]{64}$/.test(ticket || '')) params.set('ticket', ticket);
+  if (chatTitle?.trim() && [...chatTitle].length <= 240 && !/[\u0000-\u001f\u007f-\u009f]/.test(chatTitle)) params.set('chat', chatTitle);
+  return 'joinbranch://connect' + (params.size ? '?' + params.toString().replaceAll('+', '%20') : '');
  }
- const api={handoff,appURL};if(typeof module!=='undefined'&&module.exports)module.exports=api;
+ function boardSetupURL(boardId){
+  return validBoard(boardId)?'https://joinbranch.dev/app?board='+encodeURIComponent(boardId)+'#mac-sync=1':'https://joinbranch.dev/app';
+ }
+ function handoff(boardId){
+  const board=boardSetupURL(boardId);
+  return `Help me connect this ChatGPT conversation to my team’s Branch board.
+
+Branch for Mac setup: https://joinbranch.dev/mac-setup.html
+My board: ${board}
+
+1. If Branch for Mac is missing, open the setup page. Use the Branch download if available, or tell me to install it through my workplace’s software catalog or IT.
+2. Open my board and leave me at Connect ChatGPT to this board. If you know this chat’s exact title, include it in the URL-encoded mac-chat field in the board link’s fragment. If Branch asks, help me select this conversation and grant Accessibility access.
+
+Keep this chat open. When Branch says Connected, new completed replies appear in the board’s Context view. Tell me where setup stopped if you can’t finish.`;
+ }
+ const api={handoff,appURL,boardSetupURL};if(typeof module!=='undefined'&&module.exports)module.exports=api;
  if(root)root.BranchMacSetup=api;
 })(typeof window!=='undefined'?window:null);

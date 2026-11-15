@@ -4,17 +4,27 @@ import { api, useMutation, useQuery } from '../backend/react';
 import { isChromeSyncOrigin } from '../collaboration/chrome-sync.cjs';
 
 export const chromeSyncAvailable = isChromeSyncOrigin(location.origin);
+export const desktopSyncAvailable = chromeSyncAvailable && location.protocol === 'https:';
 
-export function ChromeSyncSettings({ boardId, Dialog, onClose }) {
+export function ChromeSyncSettings({ boardId, Dialog, onClose, onConnectMac }) {
   const count = useQuery(api.chatgptBrowser.count, { boardId });
   const disconnect = useMutation(api.chatgptBrowser.disconnectBoard);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
+  const [launching, setLaunching] = useState(false);
   return <Dialog title="ChatGPT sync" onClose={onClose}>
-    <p>Choose a ChatGPT conversation in the Mac app, then approve this board. New replies will appear in Context.</p>
-    <p><a className="a-primary" href={appURL(boardId)}>Open Branch for Mac ↗</a></p>
-    <p className="a-muted">Your board choice carries over. Nothing opened? Install the companion below.</p>
-    <button type="button" className="a-primary" onClick={async()=>{try{await navigator.clipboard.writeText(handoff(boardId));setStatus('Setup instructions copied. Paste them into your coding agent on your Mac.');}catch{setStatus('Clipboard unavailable. Open the installation guide to copy the setup instructions.');}}}>Set up with your agent</button>
+    <p>New replies from the chat you choose will appear in this board’s Context. Anyone with access to the board can read them.</p>
+    {desktopSyncAvailable && <p><button type="button" className="a-primary" disabled={launching} onClick={async()=>{
+      setLaunching(true);
+      try {
+        await onConnectMac();
+        setStatus('Continue in Branch for Mac.');
+      } catch {
+        setStatus('Could not open Branch for Mac. Check your connection and try again.');
+      } finally { setLaunching(false); }
+    }}>{launching ? 'Opening Branch for Mac…' : 'Connect ChatGPT to this board'}</button></p>}
+    {desktopSyncAvailable && <p className="a-muted">If Branch for Mac didn’t open, use the installation guide.</p>}
+    <button type="button" className="a-primary" onClick={async()=>{try{await navigator.clipboard.writeText(handoff(boardId));setStatus('Setup instructions copied. Paste them into the ChatGPT conversation you want to connect.');}catch{setStatus('Clipboard unavailable. Open the installation guide for setup steps.');}}}>Copy setup instructions</button>
     <p><a href={'/mac-setup.html?board='+encodeURIComponent(boardId)} target="_blank" rel="noopener noreferrer">Installation guide ↗</a></p>
     <p className="a-muted">First-time setup requires macOS Accessibility approval. Only the chat you choose is shared.</p>
     {!!count && <button type="button" className="a-secondary" disabled={busy} onClick={async () => {
@@ -54,7 +64,7 @@ export function ConnectChatGPTSync({ request, desktop = false }) {
   return <main className="a-link-landing a-chatgpt-consent">
     <h1>{desktop ? 'Connect ChatGPT on Mac' : 'Sync this ChatGPT conversation'}</h1>
     <p>New replies will save to the board you choose. Anyone with access to that board can read them.</p>
-    {completed ? <><p role="status">Board approved. Return to Branch for Mac and wait for “Syncing,” then send a new message in ChatGPT.</p>
+    {completed ? <><p role="status">Board approved. Return to Branch for Mac and wait until the app shows it is connected and syncing, then send a new message in ChatGPT.</p>
       <p><a className="a-primary" href={appURL()}>Return to Branch for Mac ↗</a></p><a href={'/app?board='+encodeURIComponent(selected?.id || '')}>Open this board ↗</a></> : valid ? <form onSubmit={async event => {
       event.preventDefault();
       if (busy || !selected) return;

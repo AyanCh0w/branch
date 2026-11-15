@@ -79,6 +79,38 @@ it('binds desktop approvals to a board, separates browser keys and revokes deskt
   await expect(desktopSave({ ...update, key: expired })).rejects.toThrow('chrome_sync_disconnected');
 });
 
+it('consumes one board-scoped launch ticket after an editor initiates Mac sync', async () => {
+  const firstBoard = await h.call(owner, 'library:create', { title: 'Launch board' });
+  const otherBoard = await h.call(owner, 'library:create', { title: 'Other launch board' });
+  const conversationId = hash('A desktop launch conversation');
+  const key = `branch_desktop_${Date.now() + 60_000}_${'5'.repeat(64)}`;
+  const start = { boardId: firstBoard };
+  await h.call(owner, 'sharing:addMember', { ...start, username: 'context-viewer', role: 'viewer' });
+  await expect(h.call(viewer, 'chatgptBrowser:startDesktop', start)).rejects.toThrow('Board access denied');
+  const { ticket } = await h.call(owner, 'chatgptBrowser:startDesktop', start);
+  const redeem = (values: object) => h.engine.call('chatgptBrowser:redeemDesktop', values, {}, 'mutation', true);
+  const status = () => h.engine.call('chatgptBrowser:status', { key, source: 'desktop' }, {}, 'query', true);
+  const request = { ...start, ticket, conversationId, key };
+
+  expect(await h.call(owner, 'chatgptBrowser:count', start, 'query')).toBe(0);
+  await expect(status()).rejects.toThrow('chrome_sync_disconnected');
+  await expect(redeem({ ...request, boardId: otherBoard })).rejects.toThrow('chrome_sync_disconnected');
+  await expect(h.call(owner, 'chatgptBrowser:redeemDesktop', request)).rejects.toThrow('Unknown operation');
+  const [first, replay] = await Promise.allSettled([redeem(request), redeem(request)]);
+  expect([first.status, replay.status].sort()).toEqual(['fulfilled', 'rejected']);
+  expect(await status()).toEqual({ boardId: firstBoard, boardTitle: 'Launch board' });
+  expect(await h.call(owner, 'chatgptBrowser:count', start, 'query')).toBe(1);
+  const update = { key, source: 'desktop', updateId: randomUUID(), title: 'Connected chat', result: 'A new completed reply' };
+  const saved = await h.engine.call('chatgptBrowser:save', update, {}, 'mutation', true);
+  const context = await h.call(owner, 'agentContext:read', { ...start, token: '', nodeKey: saved.cardId, limit: 10 }, 'query');
+  expect(context.items.map((item: any) => item.result)).toEqual([update.result]);
+
+  const pending = await h.call(owner, 'chatgptBrowser:startDesktop', start);
+  await h.call(owner, 'chatgptBrowser:disconnectBoard', start);
+  await expect(redeem({ ...request, ticket: pending.ticket })).rejects.toThrow('chrome_sync_disconnected');
+  await expect(status()).rejects.toThrow('chrome_sync_disconnected');
+});
+
 it('delivers only approved coding handoffs, keeps drafts private, and publishes a result note', async () => {
   const nodeKey = 'coding-source';
   const args = { ...scope(), nodeKey };

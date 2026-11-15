@@ -18,6 +18,9 @@ struct DesktopSyncClient: Sendable {
 
     private struct Request: Encodable {
         let key: String
+        var ticket: String? = nil
+        var boardId: String? = nil
+        var conversationId: String? = nil
         var updateId: String? = nil
         var title: String? = nil
         var result: String? = nil
@@ -65,6 +68,12 @@ struct DesktopSyncClient: Sendable {
         url.fragment = "desktop-sync=1&conversation=\(Self.digest(conversationID.lowercased()))&challenge=\(Self.digest(key))"
         if let preferredBoardID { url.fragment! += "&board=\(preferredBoardID)" }
         return url.url!
+    }
+
+    /// Exchanges the board editor’s single-use launch ticket for this chat’s sync grant.
+    func redeem(_ ticket: String, boardID: String) async throws -> Board {
+        try await call("redeem", Request(key: key, ticket: ticket, boardId: boardID,
+            conversationId: Self.digest(conversationID.lowercased())))
     }
 
     /// Fetches the board approved for this session.
