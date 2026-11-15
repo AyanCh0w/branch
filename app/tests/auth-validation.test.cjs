@@ -1,0 +1,6 @@
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const {validateSignup,fieldForAuthError}=require('../../accounts/auth-validation.cjs');
+test('the reported email-as-username error targets username, not the password',()=>{const e=validateSignup('eshteremberg@icloud.com','a-long-test-password');assert.match(e.username,/not an email/);assert.equal(e.password,undefined);});
+test('normal usernames and normalized usernames pass; punctuation and length violations do not',()=>{for(const name of ['eric_s','ERIC-S','  eric  ','ｅｒｉｃ'])assert.deepEqual(validateSignup(name,'twelve_chars'),{});for(const name of ['ab','first last','eric.s','a'.repeat(65)])assert.ok(validateSignup(name,'twelve_chars').username);});
+test('password length errors remain separate from username rules',()=>{assert.match(validateSignup('eric','short').password,/12/);assert.equal(validateSignup('eric','short').username,undefined);assert.ok(validateSignup('eric','a'.repeat(513)).password);assert.deepEqual(validateSignup('eric','spaces @! $ and unicode é'),{});});
+test('ambiguous sign-in errors remain generic',()=>{assert.equal(fieldForAuthError('Check your username and password'),null);assert.equal(fieldForAuthError('That username is taken'),'username');assert.equal(fieldForAuthError('Use at least 12 characters for your password'),'password');});
