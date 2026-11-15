@@ -19,17 +19,17 @@
    <div aria-live="polite" aria-atomic="true"><h2 id="canvas-tour-title"></h2><p id="canvas-tour-copy"></p></div>
    <section class="tour-connections" aria-label="Agent setup" hidden>
     <div class="tour-providers" role="group" aria-label="Choose an agent">
-     <button type="button" data-tour="provider" data-provider="chatgpt" aria-pressed="true">ChatGPT</button>
+     <button type="button" data-tour="provider" data-provider="chatgpt" aria-pressed="true">ChatGPT or Codex</button>
      <button type="button" data-tour="provider" data-provider="claude" aria-pressed="false">Claude Code</button>
     </div>
     <div class="tour-provider-panel" data-tour-panel="chatgpt">
-     <p>Bring new replies from one ChatGPT conversation into this board’s Context.</p>
-     <button type="button" class="tour-action tour-open-mac" data-tour="connect-mac">Connect ChatGPT to this board</button>
-     <p>Choose your chat in Branch for Mac. Send a message once it says Connected.</p>
+     <p>Bring new replies from a ChatGPT or Codex conversation into this board’s Context.</p>
+     <button type="button" class="tour-action tour-open-mac" data-tour="connect-mac">Connect a conversation</button>
+     <p>Choose your chat in Branch for Mac. Send a message once it says Sync is on.</p>
      <button type="button" data-tour="copy-setup">Copy setup instructions</button>
      <a class="tour-setup-link" href="/mac-setup.html" target="_blank" rel="noopener noreferrer">Installation guide ↗</a>
      <p class="tour-setup-note">If Branch for Mac didn’t open, use the installation guide.</p>
-     <textarea readonly rows="5" aria-label="ChatGPT setup instructions" data-setup-fallback hidden></textarea>
+     <textarea readonly rows="5" aria-label="Mac sync setup instructions" data-setup-fallback hidden></textarea>
      <details class="tour-troubleshooting"><summary>Troubleshooting an installed app</summary><p>Only use this check after installation, if the app asks you to verify what it can read.</p>
       <textarea readonly rows="3" aria-label="Baseline prompt" data-baseline></textarea>
       <button type="button" data-tour="copy-baseline">Copy compatibility prompt</button>
@@ -163,8 +163,8 @@
  async function copySetup(){
   const value=window.BranchMacSetup.handoff(new URLSearchParams(location.search).get('board'));
   const field=dialog.querySelector('[data-setup-fallback]');
-  try{await navigator.clipboard.writeText(value);field.hidden=true;connectionStatus.textContent='Setup instructions copied. Paste them into the ChatGPT conversation you want to connect.';}
-  catch{field.value=value;field.hidden=false;field.focus();field.select();connectionStatus.textContent='Copy the selected instructions and paste them into your ChatGPT conversation.';}
+  try{await navigator.clipboard.writeText(value);field.hidden=true;connectionStatus.textContent='Setup instructions copied. Paste them into the conversation you want to connect.';}
+  catch{field.value=value;field.hidden=false;field.focus();field.select();connectionStatus.textContent='Copy the selected instructions and paste them into the conversation you want to connect.';}
  }
  async function copyBaseline(){
   try{

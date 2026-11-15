@@ -72,12 +72,13 @@ actor ChatWindows {
         let label: String
     }
 
-    /// Lists only windows belonging to the installed ChatGPT desktop apps.
+    static let supportedBundleIDs = ["com.openai.codex", "com.openai.chat"]
+
+    /// Lists conversation windows from ChatGPT and Codex.
     func list() -> [Choice] {
         guard AXIsProcessTrusted() else { return [] }
-        let bundleIDs = ["com.openai.codex", "com.openai.chat"]
         choices = []
-        for bundleID in bundleIDs {
+        for bundleID in Self.supportedBundleIDs {
             for application in NSRunningApplication.runningApplications(withBundleIdentifier: bundleID) {
                 let app = AXUIElementCreateApplication(application.processIdentifier)
                 AXUIElementSetMessagingTimeout(app, 0.15)
@@ -89,7 +90,7 @@ actor ChatWindows {
             }
         }
         return choices.enumerated().map { index, window in
-            Choice(title: window.title, label: "\(index + 1). \(window.title.isEmpty ? "ChatGPT window" : window.title)")
+            Choice(title: window.title, label: "\(index + 1). \(window.title.isEmpty ? "Untitled window" : window.title)")
         }
     }
 

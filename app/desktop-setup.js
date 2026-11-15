@@ -12,15 +12,15 @@
  }
  function handoff(boardId){
   const board=boardSetupURL(boardId);
-  return `Help me connect this ChatGPT conversation to my team’s Branch board.
+  return `Help me connect this conversation to my team’s Branch board from ChatGPT or Codex.
 
 Branch for Mac setup: https://joinbranch.dev/mac-setup.html
 My board: ${board}
 
 1. If Branch for Mac is missing, open the setup page. Use the Branch download if available, or tell me to install it through my workplace’s software catalog or IT.
-2. Open my board and leave me at Connect ChatGPT to this board. If you know this chat’s exact title, include it in the URL-encoded mac-chat field in the board link’s fragment. If Branch asks, help me select this conversation and grant Accessibility access.
+2. Open my board and select Connect a conversation. If you know this chat’s exact title, include it in the URL-encoded mac-chat field in the board link’s fragment. If Branch asks, help me select this conversation and grant Accessibility access.
 
-Keep this chat open. When Branch says Connected, new completed replies appear in the board’s Context view. Tell me where setup stopped if you can’t finish.`;
+Keep this chat open. When Branch says Sync is on, new completed replies appear in the board’s Context view. Tell me where setup stopped if you can’t finish.`;
  }
  const api={handoff,appURL,boardSetupURL};if(typeof module!=='undefined'&&module.exports)module.exports=api;
  if(root)root.BranchMacSetup=api;

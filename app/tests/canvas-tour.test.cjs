@@ -87,7 +87,7 @@ test('installation handoff contains setup and only the board destination, not UR
   assert.match(copied,/software catalog or IT/);
   assert.match(copied,/https:\/\/joinbranch.dev\/app\?board=boards_test/);assert.doesNotMatch(copied,/private-test-token|#secret|branch_desktop_launch_/);
   assert.match(copied,/#mac-sync=1/);
-  assert.match(copied,/this chat’s exact title/);assert.match(copied,/Connect ChatGPT to this board/);
+  assert.match(copied,/this chat’s exact title/);assert.match(copied,/Connect a conversation/);assert.match(copied,/ChatGPT or Codex/);
   assert.doesNotMatch(copied,/github|swift|build-probe|checkout|pairing prompt|baseline prompt/i);
   assert.equal(d.querySelector('details').open,false);assert.equal(d.querySelector('[data-setup-fallback]').hidden,true);
   assert.match(d.querySelector('.tour-setup-link').href,/mac-setup.html\?board=boards_test/);
@@ -105,7 +105,7 @@ test('clipboard failure exposes selectable installation instructions',async()=>{
  const {dom,w,d,tour,click}=boot();try{
   Object.defineProperty(w.navigator,'clipboard',{value:{async writeText(){throw Error('denied');}}});
   tour.start({userId:'one',scene:'connections'});click('copy-setup');await new Promise(setImmediate);
-  const field=d.querySelector('[data-setup-fallback]');assert.equal(field.hidden,false);assert.match(field.value,/Help me connect this ChatGPT conversation/);
+  const field=d.querySelector('[data-setup-fallback]');assert.equal(field.hidden,false);assert.match(field.value,/Help me connect this conversation/);
   const count=d.querySelector('.tour-count').textContent;field.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));assert.equal(d.querySelector('.tour-count').textContent,count);
  }finally{dom.window.close();}
 });

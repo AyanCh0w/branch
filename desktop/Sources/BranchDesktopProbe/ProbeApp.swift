@@ -62,7 +62,7 @@ final class ProbeApp: NSObject, NSApplicationDelegate {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.title = "Branch"
         let menu = NSMenu()
-        let sync = NSMenuItem(title: "ChatGPT Sync…", action: #selector(showSync), keyEquivalent: "")
+        let sync = NSMenuItem(title: "Conversation Sync…", action: #selector(showSync), keyEquivalent: "")
         sync.target = self
         let show = NSMenuItem(title: "Desktop Sync Probe…", action: #selector(showWindow), keyEquivalent: "")
         show.target = self
