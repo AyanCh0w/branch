@@ -23,7 +23,7 @@
      <button type="button" data-tour="provider" data-provider="claude" aria-pressed="false">Claude Code</button>
     </div>
     <div class="tour-provider-panel" data-tour-panel="chatgpt">
-     <p>To test ChatGPT on Mac, send this prompt in a fresh Chat, then select the chat in Branch Desktop Probe.</p>
+     <p>For a local board, open Branch → ChatGPT Sync on Mac to pair a chat. To check what the app can read, use this prompt with Desktop Sync Probe.</p>
      <textarea readonly rows="3" aria-label="Baseline prompt"></textarea>
      <button type="button" class="tour-action" data-tour="copy-baseline">Copy baseline prompt</button>
      <button type="button" data-tour="chrome" hidden>Set up Chrome sync</button>

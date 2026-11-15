@@ -10,6 +10,23 @@ actor ChatWindows {
         case permissionLost
     }
 
+    enum SyncRead: Sendable {
+        case transcript(ChatTranscript)
+        case incomplete, windowChanged, permissionLost
+    }
+
+    private struct Frame {
+        let elements: [ChatElement]
+        let chatID: String?
+        let title: String
+        let isGenerating: Bool
+    }
+
+    private enum WindowRead {
+        case frame(Frame)
+        case incomplete, windowChanged, permissionLost
+    }
+
     private struct Window {
         let app: AXUIElement
         let element: AXUIElement
@@ -48,35 +65,65 @@ actor ChatWindows {
 
     /// Searches one window for synthetic markers and returns no raw Accessibility text.
     func sample(matching prompts: ProbePrompts) -> Read {
+        switch readWindow() {
+        case .incomplete: return .incomplete
+        case .windowChanged: return .windowChanged
+        case .permissionLost: return .permissionLost
+        case .frame(let frame):
+            var signals = WindowSample(stopControl: frame.isGenerating, chatURL: frame.chatID != nil)
+            for element in frame.elements {
+                for value in [element.text] + element.labels {
+                    signals.baseline = signals.baseline || value.contains(prompts.baseline)
+                    signals.firstLine = signals.firstLine || value.contains(prompts.firstLine)
+                    signals.lastLine = signals.lastLine || value.contains(prompts.lastLine)
+                }
+            }
+            return .sample(signals)
+        }
+    }
+
+    /// Returns assistant turns from the selected window and its chat URL when available.
+    func syncSample() -> SyncRead {
+        switch readWindow() {
+        case .incomplete: return .incomplete
+        case .windowChanged: return .windowChanged
+        case .permissionLost: return .permissionLost
+        case .frame(let frame):
+            return .transcript(ChatTranscript(conversationID: frame.chatID, title: frame.title, isGenerating: frame.isGenerating,
+                                            replies: ChatTranscript.completedReplies(in: frame.elements)))
+        }
+    }
+
+    private func readWindow() -> WindowRead {
         guard AXIsProcessTrusted() else { return .permissionLost }
         guard let selected, isSameWindow(selected) else { return .windowChanged }
 
         let clock = ContinuousClock()
         let deadline = clock.now + .milliseconds(900)
-        var pending = [selected.element]
+        var pending: [(AXUIElement, Int?)] = [(selected.element, nil)]
         var visited = Set<AXUIElement>()
-        var signals = WindowSample()
+        var elements: [ChatElement] = []
+        var isGenerating = false
         var observedPath: String?
 
-        while let element = pending.popLast() {
+        while let (element, parent) = pending.popLast() {
             guard !Task.isCancelled, clock.now < deadline, visited.count < 2400 else { return .incomplete }
             guard visited.insert(element).inserted else { continue }
             let keys = [kAXRoleAttribute, kAXTitleAttribute, kAXDescriptionAttribute, kAXValueAttribute,
-                        kAXIdentifierAttribute, kAXHelpAttribute, kAXChildrenAttribute]
+                        kAXIdentifierAttribute, kAXHelpAttribute, "AXDOMIdentifier", kAXChildrenAttribute]
             var raw: CFArray?
             let error = AXUIElementCopyMultipleAttributeValues(element, keys as CFArray, [], &raw)
-            if error == .cannotComplete { return .incomplete }
-            guard error == .success, let attributes = raw as? [Any], attributes.count == keys.count else { continue }
+            guard error == .success, let attributes = raw as? [Any], attributes.count == keys.count else { return .incomplete }
 
             let role = attributes[0] as? String ?? ""
-            let words = attributes[1...5].compactMap { $0 as? String }
-            for value in words {
-                signals.baseline = signals.baseline || value.contains(prompts.baseline)
-                signals.firstLine = signals.firstLine || value.contains(prompts.firstLine)
-                signals.lastLine = signals.lastLine || value.contains(prompts.lastLine)
-            }
+            let text = [attributes[3], attributes[1], attributes[2]].compactMap { $0 as? String }
+                .first { !$0.isEmpty } ?? ""
+            let labels = [attributes[1], attributes[2], attributes[4], attributes[5], attributes[6]]
+                .compactMap { $0 as? String }
+            let index = elements.count
+            elements.append(ChatElement(role: role, labels: labels, text: text, parent: parent))
             if role == kAXButtonRole {
-                signals.stopControl = signals.stopControl || words.contains(where: Self.isStopControl)
+                isGenerating = isGenerating || (labels + [text]).contains(where: Self.isStopControl)
             }
             if role == kAXWindowRole || role == "AXWebArea" {
                 for key in [kAXURLAttribute, kAXDocumentAttribute] {
@@ -85,8 +132,8 @@ actor ChatWindows {
                     observedPath = path
                 }
             }
-            if let children = attributes[6] as? [AXUIElement] {
-                pending.append(contentsOf: children.reversed())
+            if let children = attributes[7] as? [AXUIElement] {
+                pending.append(contentsOf: children.reversed().map { ($0, index) })
             }
         }
 
@@ -96,8 +143,7 @@ actor ChatWindows {
             guard observedPath == chatPath else { return .windowChanged }
         }
         chatPath = observedPath
-        signals.chatURL = observedPath != nil
-        return .sample(signals)
+        return .frame(Frame(elements: elements, chatID: observedPath, title: selected.title, isGenerating: isGenerating))
     }
 
     private static func isStopControl(_ label: String) -> Bool {

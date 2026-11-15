@@ -22,20 +22,27 @@ export async function route(req:any,res:any,url:URL){
    return json(400, { error: 'Could not complete this handoff.' });
   }
  }
- if (url.searchParams.has('chrome')) {
+ if (url.searchParams.has('chrome') || url.searchParams.has('desktop')) {
+  const desktop = url.searchParams.has('desktop');
   const extensionOrigin = 'chrome-extension://lgbhkehiipjkjhpdkkmakodccahllneh';
-  if (!isChromeSyncOrigin(url.origin) || req.headers.origin && req.headers.origin !== extensionOrigin) {
+  const loopback = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket?.remoteAddress);
+  const invalidClient = desktop
+   ? url.searchParams.has('chrome') || !loopback || req.headers.origin !== undefined || req.headers['sec-fetch-site'] !== undefined
+   : !!req.headers.origin && req.headers.origin !== extensionOrigin;
+  if (!isChromeSyncOrigin(url.origin) || invalidClient) {
    return json(403, { error: 'Invalid origin' });
   }
   if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
   if (!req.headers['content-type']?.startsWith('application/json')) return json(415, { error: 'JSON required' });
-  const operation = url.searchParams.get('chrome');
+  const operation = url.searchParams.get(desktop ? 'desktop' : 'chrome');
   if (operation !== 'status' && operation !== 'save' && operation !== 'stop') return json(400, { error: 'Invalid operation' });
   try {
    await rateLimit('chrome:'+createHash('sha256').update(String(req.socket?.remoteAddress || 'local')).digest('hex'), 600, 60);
    const body = await requestBody(req, 128 * 1024);
    if (body === null) return json(413, { error: 'Request too large' });
-   return json(200, { value: await engine.call('chatgptBrowser:' + operation, JSON.parse(body), {},
+   const { key, updateId, title, result } = JSON.parse(body);
+   const args = operation === 'save' ? { key, updateId, title, result } : { key };
+   return json(200, { value: await engine.call('chatgptBrowser:' + operation, desktop ? { ...args, source: 'desktop' } : args, {},
     operation === 'status' ? 'query' : 'mutation', true) });
   } catch (error: any) {
    if (error?.message === 'chrome_sync_disconnected') return json(401, { error: error.message });
@@ -56,7 +63,7 @@ export async function route(req:any,res:any,url:URL){
   const {kind,name,args={}}=body;
   if(!['query','mutation','action'].includes(kind)||typeof name!=='string')return json(400,{error:'Invalid operation'});
   await rateLimit('rpc:'+createHash('sha256').update(ip).digest('hex'),4000,60);
-  if (name.startsWith('chatgptBrowser:') && !isChromeSyncOrigin(url.origin)) return json(403, { error: 'Chrome sync requires local Branch.' });
+  if (name.startsWith('chatgptBrowser:') && !isChromeSyncOrigin(url.origin)) return json(403, { error: 'ChatGPT sync requires local Branch.' });
   const result=await requestClient(req)[kind](name,args);return json(200,{value:result});
  }catch(error:any){
   // Log only stack locations; never SQL, arguments, tokens, or error messages.

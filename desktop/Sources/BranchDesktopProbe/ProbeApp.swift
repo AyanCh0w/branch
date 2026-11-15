@@ -12,6 +12,9 @@ final class ProbeApp: NSObject, NSApplicationDelegate {
     private var isRefreshing = false
     private var report: String?
     private var statusItem: NSStatusItem?
+    private var stopSyncItem: NSMenuItem?
+    private var syncActive = false
+    private lazy var syncPanel = DesktopSyncPanel()
 
     private let window = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 500, height: 400),
@@ -36,20 +39,37 @@ final class ProbeApp: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         setUpMenu()
         setUpWindow()
-        showWindow()
+        syncPanel.onActivity = { [weak self] active in
+            self?.syncActive = active
+            self?.updateMenu()
+        }
+        syncPanel.show()
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        watch?.cancel()
+        return syncPanel.quitIfSyncing(then: { sender.reply(toApplicationShouldTerminate: true) })
+            ? .terminateLater : .terminateNow
     }
 
     private func setUpMenu() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.title = "Branch"
         let menu = NSMenu()
+        let sync = NSMenuItem(title: "ChatGPT Sync…", action: #selector(showSync), keyEquivalent: "")
+        sync.target = self
         let show = NSMenuItem(title: "Desktop Sync Probe…", action: #selector(showWindow), keyEquivalent: "")
         show.target = self
-        let quit = NSMenuItem(title: "Quit Branch Probe", action: #selector(quitApp), keyEquivalent: "q")
+        let stop = NSMenuItem(title: "Stop syncing", action: #selector(stopSync), keyEquivalent: "")
+        stop.target = self
+        stopSyncItem = stop
+        menu.autoenablesItems = false
+        let quit = NSMenuItem(title: "Quit Branch", action: #selector(quitApp), keyEquivalent: "q")
         quit.target = self
-        menu.items = [show, .separator(), quit]
+        menu.items = [sync, show, stop, .separator(), quit]
         item.menu = menu
         statusItem = item
+        updateMenu()
     }
 
     private func setUpWindow() {
@@ -121,6 +141,9 @@ final class ProbeApp: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate()
     }
+
+    @objc private func showSync() { syncPanel.show() }
+    @objc private func stopSync() { syncPanel.stop() }
 
     @objc private func quitApp() {
         watch?.cancel()
@@ -224,7 +247,12 @@ final class ProbeApp: NSObject, NSApplicationDelegate {
         streamButton.isEnabled = watch != nil && run.stage == .ready
         stopButton.isEnabled = watch != nil
         reportButton.isEnabled = report != nil
-        statusItem?.button?.title = watch == nil ? "Branch" : "Branch •"
+        updateMenu()
+    }
+
+    private func updateMenu() {
+        stopSyncItem?.isEnabled = syncActive
+        statusItem?.button?.title = watch == nil && !syncActive ? "Branch" : "Branch •"
     }
 
     @objc private func stop() {

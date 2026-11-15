@@ -44,7 +44,7 @@ For a database already on migration 002, apply `202611140003_agent_context.sql` 
 
 Only the project URL and publishable key reach the browser. Database credentials, secret keys, provider keys, and personal connection tokens stay on the server. Application records are in `branch_private`, which browser roles cannot access. The public revision table exposes only the signed-in user's own counter under RLS. Private file access uses signed URLs valid for one hour; previously issued URLs remain valid until expiry even if membership changes.
 
-### Isolated Chrome sync development
+### Isolated ChatGPT sync development
 
 On an Apple silicon Mac, run `SUPABASE_EXPERIMENTAL_STACK=1 npx --yes --package=supabase@3.1.0 supabase start --runtime native --preparation on-demand` from this checkout. This starts a separate local Supabase stack and applies all migrations. It does not require Supabase dashboard access, `supabase link`, or a production data import.
 
@@ -52,9 +52,9 @@ Save the local stack's API URL, publishable key, secret key, and database URL un
 
 In Chrome, load the unpacked extension from `extensions/branch-sync` (version `0.2.0`), then reload ChatGPT. Use a new local Branch account and board. Open an ordinary ChatGPT conversation, send a baseline message, then choose the test board from the **Branch sync** badge. Two new replies should show up on one card in **Context** and survive a reload. The baseline and any replies sent after **Stop syncing** should stay out of Branch.
 
-For regular ChatGPT in the macOS app, [Branch Desktop Probe](../desktop/README.md) checks whether the selected chat exposes completed replies. The probe is read-only and does not connect to Supabase.
+For regular ChatGPT in the macOS app, use [Branch's menu bar app](../desktop/README.md). Approving a local board pairs it with one desktop conversation. The desktop endpoint accepts a short-lived capability, and saves only new assistant replies identified by the app. The bundled probe can check whether the selected window exposes the signals required for capture.
 
-The board’s canvas tour ends with **Connect an agent**, also available from the account menu. ChatGPT setup includes the baseline prompt shared with the Mac probe and a shortcut to Chrome sync on the supported local address. Board editors can open the Claude Code connection setup from the same step, even before creating a card. Card handoffs still start from the source card.
+The board’s canvas tour ends with **Connect an agent**, also available from the account menu. ChatGPT setup points to the Mac menu bar app, includes the probe’s baseline prompt, and links to Chrome sync on the supported local address. Board editors can open the Claude Code connection setup from the same step, even before creating a card. Card handoffs still start from the source card.
 
 ## Data and account migration
 

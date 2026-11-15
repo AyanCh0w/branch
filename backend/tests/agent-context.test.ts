@@ -48,6 +48,37 @@ it('stores replies per conversation, rejects unapproved writes, and limits reads
   } finally { await h.pg.exec('reset role'); }
 });
 
+it('binds desktop approvals to a board, separates browser keys and revokes desktop writes', async () => {
+  const conversationId = hash('same underlying ChatGPT chat');
+  const key = `branch_desktop_${Date.now() + 60_000}_${'3'.repeat(64)}`;
+  const connect = { boardId, conversationId, keyHash: hash(key) };
+  const update = { key, updateId: randomUUID(), title: 'Desktop chat', result: 'A completed desktop reply' };
+  const desktopSave = (args: object) => h.engine.call('chatgptBrowser:save', { ...args, source: 'desktop' }, {}, 'mutation', true);
+  await expect(desktopSave(update)).rejects.toThrow('chrome_sync_disconnected');
+  await expect(h.call(viewer, 'chatgptBrowser:connectDesktop', connect)).rejects.toThrow('Board access denied');
+  const browser = await h.call(owner, 'chatgptBrowser:connect', { boardId, conversationId });
+  await h.call(owner, 'chatgptBrowser:connectDesktop', connect);
+  await expect(desktopSave({ ...update, key: browser.key })).rejects.toThrow('chrome_sync_disconnected');
+  await expect(h.engine.call('chatgptBrowser:save', update, {}, 'mutation', true)).rejects.toThrow('chrome_sync_disconnected');
+
+  const first = await desktopSave(update);
+  expect(await desktopSave(update)).toEqual(first);
+  expect(await desktopSave({ ...update, updateId: randomUUID(), result: 'The next reply' })).toEqual(first);
+  const chrome = await h.engine.call('chatgptBrowser:save', { ...update, key: browser.key }, {}, 'mutation', true);
+  expect(chrome.cardId).not.toBe(first.cardId);
+  const otherBoard = await h.call(owner, 'library:create', { title: 'Other desktop board' });
+  await expect(h.call(owner, 'chatgptBrowser:connectDesktop', { ...connect, boardId: otherBoard }))
+    .rejects.toThrow('This pairing was already used');
+  expect(await h.engine.call('chatgptBrowser:stop', { key, source: 'desktop' }, {}, 'mutation', true)).toEqual({});
+  await expect(desktopSave({ ...update, updateId: randomUUID() })).rejects.toThrow('chrome_sync_disconnected');
+  const saved = await h.call(owner, 'agentContext:read', { ...scope(), nodeKey: first.cardId, limit: 10 }, 'query');
+  expect(saved.items.map((item: any) => item.result)).toEqual(['The next reply', update.result]);
+
+  const expired = `branch_desktop_${Date.now() - 1000}_${'4'.repeat(64)}`;
+  await h.call(owner, 'chatgptBrowser:connectDesktop', { ...connect, keyHash: hash(expired) });
+  await expect(desktopSave({ ...update, key: expired })).rejects.toThrow('chrome_sync_disconnected');
+});
+
 it('delivers only approved coding handoffs, keeps drafts private, and publishes a result note', async () => {
   const nodeKey = 'coding-source';
   const args = { ...scope(), nodeKey };
