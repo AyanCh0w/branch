@@ -191,8 +191,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         let wordmark = NSTextField(labelWithString: "branch")
         wordmark.font = BranchSyncTheme.font(19, strong: true)
         wordmark.textColor = BranchSyncTheme.ink
-        guard let url = Bundle.main.url(forResource: "branch-mark", withExtension: "svg"),
-              let image = NSImage(contentsOf: url) else { return row([wordmark]) }
+        guard let image = BranchSyncTheme.logo() else { return row([wordmark]) }
         let mark = NSImageView(image: image)
         mark.imageScaling = .scaleProportionallyUpOrDown
         mark.widthAnchor.constraint(equalToConstant: 21).isActive = true
