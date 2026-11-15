@@ -249,53 +249,7 @@ document.fonts.ready.then(measureNavDock);
 reducedMotion.addEventListener('change', updateNavDock);
 measureNavDock();
 
-// Live, browser-local material preferences. Malformed or blocked storage is harmless.
-(() => {
-  const key = 'branch.nav-appearance.v1';
-  const defaults = {tint:25, glass:70, tintOn:true, glassOn:true};
-  let settings = {...defaults};
-  try {
-    const saved = JSON.parse(localStorage.getItem(key));
-    for (const name of ['tint','glass']) if (Number.isFinite(saved?.[name])) settings[name] = Math.max(0,Math.min(100,saved[name]));
-    for (const name of ['tintOn','glassOn']) if (typeof saved?.[name] === 'boolean') settings[name] = saved[name];
-  } catch {}
-  const tint = document.getElementById('nav-tint');
-  const glass = document.getElementById('nav-glass');
-  const tintOn = document.getElementById('nav-tint-on');
-  const glassOn = document.getElementById('nav-glass-on');
-  function render() {
-    tint.value = settings.tint; glass.value = settings.glass;
-    tintOn.checked = settings.tintOn; glassOn.checked = settings.glassOn;
-    tint.disabled = !settings.tintOn; glass.disabled = !settings.glassOn;
-    document.getElementById('nav-tint-value').value = settings.tint + '%';
-    document.getElementById('nav-glass-value').value = settings.glass + '%';
-    const shade = 255 - Math.round((settings.tintOn ? settings.tint : 0) * .8);
-    siteHeader.style.setProperty('--nav-tone', `${shade},${Math.min(255,shade+1)},${Math.min(255,shade+2)}`);
-    siteHeader.style.setProperty('--nav-dark-tone', String(34 - Math.round((settings.tintOn ? settings.tint : 0) * .18)));
-    siteHeader.style.setProperty('--nav-glass', settings.glassOn ? settings.glass / 100 : 0);
-  }
-  function save() { try { localStorage.setItem(key,JSON.stringify(settings)); } catch {} }
-  for (const [input,name] of [[tint,'tint'],[glass,'glass']]) {
-    input.addEventListener('input',() => {settings[name] = Number(input.value); render();});
-    input.addEventListener('change',save);
-  }
-  for (const [input,name] of [[tintOn,'tintOn'],[glassOn,'glassOn']]) input.addEventListener('change',() => {settings[name] = input.checked; render(); save();});
-  document.getElementById('nav-appearance-reset').addEventListener('click',() => {settings = {...defaults}; render(); save();});
-  render();
-})();
-
-// Use the app's shared appearance preference for the landing's footer toggle.
-(() => {
- const sync = () => document.querySelectorAll('[data-theme-toggle]').forEach(button => {
-  const dark = document.documentElement.dataset.theme === 'dark';
-  button.textContent = dark ? 'Light mode' : 'Dark mode';
-  button.setAttribute('aria-label', 'Switch to ' + (dark ? 'light' : 'dark') + ' mode');
- });
- document.addEventListener('click', event => {
-  if (event.target.closest('[data-theme-toggle]')) {
-   window.BranchTheme.set(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
-  }
- });
- window.addEventListener('branch-appearance', sync);
- sync();
-})();
+// Published navigation material defaults; development controls are removed.
+siteHeader.style.setProperty('--nav-tone', '235,236,237');
+siteHeader.style.setProperty('--nav-dark-tone', '29');
+siteHeader.style.setProperty('--nav-glass', '.7');

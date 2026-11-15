@@ -4,26 +4,12 @@
 (() => {
   const host = document.getElementById('paper-background');
   if (!host) return;
-  const toggle = document.getElementById('paper-background-on');
-  const strength = document.getElementById('paper-background-strength');
-  const output = document.getElementById('paper-background-value');
-  const status = document.getElementById('paper-background-status');
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const contrast = matchMedia('(prefers-contrast: more)');
   const mobile = matchMedia('(max-width: 600px)');
   const fine = matchMedia('(hover: hover) and (pointer: fine)');
-  const key = 'branch.paper-background.v2';
   const amounts = { mobile: 22, desktop: 45 };
   const mode = () => mobile.matches ? 'mobile' : 'desktop';
-  let enabled = true;
-  try {
-    const saved = JSON.parse(localStorage.getItem(key) || localStorage.getItem('branch.paper-background.v1'));
-    if (typeof saved?.enabled === 'boolean') enabled = saved.enabled;
-    for (const device of ['mobile', 'desktop']) {
-      const value = saved?.amounts?.[device] ?? (device === 'desktop' ? saved?.amount : undefined);
-      if (Number.isFinite(value)) amounts[device] = Math.max(0, Math.min(100, value));
-    }
-  } catch {}
   const canvas = document.createElement('canvas');
   canvas.className = 'vortex-material';
   host.append(canvas);
@@ -156,7 +142,7 @@
     });
     edges.forEach(([a,b],i)=>paths[i].setAttribute('d',`M${vertices[a].x.toFixed(2)},${vertices[a].y.toFixed(2)}L${vertices[b].x.toFixed(2)},${vertices[b].y.toFixed(2)}`));
   }
-  function canAnimate() {return !disposed && enabled && amounts[mode()]>0 && visible && !document.hidden && !reduced.matches && !contrast.matches && host.dataset.renderer==='webgl';}
+  function canAnimate() {return !disposed && amounts[mode()]>0 && visible && !document.hidden && !reduced.matches && !contrast.matches && host.dataset.renderer==='webgl';}
   function stop() {cancelAnimationFrame(frame); frame=0; last=0;}
   function tick(time) {
     frame=0;
@@ -171,7 +157,6 @@
     frame=requestAnimationFrame(tick);
   }
   function wake() {if (!frame && canAnimate()) frame=requestAnimationFrame(tick);}
-  function save() {try {localStorage.setItem(key,JSON.stringify({enabled,amounts}));} catch {}}
   // One viewport-sized GPU surface crossfades scenes; no full-page canvas or scroll lock.
   function syncOpacity() {
     const progress = Math.max(0, Math.min(1, window.scrollY / Math.max(400, window.innerHeight * .8)));
@@ -182,16 +167,13 @@
     const closing=smooth(sceneStarts[1]-height*.65,sceneStarts[1]+height*.15);
     scene=[1-middle,middle*(1-closing),middle*closing];
     host.dataset.scene=scene[0]>.5?'hero':scene[1]>.5?'shared-work':'quiet';
-    host.style.opacity = enabled && !contrast.matches ? String(amounts[mode()] / 100 * fade) : '0';
+    host.style.opacity = !contrast.matches ? String(amounts[mode()] / 100 * fade) : '0';
     host.style.setProperty('--background-reading',String(1-scene[0]));
     if (!canAnimate()) draw();
   }
   function sync() {
-    const amount=amounts[mode()];
-    toggle.checked=enabled; strength.value=amount; strength.disabled=!enabled; output.value=`${amount}%`;
     syncOpacity();
     host.dataset.motion=reduced.matches ? 'static' : 'animated';
-    status.textContent=reduced.matches ? 'Monochrome · Still scenes' : 'Monochrome · Scroll scenes';
     stop(); draw(); wake();
   }
   initialize(); resize(); host.dataset.ready='true'; sync();
@@ -221,8 +203,4 @@
   contrast.addEventListener('change',sync);
   canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();stop();host.dataset.renderer='fallback';});
   canvas.addEventListener('webglcontextrestored',()=>{initialize();resize();sync();});
-  toggle.addEventListener('change',()=>{enabled=toggle.checked;sync();save();});
-  strength.addEventListener('input',()=>{amounts[mode()]=Number(strength.value);sync();});
-  strength.addEventListener('change',save);
-  document.getElementById('nav-appearance-reset')?.addEventListener('click',()=>{enabled=true;amounts.mobile=22;amounts.desktop=45;sync();save();});
 })();

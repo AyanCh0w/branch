@@ -4,7 +4,7 @@ const {JSDOM}=require('jsdom');
 const fs=require('node:fs');
 const path=require('node:path');
 function boot(reduced=false,savedDarkness=null){
- const dom=new JSDOM('<footer class="site-footer"><div id="footer-playground"><canvas></canvas><button>Draw</button></div><input id="footer-darkness" type="range" min="0" max="100"><output id="footer-darkness-value"></output><button id="nav-appearance-reset">Reset</button></footer>',{runScripts:'outside-only',pretendToBeVisual:true,url:'https://branch.test'});
+ const dom=new JSDOM('<footer class="site-footer"><div id="footer-playground"><canvas></canvas><button>Draw</button></div></footer>',{runScripts:'outside-only',pretendToBeVisual:true,url:'https://branch.test'});
  const w=dom.window,frames=new Map(),draws=[];let id=0,visibility;
  const ctx=new Proxy({}, {get(_,key){return (...args)=>draws.push({key,args});},set(){return true;}});
  w.HTMLCanvasElement.prototype.getContext=()=>ctx;
@@ -53,26 +53,10 @@ test('trail holds briefly and retracts oldest points in sequence',()=>{
  assert.deepEqual(points(start+700),[128,160,192]);
  }finally{b.dom.window.close();}
 });
-test('footer darkness previews, saves and resets independently of page theme',()=>{
- const b=boot();try{
- const footer=b.host.closest('footer'),slider=b.w.document.getElementById('footer-darkness');
- assert.equal(slider.value,'85');
- const initial=footer.style.getPropertyValue('--footer-bg');
- slider.value='30';slider.dispatchEvent(new b.w.Event('input'));
- assert.notEqual(footer.style.getPropertyValue('--footer-bg'),initial);
- assert.equal(b.w.document.getElementById('footer-darkness-value').value,'30%');
- slider.dispatchEvent(new b.w.Event('change'));
- assert.equal(b.w.localStorage.getItem('branch.footer-darkness.v1'),'30');
- assert.equal(b.w.document.documentElement.dataset.theme,undefined);
- b.w.document.getElementById('nav-appearance-reset').click();
- assert.equal(slider.value,'85');assert.equal(footer.style.getPropertyValue('--footer-bg'),initial);
- assert.equal(b.w.localStorage.getItem('branch.footer-darkness.v1'),'85');
+test('published footer keeps its default tone despite old development preferences',()=>{
+ const b=boot(false,'30');try{
+ assert.equal(b.host.closest('footer').style.getPropertyValue('--footer-bg'),'rgb(53,56,62)');
  }finally{b.dom.window.close();}
-});
-test('saved darkness survives reload and is clamped to the slider range',()=>{
- for(const [saved,expected] of [['30','30'],['200','100'],['bad','85']]){
- const b=boot(false,saved);try{assert.equal(b.w.document.getElementById('footer-darkness').value,expected);}finally{b.dom.window.close();}
- }
 });
 
 test('points sit between background dots and smoothly grow before retracting',()=>{

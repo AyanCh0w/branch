@@ -9,17 +9,7 @@
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const step = 32, hold = 500, removalInterval = 50, transition = 140;
   const footer = host.closest('.site-footer');
-  const darknessInput = document.getElementById('footer-darkness');
-  const darknessOutput = document.getElementById('footer-darkness-value');
-  const darknessKey = 'branch.footer-darkness.v1';
-  let darkness = 85;
-  try {
-    const saved = localStorage.getItem(darknessKey);
-    if (saved !== null && Number.isFinite(Number(saved))) darkness = Math.max(0,Math.min(100,Number(saved)));
-    else if (localStorage.getItem('branch-footer-tone') === 'light') darkness = 0;
-  } catch {}
   function setDarkness(value) {
-    darkness = value;
     const rgb = [237,240,243].map((c,i)=>Math.round(c+([20,24,30][i]-c)*value/100));
     const luminance = rgb.map(c=>{c/=255;return c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4);})
       .reduce((sum,c,i)=>sum+c*[.2126,.7152,.0722][i],0);
@@ -35,19 +25,8 @@
     footer.style.setProperty('--footer-dot',color(shifted(dark ? 40 : -50)));
     footer.style.setProperty('--footer-control',color(shifted(dark ? 7 : 9)));
     footer.style.setProperty('--footer-hover',dark ? '#fff' : '#16263e');
-    if (darknessInput) darknessInput.value = String(value);
-    if (darknessOutput) darknessOutput.value = `${value}%`;
   }
-  function saveDarkness() { try { localStorage.setItem(darknessKey,String(darkness)); } catch {} }
-  setDarkness(darkness);
-  darknessInput?.addEventListener('input',()=>{
-    setDarkness(Number(darknessInput.value));
-    if (nodes.size) wake();
-  });
-  darknessInput?.addEventListener('change',saveDarkness);
-  document.getElementById('nav-appearance-reset')?.addEventListener('click',()=>{
-    setDarkness(85);saveDarkness();if (nodes.size) wake();
-  });
+  setDarkness(85);
   let lastRemoval = 0;
   let width = 1, height = 1, frame = 0, visible = true, previous = null, touchStart = null;
   let nodes = new Map(), edges = [];
