@@ -12,6 +12,16 @@
  dialog.innerHTML='<div class="tour-top"><span class="tour-count"></span><button type="button" data-tour="skip">Skip tour</button></div><div class="tour-guide" aria-hidden="true"></div><div class="tour-message" aria-live="polite" aria-atomic="true"><h2 id="canvas-tour-title"></h2><p id="canvas-tour-copy"></p></div><div class="tour-controls"><button type="button" data-tour="back">Back</button><div class="tour-dots" aria-hidden="true"></div><button type="button" data-tour="next">Next</button></div>';
  document.body.append(dialog);
  let index=0,returnFocus=null,viewer=false,savedView=null,cameraFrame=null,highlighted=null,samples=null;
+ const seenUsers=new Set();
+ const seenKey=userId=>`branch:canvas-tour:seen:${userId}`;
+ function hasSeen(userId){
+  if(seenUsers.has(userId))return true;
+  try{return localStorage.getItem(seenKey(userId))==='1';}catch{return false;}
+ }
+ function markSeen(userId){
+  seenUsers.add(userId);
+  try{localStorage.setItem(seenKey(userId),'1');}catch{}
+ }
  const motion=window.matchMedia?.("(prefers-reduced-motion: reduce)");
  function clearHighlight(){highlighted?.classList.remove('tour-highlight');highlighted=null;}
  function animateView(target){
@@ -99,13 +109,13 @@
  }
  function start({userId,force=false,role}={}){
   if(!userId||document.body.classList.contains('account-mode'))return false;
-  // Replay on every canvas entry while the introduction is being refined.
-  if(dialog.open)return false;
+  // Show automatically once per person on this browser; Account can replay it.
+  if(dialog.open||(!force&&hasSeen(userId)))return false;
   savedView=window.BranchHost?.captureView?.()||null;index=0;viewer=role==='viewer'||!!document.querySelector('.a-viewer-label');returnFocus=document.activeElement;
   const guide=dialog.querySelector('.tour-guide'),avatar=document.querySelector('.dock-agent-avatar img');guide.replaceChildren();
   if(avatar){const image=avatar.cloneNode(true);image.alt='';guide.append(image);}
   else {const url=window.BranchAvatar?.('Canvas guide','#6685cf',true);if(url){const image=document.createElement('img');image.src=url;image.alt='';guide.append(image);}}
-  render();document.body.classList.add('canvas-tour-open');dialog.showModal();guideStep();dialog.querySelector('[data-tour="next"]').focus();return true;
+  render();document.body.classList.add('canvas-tour-open');dialog.showModal();markSeen(userId);guideStep();dialog.querySelector('[data-tour="next"]').focus();return true;
  }
  dialog.addEventListener('click',e=>{const action=e.target.closest('[data-tour]')?.dataset.tour;if(action==='skip')finish();if(action==='back'&&index>0){index--;render();}if(action==='next'){if(index===slides.length-1)finish();else{index++;render();}}});
  dialog.addEventListener('cancel',e=>{e.preventDefault();finish();});
