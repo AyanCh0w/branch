@@ -4,7 +4,7 @@ const {JSDOM}=require('jsdom');
 const fs=require('node:fs');
 const path=require('node:path');
 function boot(reduced=false){
- const dom=new JSDOM('<div id="footer-playground"><canvas></canvas><button>Draw</button></div>',{runScripts:'outside-only',pretendToBeVisual:true});
+ const dom=new JSDOM('<footer class="site-footer"><div id="footer-playground"><canvas></canvas><button>Draw</button></div><button data-footer-tone-toggle>Dark footer</button></footer>',{runScripts:'outside-only',pretendToBeVisual:true,url:'https://branch.test'});
  const w=dom.window,frames=new Map(),draws=[];let id=0,visibility;
  const ctx=new Proxy({}, {get(_,key){return (...args)=>draws.push({key,args});},set(){return true;}});
  w.HTMLCanvasElement.prototype.getContext=()=>ctx;
@@ -17,11 +17,11 @@ function boot(reduced=false){
  function tick(time){const pending=[...frames.values()];frames.clear();pending.forEach(fn=>fn(time));}
  return {dom,w,host,frames,draws,pointer,tick,visibility};
 }
-test('hover draws connected grid points and the animation sleeps after fading',()=>{
+test('hover draws connected grid points and the animation sleeps after retraction',()=>{
  const b=boot();try{
  assert.equal(b.frames.size,0);
  b.pointer('pointermove',36,60);b.pointer('pointermove',180,84);b.tick(b.w.performance.now());
- assert.ok(b.draws.some(d=>d.key==='lineTo'));assert.ok(b.draws.some(d=>d.key==='roundRect'));assert.equal(b.frames.size,1);
+ assert.ok(b.draws.some(d=>d.key==='lineTo'));assert.ok(b.draws.some(d=>d.key==='arc'));assert.equal(b.frames.size,1);
  b.tick(b.w.performance.now()+2200);assert.equal(b.frames.size,0);assert.equal(b.host.dataset.engaged,'false');
  }finally{b.dom.window.close();}
 });
@@ -35,7 +35,27 @@ test('touch creates a branch without consuming scrolling and cancellation breaks
 });
 test('keyboard button works with reduced motion and schedules no animation',()=>{
  const b=boot(true);try{
- b.host.querySelector('button').click();assert.ok(b.draws.some(d=>d.key==='roundRect'));assert.equal(b.frames.size,0);
+ b.host.querySelector('button').click();assert.ok(b.draws.some(d=>d.key==='arc'));assert.equal(b.frames.size,0);
  b.visibility([{isIntersecting:false}]);assert.equal(b.frames.size,0);
+ }finally{b.dom.window.close();}
+});
+
+test('trail holds briefly and retracts oldest points in sequence',()=>{
+ const b=boot();try{
+ b.pointer('pointermove',48,80);b.pointer('pointermove',176,80);
+ const start=b.w.performance.now();
+ function points(time){b.draws.length=0;b.tick(time);return b.draws.filter(d=>d.key==='arc').map(d=>d.args[0]);}
+ assert.deepEqual(points(start),[48,80,112,144,176]);
+ assert.deepEqual(points(start+400),[48,80,112,144,176]);
+ assert.deepEqual(points(start+520),[80,112,144,176]);
+ assert.deepEqual(points(start+570),[112,144,176]);
+ }finally{b.dom.window.close();}
+});
+test('footer tone defaults dark and toggles independently with a saved preference',()=>{
+ const b=boot();try{
+ const footer=b.host.closest('footer'),toggle=b.w.document.querySelector('[data-footer-tone-toggle]');
+ assert.equal(footer.dataset.footerTone,'dark');assert.equal(toggle.getAttribute('aria-pressed'),'true');
+ toggle.click();assert.equal(footer.dataset.footerTone,'light');assert.equal(b.w.localStorage.getItem('branch-footer-tone'),'light');
+ toggle.click();assert.equal(footer.dataset.footerTone,'dark');assert.equal(b.w.document.documentElement.dataset.theme,undefined);
  }finally{b.dom.window.close();}
 });

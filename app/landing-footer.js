@@ -7,14 +7,28 @@
   const ctx = canvas.getContext('2d');
   if (!ctx) { button.hidden = true; return; }
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-  const step = 24, lifetime = 2000;
+  const step = 32, hold = 500, removalInterval = 50;
+  const footer = host.closest('.site-footer');
+  const toneToggle = document.querySelector('[data-footer-tone-toggle]');
+  function setTone(tone) {
+    if (footer) footer.dataset.footerTone = tone;
+    toneToggle?.setAttribute('aria-pressed', String(tone === 'dark'));
+  }
+  try { setTone(localStorage.getItem('branch-footer-tone') === 'light' ? 'light' : 'dark'); } catch { setTone('dark'); }
+  toneToggle?.addEventListener('click', () => {
+    const tone = footer.dataset.footerTone === 'dark' ? 'light' : 'dark';
+    setTone(tone);
+    try { localStorage.setItem('branch-footer-tone', tone); } catch {}
+    if (nodes.size) wake();
+  });
+  let lastRemoval = 0;
   let width = 1, height = 1, frame = 0, visible = true, previous = null;
   let nodes = new Map(), edges = [];
-  const snap = n => Math.round((n - 12) / step) * step + 12;
+  const snap = n => Math.round((n - 16) / step) * step + 16;
   const key = p => `${p.x}:${p.y}`;
   const point = (x, y) => ({x: snap(x), y: snap(y)});
   function stop() { cancelAnimationFrame(frame); frame = 0; }
-  function clear() { stop(); nodes.clear(); edges = []; previous = null; ctx.clearRect(0,0,width,height); }
+  function clear() { stop(); nodes.clear(); edges = []; previous = null; lastRemoval = 0; ctx.clearRect(0,0,width,height); }
   function add(p, time) {
     if (p.x < 0 || p.y < 0 || p.x > width || p.y > height - 68) return false;
     nodes.delete(key(p)); nodes.set(key(p), {...p, time});
@@ -30,19 +44,24 @@
     frame = 0;
     if (!visible || document.hidden) return;
     ctx.clearRect(0,0,width,height);
-    const color = '104,153,255';
-    const alpha = t => reduced.matches ? .85 : Math.max(0, 1-(time-t)/lifetime);
-    edges = edges.filter(edge=>alpha(edge.time)>0);
+    const color = footer?.dataset.footerTone === 'dark' ? '126,165,230' : '70,111,181';
+    // A short hold, then ordered retraction from the oldest point. No blanket fade.
+    if (!reduced.matches) {
+      for (const [id,p] of nodes) {
+        const due = Math.max(p.time + hold, lastRemoval + removalInterval);
+        if (time < due) break;
+        nodes.delete(id); lastRemoval = due;
+      }
+    }
+    edges = edges.filter(edge=>nodes.has(key(edge.a)) && nodes.has(key(edge.b)));
     for (const edge of edges) {
-      ctx.strokeStyle=`rgba(${color},${alpha(edge.time)*.65})`; ctx.lineWidth=1.5;
+      ctx.strokeStyle=`rgba(${color},${.58})`; ctx.lineWidth=1; ctx.lineCap='round';
       ctx.beginPath();ctx.moveTo(edge.a.x,edge.a.y);ctx.lineTo(edge.b.x,edge.b.y);ctx.stroke();
     }
     for (const [id,p] of nodes) {
-      const a=alpha(p.time);
-      if(a<=0){nodes.delete(id);continue;}
-      const size=10+4*a;
-      ctx.fillStyle=`rgba(${color},${a})`;
-      ctx.beginPath();ctx.roundRect(p.x-size/2,p.y-size/2,size,size,4);ctx.fill();
+      const radius=2.5;
+      ctx.fillStyle=`rgba(${color},${.95})`;
+      ctx.beginPath();ctx.arc(p.x,p.y,radius,0,Math.PI*2);ctx.fill();
     }
     if(nodes.size && !reduced.matches) frame=requestAnimationFrame(paint);
     else if(!nodes.size) host.dataset.engaged='false';
@@ -85,6 +104,9 @@
       let from=previous;
       for(let i=1;i<=count;i++) {
         const next=point(previous.x+(p.x-previous.x)*i/count,previous.y+(p.y-previous.y)*i/count);
+        if(from.x!==next.x && from.y!==next.y) {
+          const corner={x:next.x,y:from.y};connect(from,corner,now);from=corner;
+        }
         connect(from,next,now);from=next;
       }
     } else add(p,now);
