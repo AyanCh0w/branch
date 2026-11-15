@@ -84,8 +84,17 @@ function drawFlowWires() {
     const r=port.getBoundingClientRect();
     points[port.dataset.port]={x:(r.left+r.width/2-rect.left)/sx,y:(r.top+r.height/2-rect.top)/sy};
   });
-  for (const [name,from,to] of [['source','source','input'],['interviews','interviews','input'],['branch','answer','branch'],['second','answer','second'],['third','answer','third']])
-    flow.querySelector(`[data-wire="${name}"]`).setAttribute('d',curve(points[from],points[to]));
+  for (const [name,from,to] of [['source','source','input'],['interviews','interviews','input'],['branch','answer','branch'],['second','answer','second'],['third','answer','third']]) {
+    let route=curve(points[from],points[to]);
+    if(name==='second' && matchMedia('(min-width: 1101px)').matches){
+      // The second branch sits beside the first: use the clear upper gutter.
+      const a=points[from],b=points[to];
+      const hub=(a.x+points.branch.x)/2, lane=b.x-7;
+      const top=(flow.querySelector('.flow-branches').getBoundingClientRect().top-rect.top)/sy-10;
+      route=`M${a.x} ${a.y} C${hub} ${a.y},${hub} ${top+8},${hub} ${top+8} Q${hub} ${top},${hub+8} ${top} H${lane-8} Q${lane} ${top},${lane} ${top+8} V${b.y-8} Q${lane} ${b.y},${b.x} ${b.y}`;
+    }
+    flow.querySelector(`[data-wire="${name}"]`).setAttribute('d',route);
+  }
   renderFlow(playhead);
 }
 function reveal(el, visible) {
