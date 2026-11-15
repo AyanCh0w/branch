@@ -7,7 +7,7 @@ function canonical(value){if(Array.isArray(value))return value.map(canonical);if
 export class BranchClient {
  constructor(config){
   this.session=null;this.loading=true;this.online=false;this.epoch=0;this.closed=false;
-  this.watchers=new Set();this.authListeners=new Set();this.connectionListeners=new Set();this.subscriptions=new Map();this.realtimeReady=false;
+  this.watchers=new Set();this.authListeners=new Set();this.connectionListeners=new Set();this.subscriptions=new Map();this.realtimeReady=false;this.liveBoards=new Set();
   this.supabase=createClient(config.url,config.publishableKey,{realtime:{worker:typeof Worker!=='undefined',heartbeatCallback:status=>{
    if(['disconnected','timeout','error'].includes(status)&&!this.closed){this.realtimeReady=false;this.supabase.realtime.connect();}
   }}});
@@ -49,6 +49,7 @@ export class BranchClient {
  }
 
  state(online){if(this.online===online)return;this.online=online;for(const fn of this.connectionListeners)fn(this.connectionState());}
+ setBoardLive(boardId,ready){if(ready)this.liveBoards.add(boardId);else this.liveBoards.delete(boardId);}
  connectionState(){return {isWebSocketConnected:this.online};}
  subscribeToConnectionState(fn){this.connectionListeners.add(fn);return()=>this.connectionListeners.delete(fn);}
  async call(kind,name,args,signal,onDependencies){
@@ -105,7 +106,7 @@ export class BranchClient {
    refresh.queryName=name;refresh.boardId=args?.boardId;
    this.watchers.add(refresh);
    // Realtime drives updates; polling is recovery and capability revalidation only.
-   const interval=setInterval(()=>{if(!document.hidden&&Date.now()-lastRefresh>=(args?.token?1000:this.realtimeReady&&this.online?30000:3000))refresh();},1000);
+   const interval=setInterval(()=>{if(!document.hidden&&Date.now()-lastRefresh>=((this.liveBoards.has(args?.boardId)||this.realtimeReady&&this.online)?30000:3000))refresh();},1000);
    entry.stop=()=>{stopped=true;request++;controller?.abort();clearInterval(interval);this.watchers.delete(refresh);this.subscriptions.delete(key);};
    queueMicrotask(()=>refresh());
   }
