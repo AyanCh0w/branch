@@ -736,7 +736,7 @@ function codingResultMarkup(n){
 let pendingCodingNote;
 function revealCodingNote(){
  const node=nodeById(pendingCodingNote), el=node&&cardEl(node.id);
- if(!node?.codingNote||!el)return;
+ if(!node||!el)return;
  pendingCodingNote=undefined;
  const board=$('#board');
  camera.x=board.clientWidth/2-(node.x+el.offsetWidth/2)*camera.z;

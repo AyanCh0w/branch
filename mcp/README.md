@@ -1,4 +1,32 @@
-# Branch visual planning MCP
+# Branch MCP tools
+
+## Connect a board agent
+
+In an editable board, open **Agents**. Save shared Markdown under **Project instructions**, then name a connection and choose **Read only** or **Read and contribute**. Use the displayed URL and connection key with a client that accepts a remote Streamable HTTP MCP server and a bearer token. Store the key in the client's private configuration. The URL is `/api/backend?agent=1` on the same Branch instance you connected from.
+
+For Codex CLI, set `BRANCH_AGENT_TOKEN` in the environment that launches Codex, then register the server with the URL shown in Branch:
+
+```sh
+codex mcp add branch-board --url 'https://joinbranch.dev/api/backend?agent=1' --bearer-token-env-var BRANCH_AGENT_TOKEN
+```
+
+Use the URL from **Agents** for local or preview boards. The connection uses a Branch key and does not need macOS Accessibility. Each connection covers one board and can be disconnected from **Agents**. Saved updates remain in Context after disconnecting.
+
+Ask the agent to read the board instructions before beginning, then post milestone updates with links to the relevant cards. Try “Read the board and project instructions, create a note for the API contract, and post a short update in Context when it’s ready.”
+
+| Tool | Behavior |
+| --- | --- |
+| `read_board` | Reads project instructions and the current card list. Follow `nextOffset` for more cards. |
+| `read_card` | Reads saved card text and the version used for edits. |
+| `read_context` | Reads recent updates and proposals from connected board agents. |
+| `publish_update` | Publishes progress in the agent’s Context row, with an optional link to a canvas card. |
+| `create_card` | Creates a note on the regular whiteboard. |
+| `update_card` | Edits a note created by this connection if its text has not changed since it was read and no teammate is editing it. |
+| `propose_edit` | Queues an edit in Context for a board editor to apply or dismiss. |
+
+The four write tools require **Read and contribute**. Use a stable request ID when retrying a create, update to Context, or proposal. For an edit to a card, re-read its text and version after a version conflict. Each call rechecks the person’s board access. Apply [the board agent migration](../supabase/migrations/202611150004_board_agents.sql) before deploying the feature.
+
+## Local visual planning tools
 
 This local stdio MCP server lets an agent create real shared Branch boards, publish a work plan, maintain step status and findings, and connect evidence/decision notes. Open the returned board URL in Branch to watch changes arrive live. It uses the official MCP SDK; it does not expose an HTTP port or run a second model.
 

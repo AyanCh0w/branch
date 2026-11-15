@@ -44,6 +44,8 @@ implemented features; this migration does not enable them.
 
 Apply `202611140003_github.sql` and then `202611140004_agent_context.sql` if those migrations have yet to run. Migration 004 adds private coding handoff and ChatGPT reply tables, plus optional metadata on existing nodes. On development databases that already ran the earlier agent-context migration, 004 retains those tables and refreshes the compatibility view and write trigger after the GitHub migration. Existing board records, IDs, and Yjs text are preserved.
 
+Apply `202611150004_board_agents.sql` before releasing **Agents**. It adds private tables for the board instructions, connection key hashes, agent-created card references, and Context updates or proposals. The migration preserves existing cards and handoffs. The existing Cloudflare API route serves the [remote board agent connection](../mcp/README.md#connect-a-board-agent).
+
 Only the project URL and publishable key reach the browser. Database credentials, secret keys, provider keys, and personal connection tokens stay on the server. Application records are in `branch_private`, which browser roles cannot access. The public revision table exposes only the signed-in user's own counter under RLS. Private file access uses signed URLs valid for one hour; previously issued URLs remain valid until expiry even if membership changes.
 
 ### Isolated ChatGPT sync development

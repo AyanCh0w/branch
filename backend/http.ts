@@ -3,24 +3,29 @@ import {encode,decode} from './codec';
 import {SessionError} from './session-error';
 import {createHash} from 'node:crypto';
 import {codingRequest} from './coding-http';
+import {boardAgentRequest} from './board-agent-http';
 import {isChromeSyncOrigin,validSyncClient,EXTENSION_ORIGIN} from '../collaboration/chrome-sync.cjs';
 export async function route(req:any,res:any,url:URL){
  const json=(status:number,data:any)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store','Referrer-Policy':'no-referrer'});res.end(JSON.stringify(encode(data)));};
  if(!configured())return json(503,{error:'Supabase is not configured yet.'});
- if (url.searchParams.has('coding')) {
+ if (url.searchParams.has('coding') || url.searchParams.has('agent')) {
+  const agent = url.searchParams.has('agent');
+  if (agent && url.searchParams.has('coding')) return json(400, { error: 'Invalid connection' });
   if (req.headers.origin || req.headers['sec-fetch-site'] === 'cross-site') return json(403, { error: 'Invalid origin' });
   if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
   try {
-   await rateLimit('coding:'+createHash('sha256').update(String(req.socket?.remoteAddress || 'local')).digest('hex'), 600, 60);
+   const ip = process.env.CLOUDFLARE_WORKER === 'true' ? req.headers['cf-connecting-ip'] : req.socket?.remoteAddress;
+   await rateLimit((agent ? 'agent:' : 'coding:')+createHash('sha256').update(String(ip || 'local')).digest('hex'), 600, 60);
    const body = await requestBody(req, 256 * 1024);
    if (body === null) return json(413, { error: 'Request too large' });
    const headers = new Headers();
    for (const [key, value] of Object.entries(req.headers)) if (typeof value === 'string') headers.set(key, value);
-   const response = await codingRequest(new Request(url, { method: 'POST', headers, body }), engine);
+   const handle = agent ? boardAgentRequest : codingRequest;
+   const response = await handle(new Request(url, { method: 'POST', headers, body }), engine);
    res.writeHead(response.status, Object.fromEntries(response.headers.entries()));
    return res.end(await response.text());
   } catch {
-   return json(400, { error: 'Could not complete this handoff.' });
+   return json(400, { error: agent ? 'Could not complete this agent request.' : 'Could not complete this handoff.' });
   }
  }
  if (url.searchParams.has('chrome') || url.searchParams.has('desktop')) {

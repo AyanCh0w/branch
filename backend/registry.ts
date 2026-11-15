@@ -1,4 +1,5 @@
 import * as agentContext from './functions/agentContext';
+import * as boardAgents from './functions/boardAgents';
 import * as coding from './functions/coding';
 import * as chatgptBrowser from './functions/chatgptBrowser';
 import * as boards from './functions/boards';
@@ -17,4 +18,4 @@ import * as files from './functions/files';
 import * as sharing from './functions/sharing';
 import * as github from './functions/github';
 import * as githubActions from './functions/githubActions';
-export const registry = {agentContext,coding,chatgptBrowser,boards,chatgptActions,invitations,workspaceKeyActions,collaboration,chatgpt,people,chat,teams,accounts,library,workspaceKeys,files,sharing,github,githubActions};
+export const registry = {agentContext,boardAgents,coding,chatgptBrowser,boards,chatgptActions,invitations,workspaceKeyActions,collaboration,chatgpt,people,chat,teams,accounts,library,workspaceKeys,files,sharing,github,githubActions};

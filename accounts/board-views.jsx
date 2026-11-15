@@ -1,13 +1,14 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ContextCanvas } from './context-canvas';
+import { api, useQuery } from '../backend/react';
 
 const modes = [
   { id: 'visualization', title: 'Canvas', icon: 'git-branch', panel: 'board' },
   { id: 'context', title: 'Context', icon: 'chat-bubble', panel: 'board-context' },
 ];
 
-export function BoardViews({ boardId, token }) {
+export function BoardViews({ boardId, token, canReview }) {
   const [mode, setMode] = useState('visualization');
   const [selection, setSelection] = useState('');
   const [cards, setCards] = useState([]);
@@ -15,6 +16,10 @@ export function BoardViews({ boardId, token }) {
   const previousDrafts = useRef(new Set());
   const slot = document.getElementById('board-view-slot');
   const showingContext = mode === 'context';
+  const sources = useQuery(api.boardAgents.sources, showingContext ? { boardId, token } : 'skip');
+  const agentCards = (sources || []).map(source => ({
+    id: source.id, title: source.name, latest: source.latest, boardAgent: true,
+  }));
 
   useEffect(() => {
     const openCard = event => {
@@ -24,20 +29,26 @@ export function BoardViews({ boardId, token }) {
     };
     let frame;
     const openNote = event => {
+      const key = event.detail;
+      if (!window.BranchHost.getState().nodes.some(node => node.id === key)) {
+        window.BranchHost.notify('This card is no longer on the canvas.');
+        return;
+      }
       setMode('visualization');
       cancelAnimationFrame(frame);
-      const key = event.detail;
       frame = requestAnimationFrame(() => {
         window.dispatchEvent(new CustomEvent('branch:show-coding-note', { detail: key }));
       });
     };
     window.addEventListener('branch:show-context', openCard);
     window.addEventListener('branch:open-coding-note', openNote);
+    window.addEventListener('branch:open-board-card', openNote);
     window.dispatchEvent(new CustomEvent('branch:show-initial-context'));
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener('branch:show-context', openCard);
       window.removeEventListener('branch:open-coding-note', openNote);
+      window.removeEventListener('branch:open-board-card', openNote);
     };
   }, []);
 
@@ -91,7 +102,7 @@ export function BoardViews({ boardId, token }) {
       }
       setSelection(previous => {
         if (newDraft && next.some(card => card.id === newDraft.nodeKey)) return newDraft.nodeKey;
-        return next.some(card => card.id === previous) ? previous : next[0]?.id || '';
+        return previous || next[0]?.id || '';
       });
       setCards(previous => {
         const byId = new Map(next.map(card => [card.id, card]));
@@ -139,8 +150,8 @@ export function BoardViews({ boardId, token }) {
         dangerouslySetInnerHTML={{ __html: window.Iconoir[view.icon] }} />)}
     </div>, slot)}
     <main id="board-context" role="tabpanel" aria-labelledby="context-tab" tabIndex={0} hidden={!showingContext}>
-      <ContextCanvas active={showingContext} boardId={boardId} token={token} cards={cards}
-        selection={selection} onSelect={setSelection} />
+      <ContextCanvas active={showingContext} boardId={boardId} token={token} cards={[...cards, ...agentCards]}
+        canReview={canReview} selection={selection} onSelect={setSelection} />
     </main>
   </>;
 }

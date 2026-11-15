@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { api, useQuery } from '../backend/react';
+import { api, useMutation, useQuery } from '../backend/react';
 
 const stepX = 378;
 const stepY = 174;
@@ -8,7 +8,7 @@ const cardHeight = 130;
 const shortDate = timestamp => new Date(timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 const initialCamera = () => ({ x: 32, y: 48, z: Math.min(1, Math.max(.25, (innerWidth - 64) / cardWidth)) });
 
-export function ContextCanvas({ active, boardId, token, cards, selection, onSelect }) {
+export function ContextCanvas({ active, boardId, token, cards, selection, onSelect, canReview }) {
   const surface = useRef(null);
   const gesture = useRef(null);
   const [camera, setCamera] = useState(initialCamera);
@@ -19,7 +19,10 @@ export function ContextCanvas({ active, boardId, token, cards, selection, onSele
   const limit = page.card === selected?.id ? page.size : 10;
   const timeline = useQuery(api.agentContext.read,
     active && selected?.chatgpt ? { boardId, token, nodeKey: selected.id, limit } : 'skip');
-  const results = timeline?.items || [];
+  const agentTimeline = useQuery(api.boardAgents.activity,
+    active && selected?.boardAgent ? { boardId, token, connectionId: selected.id, limit } : 'skip');
+  const activity = selected?.boardAgent ? agentTimeline : timeline;
+  const results = activity?.items || [];
 
   function zoom(factor, x, y) {
     setCamera(previous => {
@@ -90,7 +93,7 @@ export function ContextCanvas({ active, boardId, token, cards, selection, onSele
   }
 
   if (!active) return null;
-  const items = selected?.chatgpt ? results : [
+  const items = selected?.chatgpt || selected?.boardAgent ? results : [
     ...(selected?.draftId && selected.draftId !== selected.codingResult?.handoffId
       && !selected.notes.some(note => note.handoffId === selected.draftId)
       ? [{ id: selected.draftId, privateDraft: true }] : []),
@@ -107,7 +110,7 @@ export function ContextCanvas({ active, boardId, token, cards, selection, onSele
   return <div ref={surface} className="context-canvas"
     style={{ '--context-grid': gridStep + 'px', backgroundPosition: camera.x + 'px ' + camera.y + 'px' }}
     onPointerDown={startPan} onPointerMove={movePan} onLostPointerCapture={stopPan}>
-    {!cards.length && <p className="context-canvas-empty">Coding drafts and updates from connected ChatGPT chats appear here.</p>}
+    {!cards.length && <p className="context-canvas-empty">Updates from board agents, synced conversations and coding handoffs appear here.</p>}
     <div className="context-world" style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.z})` }}>
       <svg className="context-wires" aria-hidden="true">
         {items.map((item, index) => {
@@ -124,11 +127,11 @@ export function ContextCanvas({ active, boardId, token, cards, selection, onSele
         className="card context-node context-source" onFocus={revealFocused} aria-pressed={card.id === selected?.id}
         style={{ left: 0, top: index * stepY, width: cardWidth }}
         onClick={() => { setOpenUpdate(''); onSelect(card.id); }}>
-        <span className="context-node-kind">{card.chatgpt ? 'ChatGPT' : 'Coding agent'}{card.owner ? ' · ' + card.owner : ''}</span>
+        <span className="context-node-kind">{card.chatgpt ? 'ChatGPT' : card.boardAgent ? 'Board agent' : 'Coding agent'}{card.owner ? ' · ' + card.owner : ''}</span>
         <strong>{card.title}</strong>
         {card.latest > 0 && <time dateTime={new Date(card.latest).toISOString()}>{shortDate(card.latest)}</time>}
         {card.draftId && <span className="context-node-kind">Private draft ready</span>}
-        {card.chatgpt && card.id === selected?.id && !timeline && <span role="status">Loading updates…</span>}
+        {(card.chatgpt || card.boardAgent) && card.id === selected?.id && !activity && <span role="status">Loading updates…</span>}
       </button>)}
       {items.map((item, index) => <button type="button" key={item.id} className="card context-node context-update" onFocus={revealFocused}
         style={{ left: (index + 1) * stepX, top: y, width: cardWidth }}
@@ -139,21 +142,25 @@ export function ContextCanvas({ active, boardId, token, cards, selection, onSele
           else setOpenUpdate(item.id === update?.id ? '' : item.id);
         }}>
         {item.timestamp && <time dateTime={new Date(item.timestamp).toISOString()}>{shortDate(item.timestamp)}</time>}
-        <strong>{item.privateDraft ? 'Review draft' : item.coding ? item.title || 'Published coding result' : item.prompt || 'Shared update'}</strong>
+        <strong>{item.privateDraft ? 'Review draft' : item.coding ? item.title || 'Published coding result' : item.title || item.prompt || 'Shared update'}</strong>
         <span className="context-update-excerpt">{item.privateDraft ? 'Only visible to you' : item.result}</span>
       </button>)}
-      {timeline?.hasMore && <button type="button" className="context-load a-secondary" onFocus={revealFocused}
+      {activity?.hasMore && limit < 200 && <button type="button" className="context-load a-secondary" onFocus={revealFocused}
         style={{ left: (results.length + 1) * stepX, top: y + 38 }} onClick={() => setPage({ card: selected.id, size: limit + 10 })}>Load older updates</button>}
     </div>
     {update && <article className="context-reader card" aria-label={update.coding ? 'Published coding result' : 'Shared update'}>
       <header>{update.coding ? <strong>Published coding result</strong> : <time dateTime={new Date(update.timestamp).toISOString()}>{shortDate(update.timestamp)}</time>}
         <button type="button" aria-label="Close update" onClick={() => setOpenUpdate('')}>×</button></header>
+      {selected?.boardAgent && <p className="a-muted">{update.author}</p>}
       {update.prompt && <p className="a-context-prompt">{update.prompt}</p>}
       {update.coding && update.title && <button type="button" className="a-secondary"
         onClick={() => window.dispatchEvent(new CustomEvent('branch:open-coding-note', { detail: update.id }))}>Open note on canvas</button>}
       <div className="a-context-result" data-message-text dangerouslySetInnerHTML={{
         __html: window.BranchHost.formatCodingResult(update.result),
       }} />
+      {selected?.boardAgent && update.nodeKey && <button type="button" className="a-secondary"
+        onClick={() => window.dispatchEvent(new CustomEvent('branch:open-board-card', { detail: update.nodeKey }))}>Open card on canvas</button>}
+      {update.proposal && <AgentProposal key={update.id} boardId={boardId} token={token} update={update} canReview={canReview} />}
     </article>}
     {!!cards.length && <div className="context-zoom" role="group" aria-label="Context zoom">
       <button type="button" aria-label="Reset context view" data-tooltip="Reset view"
@@ -167,4 +174,37 @@ export function ContextCanvas({ active, boardId, token, cards, selection, onSele
       <button type="button" aria-label="Zoom context in" onClick={() => zoomCenter(1.15)}>+</button>
     </div>}
   </div>;
+}
+
+function AgentProposal({ boardId, token, update, canReview }) {
+  const review = useMutation(api.boardAgents.review);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [decision, setDecision] = useState('');
+  const status = update.proposal.status === 'pending' ? decision || 'pending' : update.proposal.status;
+
+  async function resolve(apply) {
+    setBusy(true);
+    setError('');
+    try {
+      const result = await review({ boardId, token, updateId: update.id, apply });
+      setDecision(result.status);
+    } catch (error) {
+      setError(error.message || 'Could not review the proposal.');
+    } finally { setBusy(false); }
+  }
+
+  return <section className="a-agent-section" aria-label="Proposed card changes">
+    <p className="a-muted">Replacement title and note</p>
+    <strong>{update.proposal.title}</strong>
+    <div className="a-context-result" dangerouslySetInnerHTML={{
+      __html: window.BranchHost.formatCodingResult(update.proposal.body),
+    }} />
+    {status === 'pending' && canReview && <div className="a-agent-actions">
+      <button type="button" className="a-primary" disabled={busy} onClick={() => resolve(true)}>Apply edit</button>
+      <button type="button" className="a-secondary" disabled={busy} onClick={() => resolve(false)}>Dismiss</button>
+    </div>}
+    {status !== 'pending' && <p role="status">{status === 'applied' ? 'Edit applied.' : 'Proposal dismissed.'}</p>}
+    {error && <p className="a-error" role="alert">{error}</p>}
+  </section>;
 }

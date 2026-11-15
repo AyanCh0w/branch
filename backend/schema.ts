@@ -50,4 +50,23 @@ export default defineSchema({
   githubConnections: defineTable({userId:v.id('users'),githubId:v.string(),login:v.string(),avatarUrl:v.string(),repos:v.array(v.object({id:v.number(),fullName:v.string(),private:v.boolean(),defaultBranch:v.string(),installationId:v.number()})),updatedAt:v.number()}).index('user',['userId']),
   boardRepos: defineTable({boardId:v.id('boards'),repoId:v.number(),fullName:v.string(),private:v.boolean(),defaultBranch:v.string(),installationId:v.number(),addedBy:v.id('users'),createdAt:v.number()}).index('board',['boardId']).index('added_by',['addedBy']),
   creditLedger: defineTable({ ownerId: v.id('users'), boardId: v.id('boards'), runId: v.id('runs'), amount: v.number(), kind: v.string() }).index('owner', ['ownerId']),
+  boardAgentConnections: defineTable({
+    boardId: v.id('boards'), userId: v.id('users'), name: v.string(), keyHash: v.string(),
+    mode: v.union(v.literal('read'), v.literal('edit')), revoked: v.boolean(), lastUpdateAt: v.optional(v.number()),
+  }).index('key', ['keyHash']).index('board', ['boardId']),
+  boardAgentInstructions: defineTable({
+    boardId: v.id('boards'), text: v.string(), version: v.number(),
+  }).index('board', ['boardId']),
+  boardAgentCards: defineTable({
+    boardId: v.id('boards'), connectionId: v.id('boardAgentConnections'), nodeId: v.id('nodes'),
+    requestId: v.string(), fingerprint: v.string(),
+  }).index('request', ['connectionId', 'requestId']).index('node', ['nodeId']),
+  boardAgentUpdates: defineTable({
+    boardId: v.id('boards'), connectionId: v.id('boardAgentConnections'), requestId: v.string(),
+    agentName: v.string(), title: v.string(), result: v.string(), nodeKey: v.optional(v.string()),
+    proposal: v.optional(v.object({
+      nodeId: v.id('nodes'), expectedVersion: v.number(), title: v.string(), body: v.string(),
+      status: v.union(v.literal('pending'), v.literal('applied'), v.literal('dismissed')),
+    })),
+  }).index('request', ['connectionId', 'requestId']).index('timeline', ['boardId', 'connectionId']),
 });

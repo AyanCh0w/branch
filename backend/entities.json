@@ -964,6 +964,141 @@
       }
     }
   },
+  "boardAgentConnections": {
+    "table": "board_agent_connections",
+    "fields": {
+      "boardId": {
+        "column": "board_id",
+        "type": "text",
+        "optional": false
+      },
+      "userId": {
+        "column": "user_id",
+        "type": "text",
+        "optional": false
+      },
+      "name": {
+        "column": "name",
+        "type": "text",
+        "optional": false
+      },
+      "keyHash": {
+        "column": "key_hash",
+        "type": "text",
+        "optional": false
+      },
+      "mode": {
+        "column": "mode",
+        "type": "text",
+        "optional": false
+      },
+      "revoked": {
+        "column": "revoked",
+        "type": "boolean",
+        "optional": false
+      },
+      "lastUpdateAt": {
+        "column": "last_update_at",
+        "type": "double precision",
+        "optional": true
+      }
+    }
+  },
+  "boardAgentInstructions": {
+    "table": "board_agent_instructions",
+    "fields": {
+      "boardId": {
+        "column": "board_id",
+        "type": "text",
+        "optional": false
+      },
+      "text": {
+        "column": "text",
+        "type": "text",
+        "optional": false
+      },
+      "version": {
+        "column": "version",
+        "type": "double precision",
+        "optional": false
+      }
+    }
+  },
+  "boardAgentCards": {
+    "table": "board_agent_cards",
+    "fields": {
+      "boardId": {
+        "column": "board_id",
+        "type": "text",
+        "optional": false
+      },
+      "connectionId": {
+        "column": "connection_id",
+        "type": "text",
+        "optional": false
+      },
+      "nodeId": {
+        "column": "node_id",
+        "type": "text",
+        "optional": false
+      },
+      "requestId": {
+        "column": "request_id",
+        "type": "text",
+        "optional": false
+      },
+      "fingerprint": {
+        "column": "fingerprint",
+        "type": "text",
+        "optional": false
+      }
+    }
+  },
+  "boardAgentUpdates": {
+    "table": "board_agent_updates",
+    "fields": {
+      "boardId": {
+        "column": "board_id",
+        "type": "text",
+        "optional": false
+      },
+      "connectionId": {
+        "column": "connection_id",
+        "type": "text",
+        "optional": false
+      },
+      "requestId": {
+        "column": "request_id",
+        "type": "text",
+        "optional": false
+      },
+      "agentName": {
+        "column": "agent_name",
+        "type": "text",
+        "optional": false
+      },
+      "title": {
+        "column": "title",
+        "type": "text",
+        "optional": false
+      },
+      "result": {
+        "column": "result",
+        "type": "text",
+        "optional": false
+      },
+      "nodeKey": {
+        "column": "node_key",
+        "type": "text",
+        "optional": true
+      },
+      "proposal": {
+        "column": "proposal",
+        "type": "jsonb",
+        "optional": true
+      }
+    }
+  },
   "_storage": {
     "table": "files",
     "fields": {
