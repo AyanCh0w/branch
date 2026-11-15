@@ -23,3 +23,12 @@ test('hosted sync blocks browser cross-origin and ambiguous transports',async()=
 test('revoked capability returns disconnected instead of success',async()=>{
  mocks.call.mockRejectedValueOnce(Error('chrome_sync_disconnected'));expect((await request('desktop=save')).status).toBe(401);
 });
+
+test('only the native sync transport can redeem a board ticket', async () => {
+ const body={key:'desktop-key',ticket:'test-ticket',boardId:'test-board',conversationId:'test-chat'};
+ expect((await request('chrome=redeem',{},'POST',body)).status).toBe(400);
+ expect((await request('desktop=redeem',{origin:'https://joinbranch.dev'},'POST',body)).status).toBe(403);
+ expect(mocks.call).not.toHaveBeenCalled();
+ expect((await request('desktop=redeem',{},'POST',body)).status).toBe(200);
+ expect(mocks.call).toHaveBeenCalledWith('chatgptBrowser:redeemDesktop',body,{},'mutation',true);
+});

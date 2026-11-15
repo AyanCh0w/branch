@@ -24,8 +24,8 @@
     </div>
     <div class="tour-provider-panel" data-tour-panel="chatgpt">
      <p>Bring new replies from one ChatGPT conversation into this board’s Context.</p>
-     <a class="tour-action tour-open-mac" href="joinbranch://connect">Open Branch for Mac ↗</a>
-     <ol class="tour-setup-steps"><li>Choose your chat in the Mac app.</li><li>Approve this board in your browser.</li><li>Wait for Syncing, then send a new message.</li></ol>
+     <button type="button" class="tour-action tour-open-mac" data-tour="connect-mac">Connect ChatGPT to this board</button>
+     <p>Choose your chat in Branch for Mac. Send a message once it says Connected.</p>
      <button type="button" data-tour="copy-setup">Set up with your agent</button>
      <a class="tour-setup-link" href="/mac-setup.html" target="_blank" rel="noopener noreferrer">Installation guide ↗</a>
      <p class="tour-setup-note">Nothing opened? Use the setup handoff to install the companion on your Mac.</p>
@@ -151,8 +151,7 @@
   }
   for(const panel of connections.querySelectorAll('[data-tour-panel]'))panel.hidden=panel.dataset.tourPanel!==provider;
   const boardId=new URLSearchParams(location.search).get('board');
-  dialog.querySelector('.tour-open-mac').href=window.BranchMacSetup.appURL(boardId);
-  dialog.querySelector('.tour-open-mac').hidden=viewer;
+  dialog.querySelector('.tour-open-mac').hidden=viewer||!boardId||location.protocol!=='https:';
   dialog.querySelector('.tour-setup-link').href='/mac-setup.html'+(/^[A-Za-z0-9_-]{1,160}$/.test(boardId||'')?'?board='+encodeURIComponent(boardId):'');
   promptField.value=baselinePrompt;
   dialog.querySelector('[data-tour="copy-baseline"]').disabled=!baselinePrompt;
@@ -209,6 +208,17 @@
    case 'next':if(index===slides.length-1)finish();else{index++;render();}break;
    case 'connections':showConnections();break;
    case 'provider':provider=button.dataset.provider;renderConnections();guideStep();break;
+   case 'connect-mac': {
+    if (viewer) break;
+    button.disabled=true;
+    connectionStatus.textContent='Opening Branch for Mac…';
+    window.dispatchEvent(new CustomEvent('branch:connect-mac',{detail:{respond:async launch=>{
+     try{await launch;connectionStatus.textContent='Continue in Branch for Mac.';}
+     catch{connectionStatus.textContent='Could not open Branch for Mac. Try again.';}
+     finally{button.disabled=false;}
+    }}}));
+    break;
+   }
    case 'copy-setup':void copySetup();break;
    case 'copy-baseline':void copyBaseline();break;
    case 'chrome':{

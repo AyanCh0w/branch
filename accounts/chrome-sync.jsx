@@ -4,16 +4,26 @@ import { api, useMutation, useQuery } from '../backend/react';
 import { isChromeSyncOrigin } from '../collaboration/chrome-sync.cjs';
 
 export const chromeSyncAvailable = isChromeSyncOrigin(location.origin);
+export const desktopSyncAvailable = chromeSyncAvailable && location.protocol === 'https:';
 
-export function ChromeSyncSettings({ boardId, Dialog, onClose }) {
+export function ChromeSyncSettings({ boardId, Dialog, onClose, onConnectMac }) {
   const count = useQuery(api.chatgptBrowser.count, { boardId });
   const disconnect = useMutation(api.chatgptBrowser.disconnectBoard);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
+  const [launching, setLaunching] = useState(false);
   return <Dialog title="ChatGPT sync" onClose={onClose}>
-    <p>Choose a ChatGPT conversation in the Mac app, then approve this board. New replies will appear in Context.</p>
-    <p><a className="a-primary" href={appURL(boardId)}>Open Branch for Mac ↗</a></p>
-    <p className="a-muted">Your board choice carries over. Nothing opened? Install the companion below.</p>
+    <p>New replies from the chat you choose will appear in this board’s Context. Anyone with access to the board can read them.</p>
+    {desktopSyncAvailable && <p><button type="button" className="a-primary" disabled={launching} onClick={async()=>{
+      setLaunching(true);
+      try {
+        await onConnectMac();
+        setStatus('Continue in Branch for Mac.');
+      } catch {
+        setStatus('Could not open Branch for Mac. Check your connection and try again.');
+      } finally { setLaunching(false); }
+    }}>{launching ? 'Opening Branch for Mac…' : 'Connect ChatGPT to this board'}</button></p>}
+    {desktopSyncAvailable && <p className="a-muted">Nothing opened? Install or update Branch for Mac below.</p>}
     <button type="button" className="a-primary" onClick={async()=>{try{await navigator.clipboard.writeText(handoff(boardId));setStatus('Setup instructions copied. Paste them into your coding agent on your Mac.');}catch{setStatus('Clipboard unavailable. Open the installation guide to copy the setup instructions.');}}}>Set up with your agent</button>
     <p><a href={'/mac-setup.html?board='+encodeURIComponent(boardId)} target="_blank" rel="noopener noreferrer">Installation guide ↗</a></p>
     <p className="a-muted">First-time setup requires macOS Accessibility approval. Only the chat you choose is shared.</p>

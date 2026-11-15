@@ -84,13 +84,21 @@ test('installation handoff contains setup and only the board destination, not UR
   let copied;Object.defineProperty(w.navigator,'clipboard',{value:{async writeText(value){copied=value;}}});
   tour.start({userId:'one',scene:'connections'});click('copy-setup');await new Promise(setImmediate);
   assert.match(copied,/swift test --package-path desktop/);assert.match(copied,/sh desktop\/build-probe.sh/);
-  assert.match(copied,/https:\/\/joinbranch.dev\/app\?board=boards_test/);assert.doesNotMatch(copied,/private-test-token|#secret/);
-  assert.match(copied,/joinbranch:\/\/connect\?board=boards_test/);
-  assert.match(copied,/exact title of this ChatGPT window/);assert.match(copied,/Approve this board/);
+  assert.match(copied,/https:\/\/joinbranch.dev\/app\?board=boards_test/);assert.doesNotMatch(copied,/private-test-token|#secret|branch_desktop_launch_/);
+  assert.match(copied,/#mac-sync=1/);
+  assert.match(copied,/exact title of this ChatGPT window/);assert.match(copied,/Connect ChatGPT to this board/);
   assert.doesNotMatch(copied,/pairing prompt|baseline prompt/);
   assert.equal(d.querySelector('details').open,false);assert.equal(d.querySelector('[data-setup-fallback]').hidden,true);
   assert.match(d.querySelector('.tour-setup-link').href,/mac-setup.html\?board=boards_test/);
  }finally{dom.window.close();}
+});
+test('Mac launch link encodes the selected chat and keeps the launch ticket out of copied setup',()=>{
+ const {appURL,handoff}=require('../desktop-setup');
+ const ticket='branch_desktop_launch_1234567890123_'+'a'.repeat(64);
+ const launch=appURL('boards_test',{ticket,chatTitle:'Current chat & notes'});
+ assert.equal(launch,'joinbranch://connect?board=boards_test&ticket='+ticket+'&chat=Current%20chat%20%26%20notes');
+ assert.doesNotMatch(handoff('boards_test'),/branch_desktop_launch_/);
+ assert.doesNotMatch(appURL(undefined,{ticket}),/ticket/);
 });
 test('clipboard failure exposes selectable installation instructions',async()=>{
  const {dom,w,d,tour,click}=boot();try{

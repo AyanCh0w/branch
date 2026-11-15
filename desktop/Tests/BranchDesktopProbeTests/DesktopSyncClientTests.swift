@@ -40,6 +40,16 @@ struct ConnectionLinkTests {
         #expect(client.approvalURL.absoluteString.contains("prototype") == false)
     }
 
+    @Test func nativeLaunchTicketRequiresAnExplicitBoard() throws {
+        let ticket = "branch_desktop_launch_1234567890123_" + String(repeating: "a", count: 64)
+        let url = try #require(URL(string: "joinbranch://connect?board=boards_123&ticket=\(ticket)&chat=Current%20chat"))
+        let link = try #require(ConnectionLink(url))
+        #expect(link.ticket == ticket)
+        #expect(link.matchingChat(in: ["Current chat"]) == 0)
+        #expect(ConnectionLink(URL(string: "joinbranch://connect?ticket=\(ticket)")!) == nil)
+        #expect(ConnectionLink(URL(string: "joinbranch://connect?board=boards_123&ticket=invalid")!) == nil)
+    }
+
     @Test func rejectsRedirectsAndCredentials() {
         for value in ["https://connect?board=a", "joinbranch://evil?board=a", "joinbranch://connect/path?board=a", "joinbranch://connect?board=a&key=secret", "joinbranch://connect?board=a&board=b", "joinbranch://connect?board=a%26b", "joinbranch://connect?chat", "joinbranch://connect?chat=a&chat=b", "joinbranch://connect?chat=%00", "joinbranch://connect#key=secret", "joinbranch://user:pass@connect?board=a"] {
             #expect(ConnectionLink(URL(string:value)!) == nil)

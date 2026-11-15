@@ -12,7 +12,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
             case .idle: "Not connected"
             case .checking: "Checking the selected chat"
             case .approval: "Waiting for board approval"
-            case .preparing: "Board approved · Getting the chat ready"
+            case .preparing: "Getting the chat ready"
             case .connected: "Connected · Sync is on"
             }
         }
@@ -44,6 +44,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     private var discovery: Task<Void, Never>?
     private var preferredBoardID: String?
     private var pendingLink: ConnectionLink?
+    private var launchTicket: String?
     private var requestedAccess = false
     private var refreshing = false
     private var connection: DesktopSyncClient?
@@ -114,6 +115,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     func show(link: ConnectionLink? = nil) {
         if watching == nil, let link, link.boardID != nil || link.chatTitle != nil {
             preferredBoardID = link.boardID
+            launchTicket = link.ticket
             pendingLink = link.chatTitle == nil ? nil : link
         }
         updateControls()
@@ -129,6 +131,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         pendingLink = nil
+        if watching == nil { launchTicket = nil }
         permissionCheck?.cancel()
         permissionCheck = nil
         discovery?.cancel()
@@ -161,6 +164,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
 
     /// Cancels capture, clears unsent data and revokes the current write capability.
     @objc func stop() {
+        launchTicket = nil
         finish(boardTitle == nil ? "Setup canceled." : "Sync stopped.")
     }
 
@@ -308,7 +312,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         while clock.now < deadline {
             switch sample {
             case .transcript(let chat, nil) where chat.isGenerating:
-                setStatus("Leave this chat open while the reply finishes. Branch will then open board approval.")
+                setStatus("Leave this chat open while the reply finishes. Branch will then continue setup.")
             case .incomplete, .transcript(_, nil):
                 retries -= 1
             default:
@@ -327,17 +331,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
 
         let client = DesktopSyncClient(conversationID: pairingID, preferredBoardID: preferredBoardID)
         connection = client
-        guard NSWorkspace.shared.open(client.approvalURL) else {
-            finish("Couldn’t open Branch. Check your default browser and try again.")
-            return
-        }
-        phase = .approval
-        status.stringValue = "In your browser, select the destination board and click Approve this board."
-        updateControls()
-        guard let board = try await approvedBoard(client) else {
-            finish("Board approval expired. Start a new pairing.")
-            return
-        }
+        guard let board = try await connectBoard(using: client) else { return }
         try Task.checkCancellation()
         boardTitle = board.boardTitle
         phase = .preparing
@@ -400,6 +394,32 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
                 : "Branch needs to see a completed reply in this chat. Open a chat with an existing reply, then click Connect chat."
         case .incomplete: "Branch couldn’t read the selected chat. Keep it open and visible in ChatGPT, then try again."
         }
+    }
+
+    private func connectBoard(using client: DesktopSyncClient) async throws -> DesktopSyncClient.Board? {
+        if let launchTicket, let preferredBoardID {
+            self.launchTicket = nil
+            setStatus("Connecting this chat to your Branch board…")
+            do {
+                return try await client.redeem(launchTicket, boardID: preferredBoardID)
+            } catch DesktopSyncClient.Failure.temporary {
+                // The server may have redeemed the ticket before the response was interrupted.
+                return try await client.status()
+            } catch DesktopSyncClient.Failure.disconnected {
+                finish("This board connection expired or was disconnected. Click Connect ChatGPT to this board again.")
+                return nil
+            }
+        }
+        guard NSWorkspace.shared.open(client.approvalURL) else {
+            finish("Couldn’t open Branch. Check your default browser and try again.")
+            return nil
+        }
+        phase = .approval
+        status.stringValue = "In your browser, choose the board where this chat’s new replies should go."
+        updateControls()
+        if let board = try await approvedBoard(client) { return board }
+        finish("Board selection expired. Start a new pairing.")
+        return nil
     }
 
     private func approvedBoard(_ client: DesktopSyncClient) async throws -> DesktopSyncClient.Board? {
