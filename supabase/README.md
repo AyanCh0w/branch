@@ -40,7 +40,21 @@ implemented features; this migration does not enable them.
 4. Run `npm ci`, `npm run build`, then `npm run dev` and `npm run worker` in separate terminals. The app defaults to `http://127.0.0.1:4387`.
 5. For local development, keep `npm run worker` running for shared AI generation. The hosted Cloudflare deployment runs jobs through Queues and a recovery cron; it does not depend on this local process. A frontend-only or Vercel-only deployment needs its own persistent worker before cutover.
 
+Apply `202611140003_github.sql` and then `202611140004_agent_context.sql` if those migrations have yet to run. Migration 004 adds private coding handoff and ChatGPT reply tables, plus optional metadata on existing nodes. On development databases that already ran the earlier agent-context migration, 004 retains those tables and refreshes the compatibility view and write trigger after the GitHub migration. Existing board records, IDs, and Yjs text are preserved.
+
 Only the project URL and publishable key reach the browser. Database credentials, secret keys, provider keys, and personal connection tokens stay on the server. Application records are in `branch_private`, which browser roles cannot access. The public revision table exposes only the signed-in user's own counter under RLS. Private file access uses signed URLs valid for one hour; previously issued URLs remain valid until expiry even if membership changes.
+
+### Isolated ChatGPT sync development
+
+On an Apple silicon Mac, run `SUPABASE_EXPERIMENTAL_STACK=1 npx --yes --package=supabase@3.1.0 supabase start --runtime native --preparation on-demand` from this checkout. This starts a separate local Supabase stack and applies all migrations. It does not require Supabase dashboard access, `supabase link`, or a production data import.
+
+Save the local stack's API URL, publishable key, secret key, and database URL under the names above in an ignored `.env.agent-context.local` with file permissions `600`. Both URLs should point to loopback. Add `PORT=4390`, then run `npm run build` followed by `node --env-file=.env.agent-context.local app/server.cjs`. Chrome sync expects `http://localhost:4390/app` exactly. No OpenAI API key or job worker is needed to sync replies from ChatGPT.
+
+In Chrome, load the unpacked extension from `extensions/branch-sync` (version `0.2.0`), then reload ChatGPT. Use a new local Branch account and board. Open an ordinary ChatGPT conversation, send a baseline message, then choose the test board from the **Branch sync** badge. Two new replies should show up on one card in **Context** and survive a reload. The baseline and any replies sent after **Stop syncing** should stay out of Branch.
+
+For regular ChatGPT in the macOS app, use [Branch's menu bar app](../desktop/README.md). Approving a local board pairs it with one desktop conversation. The desktop endpoint accepts a short-lived capability, and saves only new assistant replies identified by the app. The bundled probe can check whether the selected window exposes the signals required for capture.
+
+The board’s canvas tour ends with **Connect an agent**, also available from the account menu. ChatGPT setup points to the Mac menu bar app, includes the probe’s baseline prompt, and links to Chrome sync on the supported local address. Board editors can open the Claude Code connection setup from the same step, even before creating a card. Card handoffs still start from the source card.
 
 ## Data and account migration
 
