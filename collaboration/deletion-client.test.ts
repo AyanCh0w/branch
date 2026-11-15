@@ -54,7 +54,7 @@ it.each([false,true])('keeps deletion working after a remote branch deletion (in
  const shared=(w as any).BoardShared;
  await shared.connect({client,boardId:'board',token:'test'});
  shared.edit(state.nodes[0],'body','Unacknowledged edit');
- if(inFlight)await vi.advanceTimersByTimeAsync(70);
+ if(inFlight)await vi.waitFor(()=>expect(finish).toBeTypeOf('function'),{timeout:2000});
  nodes=[sibling];
  if(inFlight){finish();await vi.advanceTimersByTimeAsync(0);}else receive(snapshot());
  await shared.deleteNode('sibling');
