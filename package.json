@@ -4,9 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "npm run build:backend && esbuild --tsconfig=tsconfig.json accounts/app.jsx --bundle --format=iife --define:process.env.NODE_ENV='\"production\"' --outfile=app/accounts.bundle.js && esbuild --tsconfig=tsconfig.json app/markdown-entry.js --bundle --format=iife --outfile=app/markdown.bundle.js && node app/build-math.cjs && node app/build-pdf.cjs && esbuild --tsconfig=tsconfig.json app/landing-shader.mjs --bundle --format=iife --minify --outfile=app/landing-shader.bundle.js",
+    "build": "npm run build:backend && esbuild --tsconfig=tsconfig.json accounts/app.jsx --bundle --format=iife --define:process.env.NODE_ENV='\"production\"' --outfile=app/accounts.bundle.js && esbuild --tsconfig=tsconfig.json app/markdown-entry.js --bundle --format=iife --outfile=app/markdown.bundle.js && node app/build-math.cjs && node app/build-pdf.cjs && esbuild --tsconfig=tsconfig.json app/landing-shader.mjs --bundle --format=iife --minify --outfile=app/landing-shader.bundle.js && node scripts/audit-runtime.cjs --local",
     "dev": "node app/server.cjs",
-    "convex:dev": "convex dev",
     "test": "node --test app/tests/*.test.cjs && vitest run && npm run test:supabase",
     "typecheck": "tsc --noEmit -p backend",
     "build:vercel": "npm run build && node scripts/build-public.cjs",

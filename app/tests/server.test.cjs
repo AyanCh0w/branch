@@ -51,7 +51,7 @@ test('public landing and workspace routes stay separate without exposing private
   assert.match((await read('/reactive-grid.js')).body,/window.createReactiveGrid/);
   assert.match((await read('/whiteboard.css')).body,/#selection-marquee/);
   assert.match((await read('/landing.js')).body,/location.replace\('\/app'/);
-  for(const route of ['/.env.local','/server.cjs','/../accounts/app.jsx'])assert.equal((await read(route)).status,404);
+  for(const route of ['/.env.local','/server.cjs','/../accounts/app.jsx','/collaboration.bundle.js'])assert.equal((await read(route)).status,404);
  }finally{await new Promise(resolve=>server.close(resolve));}
 });
 

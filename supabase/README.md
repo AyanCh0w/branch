@@ -2,6 +2,8 @@
 
 This branch replaces the active Convex runtime with Supabase Auth, typed private Postgres tables, Storage, and Realtime invalidation. The original `convex/` tree and its tests remain as a rollback/parity reference; the running application does not import that tree.
 
+Local builds and direct `node app/server.cjs` startup also audit the generated browser/API/worker bundles and reject stale Convex clients or endpoints. Rebuild after changing branches. The obsolete collaboration bundle is no longer served, and the Convex development launcher has been removed. Local configuration should contain only Supabase backend settings; retained parity tests run in memory and do not need a Convex deployment.
+
 ## Deployment status
 
 Branch is live at **https://branch.eshteremberg.workers.dev**, using Cloudflare
