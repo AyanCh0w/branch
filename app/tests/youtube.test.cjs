@@ -33,3 +33,11 @@ test('caption-backed video answers do not force a web search; ordinary websites 
  assert.equal(webOptions([{content:'Summarize'}],[video,{text:'https://example.com'}]).tool_choice,'required');
  const {buildRequest}=require('../server.cjs');const request=buildRequest({messages:[{role:'user',content:'Summarize'}],contexts:[video]});assert.match(JSON.stringify(request.input),/iframe API/);assert.equal(request.tool_choice,'auto');
 });
+test('server blocks are distinguished from missing captions without retries or credential workarounds',async()=>{
+ const {captionFetch}=require('../../collaboration/youtube.cjs');const params={url:'https://www.youtube.com/youtubei/v1/player',method:'POST',body:'{}'};
+ for(const response of [new Response('',{status:403}),new Response('',{status:429}),Response.json({playabilityStatus:{status:'LOGIN_REQUIRED',reason:'Sign in to confirm you’re not a bot'}})]){
+  await assert.rejects(captionFetch(params,async()=>response),error=>error.name==='YoutubeTranscriptRequestBlockedError'&&/blocked caption requests/.test(publicError(error)));
+ }
+ const playable=Response.json({playabilityStatus:{status:'OK'},captions:{}});assert.equal(await captionFetch(params,async()=>playable),playable);
+ const missing=Response.json({playabilityStatus:{status:'ERROR',reason:'Video unavailable'}});assert.equal(await captionFetch(params,async()=>missing),missing);
+});

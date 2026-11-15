@@ -27,6 +27,7 @@ function blockedByHeaders(headers,target,parent){
  return xfo.includes('DENY')||(xfo.includes('SAMEORIGIN')&&target.origin!==parent.origin);
 }
 async function requestHeaders(url,signal){
+ if(process.env.CLOUDFLARE_WORKER==='true')return workerRequestHeaders(url,signal);
  if(!['http:','https:'].includes(url.protocol)||url.username||url.password||(url.port&&!['80','443'].includes(url.port)))throw Error('Unsupported URL');
  const records=await dns.lookup(url.hostname,{family:4,all:true});
  if(!records.length||records.some(r=>!publicIPv4(r.address)))throw Error('Private address');
@@ -35,6 +36,21 @@ async function requestHeaders(url,signal){
   const req=(url.protocol==='https:'?https:http).request(url,{method:'GET',signal,agent:false,lookup:(_host,options,cb)=>cb(null,...(options.all?[[records[0]]]:[records[0].address,4])),headers:{'User-Agent':'Branch-Preview-Check/1.0','Accept':'text/html'}},res=>{resolve({status:res.statusCode,headers:res.headers});res.destroy();});
   req.on('error',reject);req.end();
  });
+}
+// Workers has no dns.lookup or custom HTTP lookup support. Use its public-network
+// fetch transport, validate every destination, and leave redirects to checkEmbed.
+// No cookies, authorization headers, service bindings, or VPC bindings are used.
+async function workerRequestHeaders(url,signal,{resolve=dns.resolve4,fetchImpl=fetch}={}){
+ if(!['http:','https:'].includes(url.protocol)||url.username||url.password||(url.port&&!['80','443'].includes(url.port)))throw Error('Unsupported URL');
+ const host=url.hostname;
+ if(host.includes(':')||host.endsWith('.localhost')||host==='localhost')throw Error('Private address');
+ const addresses=/^[\d.]+$/.test(host)?[host]:await resolve(host);
+ if(!addresses.length||addresses.some(address=>!publicIPv4(address)))throw Error('Private address');
+ signal.throwIfAborted();
+ const response=await fetchImpl(url.href,{method:'GET',redirect:'manual',signal,headers:{'User-Agent':'Branch-Preview-Check/1.0','Accept':'text/html'}});
+ const result={status:response.status,headers:Object.fromEntries(response.headers)};
+ await response.body?.cancel();
+ return result;
 }
 let active=0;
 async function checkEmbed(value,origin,{request=requestHeaders}={}){
@@ -51,4 +67,4 @@ async function checkEmbed(value,origin,{request=requestHeaders}={}){
   return {status:'unknown'};
  }catch{return {status:'unknown'};}finally{active--;}
 }
-module.exports={checkEmbed,blockedByHeaders,publicIPv4};
+module.exports={checkEmbed,blockedByHeaders,publicIPv4,workerRequestHeaders};
