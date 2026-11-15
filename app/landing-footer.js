@@ -70,10 +70,15 @@
       const before=edges[i-1],after=edges[i+1];
       const start=before && key(before.b)===key(edge.a) ? before.a : edge.a;
       const end=after && key(after.a)===key(edge.b) ? after.b : edge.b;
+      // A small, stable bow softens straight runs without making the trail wobble.
+      const dx=edge.b.x-edge.a.x,dy=edge.b.y-edge.a.y;
+      const length=Math.hypot(dx,dy)||1;
+      const bend=3*Math.sin((edge.a.x+edge.b.x)*.008+(edge.a.y+edge.b.y)*.011+.8);
+      const bowX=-dy/length*bend,bowY=dx/length*bend;
       ctx.beginPath();ctx.moveTo(edge.a.x,edge.a.y);
       ctx.bezierCurveTo(
-        edge.a.x+(edge.b.x-start.x)/6,edge.a.y+(edge.b.y-start.y)/6,
-        edge.b.x-(end.x-edge.a.x)/6,edge.b.y-(end.y-edge.a.y)/6,
+        edge.a.x+(edge.b.x-start.x)/6+bowX,edge.a.y+(edge.b.y-start.y)/6+bowY,
+        edge.b.x-(end.x-edge.a.x)/6+bowX,edge.b.y-(end.y-edge.a.y)/6+bowY,
         edge.b.x,edge.b.y);ctx.stroke();
     }
     for (const p of nodes.values()) {
