@@ -39,7 +39,10 @@ export async function identity(token=''){
  return {userId:rows[0].user_id,authId:data.user.id};
 }
 export const tokenFrom=(req:any)=>/^Bearer (\S+)$/.exec(req.headers.authorization||'')?.[1]||'';
-export function requestClient(req:any){const verified=identity(tokenFrom(req));return Object.fromEntries(['query','mutation','action'].map(kind=>[kind,async(name:string,args:any={})=>engine.call(name,args,await verified,kind)])) as any;}
+export function requestClient(req:any){const verified=identity(tokenFrom(req));return {
+ ...Object.fromEntries(['query','mutation','action'].map(kind=>[kind,async(name:string,args:any={})=>engine.call(name,args,await verified,kind)])),
+ async queryWithDependencies(name:string,args:any={}){let dependencies:string[]=[];const value=await engine.call(name,args,await verified,'query',false,undefined,reads=>{dependencies=reads;});return {value,dependencies};}
+} as any;}
 const username=(s:any,creating:boolean)=>{
  if(typeof s!=='string')throw Error('Use a username');
  const u=s.trim().normalize('NFKC').toLowerCase();

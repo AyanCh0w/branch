@@ -59,6 +59,7 @@ export const read = query({
     const thread = await ctx.db.query('chatgptThreads').withIndex('card', q => q.eq('boardId', boardId).eq('nodeKey', nodeKey)).unique();
     if (!thread) return { items: [], hasMore: false };
     const size = Math.min(200, Math.max(10, Math.floor(limit)));
+    ctx.db.readCollections?.add('chatgptUpdates');
     const { rows } = await ctx.db.sql.query(
       'select id, created_at as timestamp, result from branch_private.chatgpt_updates where thread_id=$1 order by created_at desc, id desc limit $2',
       [thread._id, size + 1],

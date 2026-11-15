@@ -13,7 +13,7 @@ export class Engine {
   if(rest.length||!fn?.handler||!fn.kind||fn.internal&&!internal||kind&&fn.kind!==kind)throw Error('Unknown operation');
   return fn;
  }
- async call(name:string,args:any={},identity:any={},kind?:string,internal=false,context?:any):Promise<any>{
+ async call(name:string,args:any={},identity:any={},kind?:string,internal=false,context?:any,onRead?:(collections:string[])=>void):Promise<any>{
   name=String(name);const fn=this.resolve(name,kind,internal);fn.args.parse(args);
   if(context&&fn.kind!=='action'){
    if(fn.kind==='mutation'&&!context.db.writable)throw Error('Mutation from query');
@@ -35,6 +35,7 @@ export class Engine {
     if(fn.kind==='mutation')await this.invalidate(ctx.db);
     connection.assertHealthy();
     await sql.query('commit');
+    if(fn.kind==='query')onRead?.([...ctx.db.readCollections]);
     if(ctx.scheduledJobs.length&&this.notifyJobs){try{await this.notifyJobs();}catch{console.error('Job wake-up deferred to recovery scan');}}
     return value;
    }catch(error:any){await connection.rollback();if(!connection.failure&&error.code==='40001'&&attempt<3)continue;throw connection.failure||error;}
@@ -70,6 +71,9 @@ export class Engine {
    union select data->>'ownerId' from branch_private.records where collection='boards' and id=any($2::text[])
    union select data->>'userId' from branch_private.records where collection='teamMembers' and (data->>'teamId'=any($3::text[]) or data->>'teamId' in (select data->>'teamId' from branch_private.records where collection='boards' and id=any($2::text[])))
   )`,[[...db.affectedUsers],[...db.affectedBoards],[...db.affectedTeams]]);
-  for(const row of rows)await db.sql.query('insert into public.branch_revisions(user_id,revision) values($1,1) on conflict(user_id) do update set revision=branch_revisions.revision+1',[row.auth_id]);
+  if(rows.length)await db.sql.query(`insert into public.branch_revisions(user_id,revision,change)
+   select unnest($1::uuid[]),1,$2::jsonb on conflict(user_id) do update
+   set revision=branch_revisions.revision+1,change=excluded.change`,
+   [rows.map((row:any)=>row.auth_id),JSON.stringify({collections:[...db.changedCollections],boards:[...db.affectedBoards],teams:[...db.affectedTeams]})]);
  }
 }

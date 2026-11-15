@@ -66,7 +66,9 @@ export async function route(req:any,res:any,url:URL){
   if(!['query','mutation','action'].includes(kind)||typeof name!=='string')return json(400,{error:'Invalid operation'});
   await rateLimit('rpc:'+createHash('sha256').update(ip).digest('hex'),4000,60);
   if (name.startsWith('chatgptBrowser:') && !isChromeSyncOrigin(url.origin)) return json(403, { error: 'ChatGPT sync is unavailable on this origin.' });
-  const result=await requestClient(req)[kind](name,args);return json(200,{value:result});
+  const client=requestClient(req);
+  if(kind==='query')return json(200,await client.queryWithDependencies(name,args));
+  const result=await client[kind](name,args);return json(200,{value:result});
  }catch(error:any){
   // Log only stack locations; never SQL, arguments, tokens, or error messages.
   if(process.env.CLOUDFLARE_WORKER==='true')console.error('RPC failure',error?.name,String(error?.stack||'').split('\n').slice(1,4).join('\n'));

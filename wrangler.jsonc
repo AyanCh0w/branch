@@ -7,6 +7,7 @@
     "nodejs_compat"
   ],
   "workers_dev": true,
+  "placement": { "region": "aws:us-east-1" },
   "routes": [
     { "pattern": "joinbranch.dev", "custom_domain": true },
     { "pattern": "www.joinbranch.dev", "custom_domain": true }

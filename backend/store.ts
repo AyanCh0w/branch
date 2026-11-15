@@ -4,8 +4,13 @@ import entities from './entities.json';
 import {encode,decode} from './codec';
 export class Store {
  affectedUsers=new Set<string>();affectedBoards=new Set<string>();affectedTeams=new Set<string>();
+ changedCollections=new Set<string>();
+ readCollections=new Set<string>();
+ private reads=new Map<string,Promise<any>>();
  constructor(public sql:any,public writable=false){}
  touch(collection:string,id:string,data:any){
+  this.changedCollections.add(collection);
+  this.reads.delete(id);
   for(const key of ['userId','ownerId','initiatedBy'])if(data[key])this.affectedUsers.add(data[key]);
   if(collection==='users')this.affectedUsers.add(id);
   if(data.boardId)this.affectedBoards.add(data.boardId);
@@ -15,13 +20,19 @@ export class Store {
  }
  system={get:(id:string)=>this.get(id),normalizeId:(_table:string,id:string)=>this.normalizeId('_storage',id)};
  normalizeId(_table:string,id:string){return typeof id==='string'&&/^[A-Za-z0-9_-]{1,160}$/.test(id)?id:null;}
- async get(id:string){const {rows}=await this.sql.query('select * from branch_private.records where id=$1',[id]);return rows[0]?{...decode(rows[0].data),_id:rows[0].id,_creationTime:rows[0].created_at}:null;}
+ async get(id:string){
+  let read=this.reads.get(id);
+  if(!read){read=this.sql.query('select * from branch_private.records where id=$1',[id]).then(({rows}:any)=>{if(rows[0])this.readCollections.add(rows[0].collection);else this.readCollections.add('*');return rows[0]?{...decode(rows[0].data),_id:rows[0].id,_creationTime:rows[0].created_at}:null;});this.reads.set(id,read!);}
+  // Cache only within this transaction; return copies so handlers cannot mutate it.
+  return structuredClone(await read);
+ }
  query(collection:string){
   if(!Object.hasOwn(schema,collection)&&collection!=='_storage')throw Error('Unknown collection');
   const clauses:any[]=[];const build:any={
    withIndex:(_name:string,fn?:any)=>{if(fn){const q:any={eq:(key:string,value:any)=>{clauses.push([key,value]);return q;}};fn(q);}return build;},
    filter:(fn:any)=>{fn({field:(key:string)=>key,eq:(key:string,value:any)=>clauses.push([key,value])});return build;},
    collect:async()=>{
+    this.readCollections.add(collection);
     const entity=(entities as any)[collection];
     const values:any[]=[];const where:string[]=[];
     for(const [key,value] of clauses){

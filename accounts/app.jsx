@@ -364,7 +364,7 @@ function ActiveBoardUsers({boardId,token,userId}){
   const hide=()=>publish(false);
   document.addEventListener('visibilitychange',update);window.addEventListener('pagehide',hide);
   window.addEventListener('pageshow',update);
-  const heartbeat=setInterval(update,5000),expiry=setInterval(()=>setNow(Date.now()),1000);
+  const heartbeat=setInterval(()=>{if(!document.hidden)update();},5000),expiry=setInterval(()=>setNow(Date.now()),1000);
   update();
   return()=>{
    disposed=true;clearInterval(heartbeat);clearInterval(expiry);offRows();offConnection();

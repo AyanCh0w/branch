@@ -41,7 +41,7 @@ export function startCursors({client,scope,tabId,host}){
  document.addEventListener('pointerup',up);document.addEventListener('pointercancel',leave);
  document.addEventListener('visibilitychange',visibility);document.addEventListener('branch-camera',camera);
  document.documentElement.addEventListener('pointerleave',leave);window.addEventListener('blur',leave);window.addEventListener('pagehide',leave);
- const heartbeat=setInterval(()=>{render();if(pointer&&online)publish();},5000);
+ const heartbeat=setInterval(()=>{render();if(pointer&&online&&!document.hidden)publish();},5000);
  const expiry=setInterval(render,1000);
  return ()=>{
   disposed=true;clearTimeout(timer);clearInterval(heartbeat);clearInterval(expiry);pending=undefined;
