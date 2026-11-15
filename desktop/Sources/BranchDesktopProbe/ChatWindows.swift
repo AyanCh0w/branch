@@ -51,13 +51,19 @@ actor ChatWindows {
                 let app = AXUIElementCreateApplication(application.processIdentifier)
                 AXUIElementSetMessagingTimeout(app, 0.15)
                 for element in windows(of: app) {
-                    choices.append(Window(app: app, element: element, title: title(of: element)))
+                    let name = title(of: element)
+                    guard Self.isConversationWindow(name) else { continue }
+                    choices.append(Window(app: app, element: element, title: name))
                 }
             }
         }
         return choices.enumerated().map { index, window in
             "\(index + 1). \(window.title.isEmpty ? "ChatGPT window" : window.title)"
         }
+    }
+
+    nonisolated static func isConversationWindow(_ title: String) -> Bool {
+        !["computer use", "computer use controls"].contains(title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
     }
 
     /// Pins reads to the specific Accessibility window chosen by the user.

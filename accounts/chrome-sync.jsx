@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import {handoff} from '../app/desktop-setup';
+import {handoff,appURL} from '../app/desktop-setup';
 import { api, useMutation, useQuery } from '../backend/react';
 import { isChromeSyncOrigin } from '../collaboration/chrome-sync.cjs';
 
@@ -11,10 +11,12 @@ export function ChromeSyncSettings({ boardId, Dialog, onClose }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   return <Dialog title="ChatGPT sync" onClose={onClose}>
-    <p>Install the Mac companion, choose a ChatGPT conversation, then connect it to this board. New completed replies appear in Context.</p>
+    <p>Choose a ChatGPT conversation in the Mac app, then approve this board. New replies will appear in Context.</p>
+    <p><a className="a-primary" href={appURL(boardId)}>Open Branch for Mac ↗</a></p>
+    <p className="a-muted">Your board choice carries over. Nothing opened? Install the companion below.</p>
     <button type="button" className="a-primary" onClick={async()=>{try{await navigator.clipboard.writeText(handoff(boardId));setStatus('Setup instructions copied. Paste them into your coding agent on your Mac.');}catch{setStatus('Clipboard unavailable. Open the installation guide to copy the setup instructions.');}}}>Set up with your agent</button>
     <p><a href={'/mac-setup.html?board='+encodeURIComponent(boardId)} target="_blank" rel="noopener noreferrer">Installation guide ↗</a></p>
-    <p className="a-muted">Already installed? Open the Mac menu-bar app, choose your conversation, and click Connect chat.</p>
+    <p className="a-muted">First-time setup requires macOS Accessibility approval. Only the chat you choose is shared.</p>
     {!!count && <button type="button" className="a-secondary" disabled={busy} onClick={async () => {
       setBusy(true);
       try {
@@ -36,7 +38,7 @@ export function ConnectChatGPTSync({ request, desktop = false }) {
   const boards = useQuery(api.library.list, {});
   const connect = useMutation(api.chatgptBrowser.connect);
   const connectDesktop = useMutation(api.chatgptBrowser.connectDesktop);
-  const [boardId, setBoardId] = useState('');
+  const [boardId, setBoardId] = useState(desktop ? request.get('board') || '' : '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [completed, setCompleted] = useState(false);
@@ -52,8 +54,8 @@ export function ConnectChatGPTSync({ request, desktop = false }) {
   return <main className="a-link-landing a-chatgpt-consent">
     <h1>{desktop ? 'Connect ChatGPT on Mac' : 'Sync this ChatGPT conversation'}</h1>
     <p>New replies will save to the board you choose. Anyone with access to that board can read them.</p>
-    {completed ? <><p role="status">Board approved. Return to the Branch menu bar app to see the sync status.</p>
-      <a href="/app">Back to your boards</a></> : valid ? <form onSubmit={async event => {
+    {completed ? <><p role="status">Board approved. Return to Branch for Mac and wait for “Syncing,” then send a new message in ChatGPT.</p>
+      <p><a className="a-primary" href={appURL()}>Return to Branch for Mac ↗</a></p><a href={'/app?board='+encodeURIComponent(selected?.id || '')}>Open this board ↗</a></> : valid ? <form onSubmit={async event => {
       event.preventDefault();
       if (busy || !selected) return;
       setBusy(true);
@@ -79,7 +81,7 @@ export function ConnectChatGPTSync({ request, desktop = false }) {
       </label>
       {editable?.length === 0 && <p><a href="/app" target="_blank" rel="noopener noreferrer">Create a board</a> to turn on sync.</p>}
       {error && <p className="a-error" role="alert">{error}</p>}
-      <button className="a-primary" disabled={!selected || busy}>{busy ? 'Connecting…' : 'Start syncing'}</button>
+      <button className="a-primary" disabled={!selected || busy}>{busy ? 'Approving…' : desktop ? 'Approve this board' : 'Start syncing'}</button>
       <button type="button" className="a-secondary" onClick={() => desktop ? location.assign('/app') : finish({ error: 'cancelled' })} disabled={busy}>Cancel</button>
     </form> : <p role="alert">Start a new sync connection from the Branch menu bar app or the Chrome extension.</p>}
   </main>;

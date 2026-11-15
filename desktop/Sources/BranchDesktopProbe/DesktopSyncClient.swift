@@ -45,11 +45,13 @@ struct DesktopSyncClient: Sendable {
 
     private let key: String
     private let conversationID: String
+    private let preferredBoardID: String?
     let expiresAt: Date
 
     /// Creates an in-memory capability. Only its hash is presented in the browser.
-    init(conversationID: String) {
+    init(conversationID: String, preferredBoardID: String? = nil) {
         self.conversationID = conversationID
+        self.preferredBoardID = preferredBoardID.flatMap { ConnectionLink.validBoard($0) ? $0 : nil }
         expiresAt = Date().addingTimeInterval(7 * 60 * 60 + 55 * 60)
         let random = SymmetricKey(size: .bits256).withUnsafeBytes { bytes in
             bytes.map { String(format: "%02x", $0) }.joined()
@@ -61,6 +63,7 @@ struct DesktopSyncClient: Sendable {
     var approvalURL: URL {
         var url = URLComponents(url: Self.origin.appendingPathComponent("app"), resolvingAgainstBaseURL: false)!
         url.fragment = "desktop-sync=1&conversation=\(Self.digest(conversationID.lowercased()))&challenge=\(Self.digest(key))"
+        if let preferredBoardID { url.fragment! += "&board=\(preferredBoardID)" }
         return url.url!
     }
 

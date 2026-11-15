@@ -23,11 +23,12 @@
      <button type="button" data-tour="provider" data-provider="claude" aria-pressed="false">Claude Code</button>
     </div>
     <div class="tour-provider-panel" data-tour-panel="chatgpt">
-     <p>Install the Mac companion to bring new ChatGPT replies into your team’s Context.</p>
-     <ol class="tour-setup-steps"><li>Install Branch for Mac.</li><li>Allow Accessibility, then choose a chat.</li><li>Connect this board and verify a new reply.</li></ol>
-     <button type="button" class="tour-action" data-tour="copy-setup">Set up with your agent</button>
+     <p>Bring new replies from one ChatGPT conversation into this board’s Context.</p>
+     <a class="tour-action tour-open-mac" href="joinbranch://connect">Open Branch for Mac ↗</a>
+     <ol class="tour-setup-steps"><li>Choose your chat in the Mac app.</li><li>Approve this board in your browser.</li><li>Wait for Syncing, then send a new message.</li></ol>
+     <button type="button" data-tour="copy-setup">Set up with your agent</button>
      <a class="tour-setup-link" href="/mac-setup.html" target="_blank" rel="noopener noreferrer">Installation guide ↗</a>
-     <p class="tour-setup-note">Copies the install and connection steps for your coding agent.</p>
+     <p class="tour-setup-note">Nothing opened? Use the setup handoff to install the companion on your Mac.</p>
      <textarea readonly rows="5" aria-label="Agent setup instructions" data-setup-fallback hidden></textarea>
      <details class="tour-troubleshooting"><summary>Troubleshooting an installed app</summary><p>Only use this check after installation, if the app asks you to verify what it can read.</p>
       <textarea readonly rows="3" aria-label="Baseline prompt" data-baseline></textarea>
@@ -150,6 +151,8 @@
   }
   for(const panel of connections.querySelectorAll('[data-tour-panel]'))panel.hidden=panel.dataset.tourPanel!==provider;
   const boardId=new URLSearchParams(location.search).get('board');
+  dialog.querySelector('.tour-open-mac').href=window.BranchMacSetup.appURL(boardId);
+  dialog.querySelector('.tour-open-mac').hidden=viewer;
   dialog.querySelector('.tour-setup-link').href='/mac-setup.html'+(/^[A-Za-z0-9_-]{1,160}$/.test(boardId||'')?'?board='+encodeURIComponent(boardId):'');
   promptField.value=baselinePrompt;
   dialog.querySelector('[data-tour="copy-baseline"]').disabled=!baselinePrompt;

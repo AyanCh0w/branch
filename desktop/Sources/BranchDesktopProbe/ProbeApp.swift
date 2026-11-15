@@ -53,6 +53,11 @@ final class ProbeApp: NSObject, NSApplicationDelegate {
             ? .terminateLater : .terminateNow
     }
 
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let link = urls.compactMap({ ConnectionLink($0) }).first else { return }
+        syncPanel.show(preferredBoardID: link.boardID)
+    }
+
     private func setUpMenu() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.title = "Branch"

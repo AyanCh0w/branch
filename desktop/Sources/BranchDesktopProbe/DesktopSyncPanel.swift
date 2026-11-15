@@ -20,10 +20,13 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     private lazy var openButton = button("Open in Branch", #selector(openCard))
     private lazy var copyButton = button("Copy pairing prompt", #selector(copyPairingPrompt))
     private lazy var diagnosticButton = button("Check window compatibility", #selector(openProbe))
+    private lazy var chatGPTButton = button("Open ChatGPT", #selector(openChatGPT))
 
     private var watching: Task<Void, Never>?
     private var uploading: Task<Void, Never>?
     private var permissionCheck: Task<Void, Never>?
+    private var discovery: Task<Void, Never>?
+    private var preferredBoardID: String?
     private var requestedAccess = false
     private var refreshing = false
     private var connection: DesktopSyncClient?
@@ -67,7 +70,8 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         route.setAccessibilityRole(.staticText)
         route.setAccessibilityLabel("ChatGPT replies go to Board Context")
         let actions = row([startButton, copyButton, openButton, findButton, settingsButton, diagnosticButton, stopButton])
-        [brand, heading, intro, route, conversationLabel, chatPicker, status, actions].forEach(content.addArrangedSubview)
+        let helpActions = row([chatGPTButton])
+        [brand, heading, intro, route, conversationLabel, chatPicker, status, actions, helpActions].forEach(content.addArrangedSubview)
         content.orientation = .vertical
         content.alignment = .leading
         content.spacing = 14
@@ -94,15 +98,44 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     }
 
     /// Brings the sync window to the front while leaving an existing session running.
-    func show() {
+    func show(preferredBoardID: String? = nil) {
+        if watching == nil, let preferredBoardID { self.preferredBoardID = preferredBoardID }
         updateControls()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate()
+        if AXIsProcessTrusted() { refresh() }
+        startDiscovery()
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        if AXIsProcessTrusted() { refresh() }
     }
 
     func windowWillClose(_ notification: Notification) {
         permissionCheck?.cancel()
         permissionCheck = nil
+        discovery?.cancel()
+        discovery = nil
+    }
+
+    private func startDiscovery() {
+        guard discovery == nil else { return }
+        discovery = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, self.window.isVisible else { return }
+                if self.watching == nil && !self.refreshing && self.chatPicker.numberOfItems <= 1 && AXIsProcessTrusted() { self.refresh() }
+                do { try await Task.sleep(for: .seconds(3)) } catch { return }
+            }
+        }
+    }
+
+    @objc private func openChatGPT() {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.openai.chat") else {
+            status.stringValue = "Open the ChatGPT Mac app and leave your conversation visible. Branch will find it automatically."
+            updateControls()
+            return
+        }
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
     }
 
     /// Cancels capture, clears unsent data and revokes the current write capability.
@@ -188,20 +221,23 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     }
 
     private func refresh() {
+        guard watching == nil, !refreshing else { return }
         refreshing = true
-        status.stringValue = "Looking for ChatGPT windows…"
+        let previous = chatPicker.indexOfSelectedItem > 0 ? chatPicker.titleOfSelectedItem : nil
+        if chatPicker.numberOfItems <= 1 { status.stringValue = "Looking for ChatGPT conversations…" }
         updateControls()
         Task {
             let choices = await sampler.list()
             chatPicker.removeAllItems()
             chatPicker.addItem(withTitle: "Choose a conversation")
             chatPicker.addItems(withTitles: choices)
-            if choices.count == 1 { chatPicker.selectItem(at: 1) }
+            if let previous, choices.filter({ $0 == previous }).count == 1 { chatPicker.selectItem(withTitle: previous) }
+            else if choices.count == 1 { chatPicker.selectItem(at: 1) }
             refreshing = false
             if !AXIsProcessTrusted() {
                 status.stringValue = "Allow Accessibility to find ChatGPT windows."
             } else {
-                status.stringValue = choices.isEmpty ? "Open a conversation in the ChatGPT desktop app, then try again." : ""
+                status.stringValue = choices.isEmpty ? "Open ChatGPT and leave a chat visible. It will appear here automatically." : "Choose the chat you want your team to see. Existing replies stay private; only new completed replies are shared."
             }
             updateControls()
         }
@@ -243,10 +279,10 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         }
         guard let identity = try await verifyIdentity(in: first) else { return }
 
-        let client = DesktopSyncClient(conversationID: identity.pairingID)
+        let client = DesktopSyncClient(conversationID: identity.pairingID, preferredBoardID: preferredBoardID)
         connection = client
         guard NSWorkspace.shared.open(client.approvalURL) else {
-            finish("Couldn’t open the local Branch board picker.")
+            finish("Couldn’t open Branch. Check your default browser and try again.")
             return
         }
         status.stringValue = "Select a board in your browser and approve the connection."
@@ -383,7 +419,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
                     finish("The board disconnected. Pair again to resume.")
                     return
                 } catch DesktopSyncClient.Failure.temporary {
-                    finish("Couldn’t save a reply to local Branch after retrying. Pair again to resume.")
+                    finish("Couldn’t save a reply to Branch after retrying. Pair again to resume.")
                     return
                 } catch {
                     finish("Branch couldn’t save the reply. Check the board and pair again to resume.")
@@ -484,6 +520,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         openButton.isHidden = cardURL == nil
         copyButton.isHidden = pairingPrompt == nil
         diagnosticButton.isHidden = inSession || !offersDiagnostics
+        chatGPTButton.isHidden = inSession || !trusted
         status.isHidden = status.stringValue.isEmpty
 
         if let boardTitle {
@@ -497,8 +534,8 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
             intro.stringValue = "A test reply helps Branch confirm it’s reading the chat you chose."
         } else {
             heading.stringValue = "Connect ChatGPT"
-            intro.stringValue = trusted ? "New replies go to the Branch board you choose."
-                : "Allow Accessibility so Branch can find your ChatGPT conversation."
+            intro.stringValue = trusted ? (preferredBoardID == nil ? "1 of 3 · Choose a chat. Next, approve its Branch board." : "1 of 3 · Choose a chat. Your Branch board is already selected for approval.")
+                : "One-time setup · Allow Accessibility, then choose the chat you want to share."
         }
         let primary = [startButton, copyButton, openButton, findButton].first { !$0.isHidden && $0.isEnabled }
         for button in [startButton, copyButton, openButton, findButton] { button.isPrimary = button === primary }
