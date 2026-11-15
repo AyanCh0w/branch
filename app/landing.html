@@ -6,7 +6,7 @@
 <title>Branch — The shared AI workspace for teams.</title>
 <meta name="description" content="See everyone’s AI threads on one canvas. Plan together, connect shared context, and build in parallel.">
 <link rel="preload" href="/fonts/BDOGrotesk-Regular.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/landing.css"><script src="/landing.js" defer></script><script src="/landing-scroll.js" defer></script><script src="/landing-shader.bundle.js" defer></script>
+<link rel="stylesheet" href="/landing.css"><script src="/landing.js" defer></script><script src="/landing-footer.js" defer></script><script src="/landing-scroll.js" defer></script><script src="/landing-shader.bundle.js" defer></script>
 <link rel="stylesheet" href="/theme.css"><script src="/theme.js"></script><link rel="stylesheet" href="/landing-theme.css"></head>
 <body class="landing-page">
 <div id="paper-background" aria-hidden="true"></div>
@@ -55,22 +55,12 @@ return &lt;IssueList issues={issues} /&gt;;</code></pre><div class="inherited"><
 </div></section>
 </main>
 <footer class="site-footer" aria-label="Branch footer">
-  <div class="footer-top">
-    <div class="footer-invitation">
-      <h2>Different threads.<br>One team.</h2>
-      <p>A shared space for your next idea, and everyone building it.</p>
-      <a class="footer-cta" href="/app?auth=signup">Start building together <span aria-hidden="true">↗</span></a>
-    </div>
-    <nav class="footer-nav" aria-label="Footer navigation">
-      <div><p>Explore</p><a href="#together">Think together</a><a href="#branches">Shared context</a><a href="#features">What you can do</a></div>
-      <div><p>Your next step</p><a href="/app">Open workspace ↗</a><a href="#faq">A few answers</a><a href="#main">Back to the top ↑</a></div>
-    </nav>
+  <div class="footer-top"><a class="brand" href="/" aria-label="Branch home"><img src="/icons/branch-mark.svg" width="24" height="24" alt="">branch</a><nav aria-label="Footer navigation"><a href="#branches">How it works</a><a href="/app">Open workspace ↗</a></nav></div>
+  <div class="footer-playground" id="footer-playground" aria-label="Interactive connection canvas">
+    <canvas aria-hidden="true"></canvas>
+    <button class="footer-play" type="button" aria-label="Draw a connection pattern"><span class="footer-pointer-hint">Move to connect</span><span class="footer-touch-hint">Tap or swipe to connect</span><span aria-hidden="true">↗</span></button>
   </div>
-  <div class="footer-art" aria-hidden="true">
-    <svg class="footer-connections" viewBox="0 0 1200 360" preserveAspectRatio="none"><path d="M-70 290C80 290 20 30 260 30S540 130 650 60S1040 20 1270 110"/><path d="M-60 110C170 110 220 280 500 280S730 20 930 20S1040 270 1280 270"/><circle cx="260" cy="30" r="7"/><circle cx="650" cy="60" r="7"/><circle cx="930" cy="20" r="7"/></svg>
-    <svg class="footer-wordmark" viewBox="0 0 1000 255"><text x="0" y="235" font-size="290" textLength="1000" lengthAdjust="spacingAndGlyphs">branch</text></svg>
-  </div>
-  <div class="footer-bottom"><small>© 2026 Branch</small><span>Think with AI. Together.</span><button type="button" class="theme-toggle" data-theme-toggle>Dark mode</button></div>
+  <div class="footer-bottom"><small>© 2026 Branch</small><a class="footer-cta" href="/app?auth=signup">Start building together <span aria-hidden="true">↗</span></a><button type="button" class="theme-toggle" data-theme-toggle>Dark mode</button></div>
 </footer>
 <details class="appearance-controls">
 <summary>Appearance <span aria-hidden="true">⌃</span></summary>
