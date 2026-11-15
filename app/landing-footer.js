@@ -30,7 +30,7 @@
     frame = 0;
     if (!visible || document.hidden) return;
     ctx.clearRect(0,0,width,height);
-    const color = '242,244,248';
+    const color = '104,153,255';
     const alpha = t => reduced.matches ? .85 : Math.max(0, 1-(time-t)/lifetime);
     edges = edges.filter(edge=>alpha(edge.time)>0);
     for (const edge of edges) {
