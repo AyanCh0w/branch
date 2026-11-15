@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import BranchDesktopProbe
 
@@ -86,6 +87,17 @@ struct ReplyCaptureTests {
         #expect(DesktopChatIdentity.verifiedURL(in: sample(["Reply"], generating: true)) == nil)
         let noURL = ChatTranscript(conversationID: nil, title: "Test Chat", isGenerating: false, replies: ["Reply"])
         #expect(DesktopChatIdentity.verifiedURL(in: noURL) == nil)
+    }
+
+    @Test func pairingCodeSurvivesOmittingPunctuation() throws {
+        let code = try #require(UUID(uuidString: "01234567-89ab-4cde-8f01-23456789abcd"))
+        let (identity, prompt) = DesktopChatIdentity.pairingChallenge(code: code)
+        let expected = "BRANCH DESKTOP 0123456789ab4cde8f0123456789abcd"
+        #expect(prompt.hasSuffix("BRANCH, DESKTOP, 0123456789ab4cde8f0123456789abcd"))
+        #expect(!prompt.contains(expected))
+        #expect(identity.matches(sample([expected])))
+        #expect(identity.matches(sample(["BRANCH DESKTOP 0123456789ab4cde8f0123456789abce"])) == false)
+        #expect(identity.matches(sample([prompt])) == false)
     }
 
     private func sample(_ replies: [String], generating: Bool = false) -> ChatTranscript {

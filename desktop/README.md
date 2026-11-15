@@ -1,6 +1,6 @@
 # ChatGPT sync on Mac
 
-Branch for Mac sends new replies from one selected ChatGPT desktop conversation to one local Branch board. Updates appear on a conversation card in **Context**. The app reads the selected chat through macOS Accessibility and sends plain text replies after it sees streaming finish.
+Branch for Mac sends new replies from one selected ChatGPT desktop conversation to one local Branch board. Updates appear on a conversation card in **Context**. The app reads the selected chat through macOS Accessibility and sends plain text replies after it sees streaming finish. The sync window shares Branch’s mark and BDO Grotesk type with the web app.
 
 Build locally with Swift 6.2 or later and an Apple Development signing identity in your Keychain. List available identities with `security find-identity -v -p codesigning`. Configure the certificate name or fingerprint once per checkout.
 

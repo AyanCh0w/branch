@@ -84,6 +84,13 @@ struct ChatTranscript: Sendable {
 enum DesktopChatIdentity {
     case url(String), marker(String)
 
+    static func pairingChallenge(code: UUID = UUID()) -> (identity: Self, prompt: String) {
+        let token = code.uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        let marker = "BRANCH DESKTOP \(token)"
+        let prompt = "Reply with these three items separated by spaces instead of commas. Copy the code exactly. BRANCH, DESKTOP, \(token)"
+        return (.marker(marker), prompt)
+    }
+
     static func verifiedURL(in transcript: ChatTranscript) -> Self? {
         guard !transcript.isGenerating, !transcript.replies.isEmpty, let id = transcript.conversationID else { return nil }
         return .url(id)

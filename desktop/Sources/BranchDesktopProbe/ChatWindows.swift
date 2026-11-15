@@ -27,6 +27,10 @@ actor ChatWindows {
         case incomplete, windowChanged, permissionLost
     }
 
+    private enum WindowCheck {
+        case current, unavailable, changed
+    }
+
     private struct Window {
         let app: AXUIElement
         let element: AXUIElement
@@ -97,7 +101,12 @@ actor ChatWindows {
 
     private func readWindow() -> WindowRead {
         guard AXIsProcessTrusted() else { return .permissionLost }
-        guard let selected, isSameWindow(selected) else { return .windowChanged }
+        guard let selected else { return .windowChanged }
+        switch checkWindow(selected) {
+        case .current: break
+        case .unavailable: return .incomplete
+        case .changed: return .windowChanged
+        }
 
         let clock = ContinuousClock()
         let deadline = clock.now + .milliseconds(900)
@@ -129,7 +138,7 @@ actor ChatWindows {
             if role == kAXWindowRole || role == "AXWebArea" {
                 for key in [kAXURLAttribute, kAXDocumentAttribute] {
                     guard let path = conversationPath(from: attribute(key, of: element)) else { continue }
-                    if let observedPath, observedPath != path { return .windowChanged }
+                    if let observedPath, observedPath != path { return .incomplete }
                     observedPath = path
                 }
             }
@@ -138,7 +147,11 @@ actor ChatWindows {
             }
         }
 
-        guard isSameWindow(selected) else { return .windowChanged }
+        switch checkWindow(selected) {
+        case .current: break
+        case .unavailable: return .incomplete
+        case .changed: return .windowChanged
+        }
         if let chatPath {
             guard let observedPath else { return .incomplete }
             guard observedPath == chatPath else { return .windowChanged }
@@ -155,8 +168,20 @@ actor ChatWindows {
         }
     }
 
-    private func isSameWindow(_ window: Window) -> Bool {
-        windows(of: window.app).contains(window.element) && title(of: window.element) == window.title
+    private func checkWindow(_ window: Window) -> WindowCheck {
+        var rawWindows: CFTypeRef?
+        let windowResult = AXUIElementCopyAttributeValue(window.app, kAXWindowsAttribute as CFString, &rawWindows)
+        if windowResult == .invalidUIElement { return .changed }
+        guard windowResult == .success, let windows = rawWindows as? [AXUIElement] else { return .unavailable }
+        guard windows.contains(window.element) else { return .changed }
+
+        var rawTitle: CFTypeRef?
+        let titleResult = AXUIElementCopyAttributeValue(window.element, kAXTitleAttribute as CFString, &rawTitle)
+        if titleResult == .invalidUIElement { return .changed }
+        if titleResult == .noValue, window.title.isEmpty { return .current }
+        guard titleResult == .success, let title = rawTitle as? String else { return .unavailable }
+        if title.isEmpty, !window.title.isEmpty { return .unavailable }
+        return title == window.title ? .current : .changed
     }
 
     private func windows(of app: AXUIElement) -> [AXUIElement] {

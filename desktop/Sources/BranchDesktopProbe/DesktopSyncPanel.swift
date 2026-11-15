@@ -11,7 +11,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     private let heading = NSTextField(labelWithString: "Connect ChatGPT")
     private let intro = NSTextField(wrappingLabelWithString: "")
     private let conversationLabel = NSTextField(labelWithString: "Conversation")
-    private let chatPicker = NSPopUpButton()
+    private let chatPicker = BranchConversationPicker()
     private let status = NSTextField(wrappingLabelWithString: "")
     private lazy var findButton = button("Find ChatGPT windows", #selector(findChats))
     private lazy var settingsButton = button("Open Accessibility Settings", #selector(openAccessibilitySettings))
@@ -38,26 +38,40 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
 
     override init() {
         super.init()
+        BranchSyncTheme.registerFonts()
         window.title = "ChatGPT Sync"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.backgroundColor = .white
+        window.appearance = NSAppearance(named: .aqua)
         window.delegate = self
         window.isReleasedWhenClosed = false
 
-        heading.font = .systemFont(ofSize: 25, weight: .semibold)
-        intro.textColor = .secondaryLabelColor
-        conversationLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+        let brand = brandHeader()
+        heading.font = BranchSyncTheme.font(32, strong: true)
+        heading.textColor = BranchSyncTheme.ink
+        intro.font = BranchSyncTheme.font(15)
+        intro.textColor = BranchSyncTheme.muted
+        conversationLabel.font = BranchSyncTheme.font(13, strong: true)
+        conversationLabel.textColor = BranchSyncTheme.ink
         chatPicker.setAccessibilityLabel("ChatGPT conversation")
         chatPicker.addItem(withTitle: "Choose a conversation")
         chatPicker.target = self
         chatPicker.action = #selector(updateControls)
         chatPicker.cell?.truncatesLastVisibleLine = true
+        status.font = BranchSyncTheme.font(14)
+        status.textColor = BranchSyncTheme.ink
         status.setAccessibilityLabel("Sync status")
-        let divider = NSBox()
-        divider.boxType = .separator
+        let route = BranchSyncRoute()
+        route.setAccessibilityElement(true)
+        route.setAccessibilityRole(.staticText)
+        route.setAccessibilityLabel("ChatGPT replies go to Board Context")
         let actions = row([startButton, copyButton, openButton, findButton, settingsButton, diagnosticButton, stopButton])
-        [heading, intro, divider, conversationLabel, chatPicker, status, actions].forEach(content.addArrangedSubview)
+        [brand, heading, intro, route, conversationLabel, chatPicker, status, actions].forEach(content.addArrangedSubview)
         content.orientation = .vertical
         content.alignment = .leading
-        content.spacing = 12
+        content.spacing = 14
+        content.setCustomSpacing(18, after: brand)
         content.setCustomSpacing(6, after: heading)
         content.setCustomSpacing(16, after: intro)
         content.setCustomSpacing(6, after: conversationLabel)
@@ -67,11 +81,11 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         container.addSubview(content)
         window.contentView = container
         NSLayoutConstraint.activate([
-            content.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 28),
-            content.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -28),
-            content.topAnchor.constraint(equalTo: container.topAnchor, constant: 26),
+            content.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 30),
+            content.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -30),
+            content.topAnchor.constraint(equalTo: container.topAnchor, constant: 14),
             intro.widthAnchor.constraint(equalTo: content.widthAnchor),
-            divider.widthAnchor.constraint(equalTo: content.widthAnchor),
+            route.widthAnchor.constraint(equalTo: content.widthAnchor),
             chatPicker.widthAnchor.constraint(equalTo: content.widthAnchor),
             status.widthAnchor.constraint(equalTo: content.widthAnchor),
         ])
@@ -109,12 +123,28 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     private func row(_ views: [NSView]) -> NSStackView {
         let row = NSStackView(views: views)
         row.orientation = .horizontal
+        row.alignment = .centerY
         row.spacing = 8
         return row
     }
 
-    private func button(_ title: String, _ action: Selector) -> NSButton {
-        NSButton(title: title, target: self, action: action)
+    private func brandHeader() -> NSStackView {
+        let wordmark = NSTextField(labelWithString: "branch")
+        wordmark.font = BranchSyncTheme.font(19, strong: true)
+        wordmark.textColor = BranchSyncTheme.ink
+        guard let url = Bundle.main.url(forResource: "branch-mark", withExtension: "svg"),
+              let image = NSImage(contentsOf: url) else { return row([wordmark]) }
+        let mark = NSImageView(image: image)
+        mark.imageScaling = .scaleProportionallyUpOrDown
+        mark.widthAnchor.constraint(equalToConstant: 21).isActive = true
+        mark.heightAnchor.constraint(equalToConstant: 21).isActive = true
+        return row([mark, wordmark])
+    }
+
+    private func button(_ title: String, _ action: Selector) -> BranchSyncButton {
+        let button = BranchSyncButton(title: title, target: self, action: action)
+        button.focusRingType = .exterior
+        return button
     }
 
     @objc private func findChats() {
@@ -200,7 +230,12 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
             return
         }
         try Task.checkCancellation()
-        let initial = await sampler.syncSample()
+        var initial = await sampler.syncSample()
+        for _ in 0..<3 {
+            guard case .incomplete = initial else { break }
+            try await Task.sleep(for: .milliseconds(400))
+            initial = await sampler.syncSample()
+        }
         try Task.checkCancellation()
         guard case .transcript(let first) = initial else {
             finish(initialFailure(initial), offerDiagnostics: true)
@@ -272,32 +307,41 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     private func initialFailure(_ sample: ChatWindows.SyncRead) -> String {
         switch sample {
         case .permissionLost: "Enable Accessibility access and try again."
-        default: "The selected chat couldn’t be read. Keep it visible in ChatGPT and find its window again."
+        case .windowChanged: "The selected window changed or closed. Refresh the list and choose the conversation again."
+        case .incomplete, .transcript: "Branch couldn’t read the selected chat. Keep it open and visible in ChatGPT, then try again."
         }
     }
 
     private func verifyIdentity(in first: ChatTranscript) async throws -> DesktopChatIdentity? {
         if let identity = DesktopChatIdentity.verifiedURL(in: first) { return identity }
 
-        let code = UUID().uuidString.lowercased()
-        let identity = DesktopChatIdentity.marker("BRANCH DESKTOP \(code)")
-        pairingPrompt = "Reply with exactly these three items separated by spaces. Omit commas and punctuation. BRANCH, DESKTOP, \(code)"
+        let (identity, prompt) = DesktopChatIdentity.pairingChallenge()
+        pairingPrompt = prompt
         status.stringValue = "Copy the prompt, then paste and send it in the selected ChatGPT conversation."
         updateControls()
         let clock = ContinuousClock()
         let deadline = clock.now + .seconds(120)
+        var changedSamples = 0
         while clock.now < deadline {
             let read = await sampler.syncSample()
             try Task.checkCancellation()
             switch read {
             case .transcript(let transcript):
+                changedSamples = 0
                 if !transcript.isGenerating, identity.matches(transcript) {
                     pairingPrompt = nil
                     updateControls()
                     return transcript.conversationID.map(DesktopChatIdentity.url) ?? identity
                 }
-            case .incomplete: break
-            case .windowChanged, .permissionLost:
+            case .incomplete:
+                changedSamples = 0
+            case .windowChanged:
+                changedSamples += 1
+                if changedSamples >= 4 {
+                    finish(initialFailure(read), offerDiagnostics: true)
+                    return nil
+                }
+            case .permissionLost:
                 finish(initialFailure(read))
                 return nil
             }
@@ -413,7 +457,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     private func fitWindow() {
         guard let container = window.contentView else { return }
         container.layoutSubtreeIfNeeded()
-        let contentHeight = ceil(content.frame.height) + 48
+        let contentHeight = ceil(content.frame.height) + 42
         var frame = window.frame
         let delta = contentHeight - container.bounds.height
         guard abs(delta) >= 1 else { return }
@@ -453,10 +497,11 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
             intro.stringValue = "A test reply helps Branch confirm it’s reading the chat you chose."
         } else {
             heading.stringValue = "Connect ChatGPT"
-            intro.stringValue = trusted ? "Send new replies from a ChatGPT conversation to a Branch board."
+            intro.stringValue = trusted ? "New replies go to the Branch board you choose."
                 : "Allow Accessibility so Branch can find your ChatGPT conversation."
         }
         let primary = [startButton, copyButton, openButton, findButton].first { !$0.isHidden && $0.isEnabled }
+        for button in [startButton, copyButton, openButton, findButton] { button.isPrimary = button === primary }
         window.defaultButtonCell = primary?.cell as? NSButtonCell
         fitWindow()
         onActivity(inSession)

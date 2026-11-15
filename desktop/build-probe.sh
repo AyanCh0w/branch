@@ -20,6 +20,7 @@ app="$PWD/build/$app_name.app"
 mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources"
 cp Info.plist "$bundle/Contents/Info.plist"
 cp Sources/BranchDesktopProbe/Resources/desktop-baseline.json "$bundle/Contents/Resources/desktop-baseline.json"
+cp ../app/icons/branch-mark.svg ../app/fonts/BDOGrotesk-Regular.woff2 ../app/fonts/BDOGrotesk-DemiBold.woff2 "$bundle/Contents/Resources/"
 install -m 755 "$binary_dir/BranchDesktopProbe" "$bundle/Contents/MacOS/BranchDesktopProbe"
 if [ "$identity" = '-' ]; then
     plutil -replace CFBundleName -string "$app_name" "$bundle/Contents/Info.plist"
