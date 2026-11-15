@@ -1,6 +1,6 @@
 # Conversation sync on Mac
 
-Branch for Mac sends new replies from a selected ChatGPT or Codex conversation to one Branch board on joinbranch.dev. Updates appear on a conversation card in **Context**. The app reads the selected chat through macOS Accessibility and sends plain text replies after it sees streaming finish. The sync window shares Branch’s mark and BDO Grotesk type with the web app.
+Branch for Mac sends new replies from a selected ChatGPT or Codex conversation to one Branch board on joinbranch.dev. Updates appear on a conversation card in **Context**.
 
 Build locally with Swift 6.1 or later and an Apple Development signing identity in your Keychain. List available identities with `security find-identity -v -p codesigning`. Configure the certificate name or fingerprint once per checkout.
 
@@ -15,11 +15,11 @@ open 'build/Branch for Mac.app'
 Keep using the same signing identity across builds so macOS can recognize updates. `BRANCH_CODESIGN_IDENTITY` overrides the checkout setting. Without an identity, the script builds the separate ad hoc **Branch Desktop Probe** for diagnostics. Use one consistent Developer ID Application identity and notarize the signed app before distributing it to users.
 
 1. Open a board at https://joinbranch.dev/app, then **Conversation sync → Connect a conversation**. The Mac app opens with that board already authorized. No local web server or copied key is needed. For a first install, follow the [employee setup page](https://joinbranch.dev/mac-setup.html).
-2. Open the conversation you want to sync in ChatGPT or Codex, then open **Branch → Conversation Sync**. On first use, click **Allow Accessibility…** and approve **Branch for Mac** in the macOS prompt to load the window list. On later uses, the app finds conversations automatically when opened or brought forward. If no chat is visible yet, it keeps looking while the setup window is open. Branch hides Computer Use control windows and preselects the conversation when it finds one window. Confirm the selection with **Connect chat**.
-3. Branch uses the existing completed replies in the selected chat to check that it can read the conversation. When started from a board, Branch connects as soon as it can read the selected chat. When started from the menu bar without a board authorization, choose the destination board in the browser.
+2. Open the conversation you want to sync, then open **Branch → Conversation Sync**. On first use, allow Accessibility so Branch can list open windows. Choose the conversation, then click **Connect Codex chat** for Codex or **Connect ChatGPT** for ChatGPT.
+3. When started from a board, Branch connects as soon as it can read the selected chat. When started from the menu bar without a board authorization, choose the destination board in the browser.
 4. Wait for **Sync is on** in Branch for Mac before sending another message. After the first save, the app confirms the reply was saved and **Open in Branch** opens the saved replies. Use **Stop syncing** from the app or **Disconnect conversations** on the board to revoke access.
 
-Each pairing starts with the existing chat history as a baseline. You can switch conversations in the selected window. When the paired chat is unavailable, Branch shows **Connected · Waiting for your chat** and resumes automatically once it can verify the same conversation in that window. Codex chats use the same Accessibility checks and sync when Branch can recognize their completed replies. Replies that finish while the chat is unavailable stay in the source conversation. Pending replies and the scoped write key live in memory. The pairing expires within eight hours and needs to be renewed after quitting. Chrome and Mac connections each have their own conversation card.
+Each pairing uses existing history as a baseline. For ChatGPT, Accessibility reads only the selected window. Switching chats pauses capture until Branch recognizes the original conversation again. For Codex, Branch matches the selected window title to one local thread and follows that thread ID through the local Codex App Server. Duplicate titles require a rename before connecting. Codex sync continues when you switch chats and only sends final replies from completed turns after pairing. Pending replies and the scoped write key live in memory. The pairing expires within eight hours and needs to be renewed after quitting.
 
 ## Release the employee installer
 

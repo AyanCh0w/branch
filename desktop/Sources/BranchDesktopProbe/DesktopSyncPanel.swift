@@ -32,12 +32,13 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     private let status = NSTextField(wrappingLabelWithString: "")
     private lazy var findButton = button("Find conversations", #selector(findChats))
     private lazy var settingsButton = button("Open Accessibility Settings", #selector(openAccessibilitySettings))
-    private lazy var startButton = button("Connect chat", #selector(start))
+    private lazy var startButton = button("Connect ChatGPT", #selector(start))
     private lazy var stopButton = button("Stop syncing", #selector(stop))
     private lazy var openButton = button("Open in Branch", #selector(openCard))
     private lazy var approvalButton = button("Open board approval", #selector(openApproval))
     private lazy var diagnosticButton = button("Check window compatibility", #selector(openProbe))
     private lazy var chatAppButton = button("Open ChatGPT or Codex", #selector(openChatApp))
+    private lazy var codexButton = button("Connect Codex chat", #selector(startCodex))
 
     private var watching: Task<Void, Never>?
     private var uploading: Task<Void, Never>?
@@ -48,6 +49,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     private var launchTicket: String?
     private var requestedAccess = false
     private var refreshing = false
+    private var conversationTitles: [String] = []
     private var connection: DesktopSyncClient?
     private var boardTitle: String?
     private var pending: [(reply: ReplyCapture.Reply, title: String)] = []
@@ -85,7 +87,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         status.textColor = BranchSyncTheme.ink
         status.setAccessibilityLabel("Sync status")
         let actions = row([startButton, approvalButton, openButton, findButton, settingsButton, diagnosticButton, stopButton])
-        let helpActions = row([chatAppButton])
+        let helpActions = row([codexButton, chatAppButton])
         [brand, heading, intro, connectionStatus, conversationLabel, chatPicker, status, actions, helpActions].forEach(content.addArrangedSubview)
         content.orientation = .vertical
         content.alignment = .leading
@@ -254,6 +256,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         updateControls()
         Task {
             let choices = await sampler.list()
+            conversationTitles = choices.map(\.title)
             chatPicker.removeAllItems()
             chatPicker.addItem(withTitle: "Choose a conversation")
             chatPicker.addItems(withTitles: choices.map(\.label))
@@ -282,22 +285,90 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     }
 
     @objc private func start() {
+        beginSync()
+    }
+
+    @objc private func startCodex() {
+        guard let executable = CodexSync.executable() else { return }
+        beginSync(codex: executable)
+    }
+
+    private func beginSync(codex executable: URL? = nil) {
         let index = chatPicker.indexOfSelectedItem - 1
-        guard chatPicker.isEnabled, index >= 0 else { return }
+        guard chatPicker.isEnabled, conversationTitles.indices.contains(index) else { return }
+        let title = conversationTitles[index]
         offersDiagnostics = false
         pendingLink = nil
         cardURL = nil
         savedCount = 0
-        status.stringValue = "Keep the conversation open while Branch checks it."
+        status.stringValue = executable == nil ? "Keep the conversation open while Branch checks it."
+            : "Finding this conversation in Codex…"
         phase = .checking
         watching = Task {
-            do { try await sync(windowIndex: index) }
+            do {
+                if let executable {
+                    try await syncCodex(title: title, executable: executable)
+                } else {
+                    try await sync(windowIndex: index)
+                }
+            }
             catch is CancellationError { return }
+            catch CodexSync.Failure.missingThread { finish("Codex couldn’t find a local chat with this title. Open the Codex chat and refresh the list.") }
+            catch CodexSync.Failure.ambiguousThread { finish("More than one Codex chat has this title. Rename the chat you want, then refresh the list.") }
             catch DesktopSyncClient.Failure.disconnected { finish("The board disconnected. Pair again to resume.") }
             catch DesktopSyncClient.Failure.temporary { finish("Couldn’t reach Branch. Check your internet connection and try again.") }
             catch { finish("Branch could not approve this chat. Start a new pairing and try again.") }
         }
         updateControls()
+    }
+
+    private func syncCodex(title: String, executable: URL) async throws {
+        let source = CodexSync(executable: executable)
+        let pairingID: String
+        do {
+            pairingID = try await source.select(title: title)
+        } catch CodexSync.Failure.unavailable {
+            try Task.checkCancellation()
+            finish("Branch couldn’t open the local Codex connection. Try again.")
+            return
+        }
+        try Task.checkCancellation()
+        chatTitle = title
+        let client = DesktopSyncClient(conversationID: pairingID, preferredBoardID: preferredBoardID)
+        connection = client
+        guard let board = try await connectBoard(using: client) else { return }
+        try Task.checkCancellation()
+        boardTitle = board.boardTitle
+        phase = .preparing
+        setStatus("Getting the Codex chat ready…")
+        updateControls()
+        do {
+            try await source.start()
+        } catch {
+            try Task.checkCancellation()
+            finish("Branch couldn’t establish where to start syncing this Codex chat. Try connecting it again.")
+            return
+        }
+        try Task.checkCancellation()
+        showSavedStatus()
+        while Date() < client.expiresAt {
+            try await Task.sleep(for: .seconds(2))
+            do {
+                let replies = try await source.readNewReplies(limit: 20 - pending.count)
+                try Task.checkCancellation()
+                if !replies.isEmpty {
+                    pending.append(contentsOf: replies.map { ($0, title) })
+                    showActiveStatus("Saving new replies…")
+                    upload(using: client, board: board)
+                } else if pending.isEmpty {
+                    showSavedStatus()
+                }
+            } catch {
+                try Task.checkCancellation()
+                showPausedStatus("Waiting for Codex. Branch will retry automatically.")
+            }
+        }
+        finish("The sync session expired. Pair the chat again to resume.")
     }
 
     private func sync(windowIndex: Int) async throws {
@@ -393,8 +464,10 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         case .windowChanged: "The selected chat window changed or closed. Reopen the conversation, then select it again in Branch."
         case .transcript(let transcript, _):
             transcript.isGenerating
-                ? "Let the reply finish, then click Connect chat again."
-                : "Branch needs to see a completed reply in this chat. Open a chat with an existing reply, then click Connect chat."
+                ? "Let the reply finish, then click Connect ChatGPT again."
+                : CodexSync.executable() != nil
+                    ? "For a Codex conversation, choose Connect Codex chat. For a ChatGPT conversation, open one with a completed reply."
+                    : "Open a ChatGPT conversation with a completed reply, then click Connect ChatGPT."
         case .incomplete: "Branch couldn’t read the selected chat. Keep the conversation open and visible, then try again."
         }
     }
@@ -575,6 +648,8 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         chatPicker.isEnabled = !chatPicker.isHidden && !refreshing
         startButton.isHidden = chatPicker.isHidden
         startButton.isEnabled = chatPicker.isEnabled && chatPicker.indexOfSelectedItem > 0
+        codexButton.isHidden = chatPicker.isHidden || CodexSync.executable() == nil
+        codexButton.isEnabled = startButton.isEnabled
         stopButton.title = boardTitle != nil ? "Stop syncing" : "Cancel setup"
         stopButton.isHidden = !inSession
         openButton.isHidden = cardURL == nil
@@ -599,7 +674,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
             heading.stringValue = phase == .preparing ? "Connecting your conversation" : "Conversation connected"
             intro.stringValue = "New replies from this chat go to Context on \(boardTitle ?? "your board")."
         }
-        let primaryButtons = [startButton, approvalButton, openButton, findButton]
+        let primaryButtons = [startButton, codexButton, approvalButton, openButton, findButton]
         let primary = primaryButtons.first { !$0.isHidden && $0.isEnabled }
         for button in primaryButtons {
             button.isPrimary = button === primary
