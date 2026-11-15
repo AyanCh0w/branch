@@ -38,14 +38,18 @@ struct ChatElement: Sendable {
 
 /// Reads only text owned by a recognized assistant turn with its own response actions.
 struct ChatTranscript: Sendable {
-    let conversationID: String?
+    struct CompletedReply {
+        let containerIndex: Int
+        let text: String
+    }
+
     let title: String
     let isGenerating: Bool
     let replies: [String]
 
-    static func completedReplies(in elements: [ChatElement]) -> [String] {
+    static func completedReplies(in elements: [ChatElement]) -> [CompletedReply] {
         var seen = Set<Int>()
-        var replies: [String] = []
+        var replies: [CompletedReply] = []
         for index in elements.indices where elements[index].isAssistantLabel {
             var enclosing: Int? = index
             for _ in 0..<7 {
@@ -72,44 +76,11 @@ struct ChatTranscript: Sendable {
                     }
                     return node.text
                 }.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-                if !text.isEmpty { replies.append(text) }
+                if !text.isEmpty { replies.append(CompletedReply(containerIndex: start, text: text)) }
                 break
             }
         }
         return replies
-    }
-}
-
-/// Binds writes to a stable ChatGPT URL or a random marker in the selected window's reply history.
-enum DesktopChatIdentity {
-    case url(String), marker(String)
-
-    static func pairingChallenge(code: UUID = UUID()) -> (identity: Self, prompt: String) {
-        let token = code.uuidString.replacingOccurrences(of: "-", with: "").lowercased()
-        let marker = "BRANCH DESKTOP \(token)"
-        let prompt = "Reply with these three items separated by spaces instead of commas. Copy the code exactly. BRANCH, DESKTOP, \(token)"
-        return (.marker(marker), prompt)
-    }
-
-    static func verifiedURL(in transcript: ChatTranscript) -> Self? {
-        guard !transcript.isGenerating, !transcript.replies.isEmpty, let id = transcript.conversationID else { return nil }
-        return .url(id)
-    }
-
-    var pairingID: String {
-        switch self {
-        case .url(let id): id
-        case .marker(let marker): "marker:" + marker
-        }
-    }
-
-    func matches(_ transcript: ChatTranscript) -> Bool {
-        switch self {
-        case .url(let id): transcript.conversationID == id
-        case .marker(let marker): transcript.replies.contains {
-            $0.split(whereSeparator: \.isWhitespace).joined(separator: " ") == marker
-        }
-        }
     }
 }
 

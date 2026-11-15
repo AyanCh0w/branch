@@ -30,8 +30,18 @@ struct ConnectionLinkTests {
         #expect(!client.approvalURL.absoluteString.contains("branch_desktop_"))
         #expect(ConnectionLink(URL(string: "joinbranch://connect")!)?.boardID == nil)
     }
+    @Test func chatHintOnlySelectsOneExactWindowAndStaysLocal() throws {
+        let url = try #require(URL(string: "joinbranch://connect?board=boards_123&chat=Build%20a%20prototype"))
+        let link = try #require(ConnectionLink(url))
+        #expect(link.matchingChat(in: ["Another chat", "Build a prototype"]) == 1)
+        #expect(link.matchingChat(in: ["Build a prototype", "Build a prototype"]) == nil)
+        #expect(link.matchingChat(in: ["Build a prototype 2"]) == nil)
+        let client = DesktopSyncClient(conversationID: "test", preferredBoardID: link.boardID)
+        #expect(client.approvalURL.absoluteString.contains("prototype") == false)
+    }
+
     @Test func rejectsRedirectsAndCredentials() {
-        for value in ["https://connect?board=a", "joinbranch://evil?board=a", "joinbranch://connect/path?board=a", "joinbranch://connect?board=a&key=secret", "joinbranch://connect?board=a&board=b", "joinbranch://connect?board=a%26b", "joinbranch://connect#key=secret", "joinbranch://user:pass@connect?board=a"] {
+        for value in ["https://connect?board=a", "joinbranch://evil?board=a", "joinbranch://connect/path?board=a", "joinbranch://connect?board=a&key=secret", "joinbranch://connect?board=a&board=b", "joinbranch://connect?board=a%26b", "joinbranch://connect?chat", "joinbranch://connect?chat=a&chat=b", "joinbranch://connect?chat=%00", "joinbranch://connect#key=secret", "joinbranch://user:pass@connect?board=a"] {
             #expect(ConnectionLink(URL(string:value)!) == nil)
         }
         let client = DesktopSyncClient(conversationID: "test", preferredBoardID: "evil&challenge=x")

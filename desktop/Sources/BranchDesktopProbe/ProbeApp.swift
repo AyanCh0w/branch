@@ -55,7 +55,7 @@ final class ProbeApp: NSObject, NSApplicationDelegate {
 
     func application(_ application: NSApplication, open urls: [URL]) {
         guard let link = urls.compactMap({ ConnectionLink($0) }).first else { return }
-        syncPanel.show(preferredBoardID: link.boardID)
+        syncPanel.show(link: link)
     }
 
     private func setUpMenu() {
@@ -177,7 +177,7 @@ final class ProbeApp: NSObject, NSApplicationDelegate {
             let titles = await sampler.list()
             choices.removeAllItems()
             choices.addItem(withTitle: "Choose the test chat window")
-            choices.addItems(withTitles: titles)
+            choices.addItems(withTitles: titles.map(\.label))
             isRefreshing = false
             feedback.stringValue = titles.isEmpty
                 ? "No ChatGPT windows were found. Open the ChatGPT desktop app and find windows again."

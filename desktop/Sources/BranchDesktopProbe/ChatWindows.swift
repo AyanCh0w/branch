@@ -1,5 +1,29 @@
 import AppKit
 import ApplicationServices
+import CryptoKit
+
+/// Uses a conversation URL when available, or pins an existing reply in the selected window.
+struct ChatConnectionIdentity {
+    private let chatID: String?
+    private let replyElement: AXUIElement
+    private let replyDigest: SHA256Digest
+    let pairingID: String
+
+    init(chatID: String?, element: AXUIElement, reply: String) {
+        self.chatID = chatID
+        replyElement = element
+        replyDigest = SHA256.hash(data: Data(reply.utf8))
+        pairingID = chatID ?? "window:" + UUID().uuidString
+    }
+
+    func matches(chatID: String?, replies: [ChatTranscript.CompletedReply], elements: [AXUIElement]) -> Bool {
+        if let expected = self.chatID { return chatID == expected }
+        return replies.contains { reply in
+            elements[reply.containerIndex] == replyElement
+                && SHA256.hash(data: Data(reply.text.utf8)) == replyDigest
+        }
+    }
+}
 
 /// Keeps Accessibility objects off the main actor and inside this sampler.
 actor ChatWindows {
@@ -11,12 +35,13 @@ actor ChatWindows {
     }
 
     enum SyncRead: Sendable {
-        case transcript(ChatTranscript)
+        case transcript(ChatTranscript, pairingID: String?)
         case incomplete, windowChanged, permissionLost
     }
 
     private struct Frame {
         let elements: [ChatElement]
+        let handles: [AXUIElement]
         let chatID: String?
         let title: String
         let isGenerating: Bool
@@ -40,9 +65,15 @@ actor ChatWindows {
     private var choices: [Window] = []
     private var selected: Window?
     private var chatPath: String?
+    private var connectionIdentity: ChatConnectionIdentity?
+
+    struct Choice: Sendable {
+        let title: String
+        let label: String
+    }
 
     /// Lists only windows belonging to the installed ChatGPT desktop apps.
-    func list() -> [String] {
+    func list() -> [Choice] {
         guard AXIsProcessTrusted() else { return [] }
         let bundleIDs = ["com.openai.codex", "com.openai.chat"]
         choices = []
@@ -58,7 +89,7 @@ actor ChatWindows {
             }
         }
         return choices.enumerated().map { index, window in
-            "\(index + 1). \(window.title.isEmpty ? "ChatGPT window" : window.title)"
+            Choice(title: window.title, label: "\(index + 1). \(window.title.isEmpty ? "ChatGPT window" : window.title)")
         }
     }
 
@@ -71,6 +102,7 @@ actor ChatWindows {
         guard choices.indices.contains(index) else { return false }
         selected = choices[index]
         chatPath = nil
+        connectionIdentity = nil
         return true
     }
 
@@ -82,7 +114,7 @@ actor ChatWindows {
         case .permissionLost: return .permissionLost
         case .frame(let frame):
             var signals = WindowSample(stopControl: frame.isGenerating, chatURL: frame.chatID != nil)
-            signals.recognizedBaseline = ChatTranscript.completedReplies(in: frame.elements).contains(prompts.baseline)
+            signals.recognizedBaseline = ChatTranscript.completedReplies(in: frame.elements).contains { $0.text == prompts.baseline }
             for element in frame.elements {
                 for value in [element.text] + element.labels {
                     signals.baseline = signals.baseline || value.contains(prompts.baseline)
@@ -94,15 +126,23 @@ actor ChatWindows {
         }
     }
 
-    /// Returns assistant turns from the selected window and its chat URL when available.
-    func syncSample() -> SyncRead {
+    /// Pins the selected chat before opening board approval and checks that identity before every capture.
+    func syncSample(beginPairing: Bool = false) -> SyncRead {
         switch readWindow() {
         case .incomplete: return .incomplete
         case .windowChanged: return .windowChanged
         case .permissionLost: return .permissionLost
         case .frame(let frame):
-            return .transcript(ChatTranscript(conversationID: frame.chatID, title: frame.title, isGenerating: frame.isGenerating,
-                                            replies: ChatTranscript.completedReplies(in: frame.elements)))
+            let replies = ChatTranscript.completedReplies(in: frame.elements)
+            if beginPairing, connectionIdentity == nil, let first = replies.first {
+                connectionIdentity = ChatConnectionIdentity(chatID: frame.chatID,
+                    element: frame.handles[first.containerIndex], reply: first.text)
+            }
+            if let connectionIdentity, !connectionIdentity.matches(chatID: frame.chatID, replies: replies, elements: frame.handles) {
+                return .windowChanged
+            }
+            let transcript = ChatTranscript(title: frame.title, isGenerating: frame.isGenerating, replies: replies.map(\.text))
+            return .transcript(transcript, pairingID: connectionIdentity?.pairingID)
         }
     }
 
@@ -120,6 +160,7 @@ actor ChatWindows {
         var pending: [(AXUIElement, Int?)] = [(selected.element, nil)]
         var visited = Set<AXUIElement>()
         var elements: [ChatElement] = []
+        var handles: [AXUIElement] = []
         var isGenerating = false
         var observedPath: String?
 
@@ -139,6 +180,7 @@ actor ChatWindows {
                 .compactMap { $0 as? String }
             let index = elements.count
             elements.append(ChatElement(role: role, labels: labels, text: text, parent: parent))
+            handles.append(element)
             if role == kAXButtonRole {
                 isGenerating = isGenerating || (labels + [text]).contains(where: Self.isStopControl)
             }
@@ -164,7 +206,7 @@ actor ChatWindows {
             guard observedPath == chatPath else { return .windowChanged }
         }
         chatPath = observedPath
-        return .frame(Frame(elements: elements, chatID: observedPath, title: selected.title, isGenerating: isGenerating))
+        return .frame(Frame(elements: elements, handles: handles, chatID: observedPath, title: selected.title, isGenerating: isGenerating))
     }
 
     private static func isStopControl(_ label: String) -> Bool {

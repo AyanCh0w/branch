@@ -1,3 +1,4 @@
+import ApplicationServices
 import Foundation
 import Testing
 @testable import BranchDesktopProbe
@@ -15,10 +16,10 @@ struct ReplyCaptureTests {
             ChatElement(role: "AXStaticText", text: "Copy", parent: 6),
             ChatElement(role: "AXTextArea", text: "Unsent draft", parent: 0),
         ]
-        #expect(ChatTranscript.completedReplies(in: elements) == ["New reply"])
+        #expect(ChatTranscript.completedReplies(in: elements).map(\.text) == ["New reply"])
         var feedbackAction = elements
         feedbackAction[6].labels = ["good-response-turn-action-button"]
-        #expect(ChatTranscript.completedReplies(in: feedbackAction) == ["New reply"])
+        #expect(ChatTranscript.completedReplies(in: feedbackAction).map(\.text) == ["New reply"])
     }
 
     @Test func rejectsMixedAndInterruptedTurns() {
@@ -72,35 +73,30 @@ struct ReplyCaptureTests {
         #expect(capture.observe(sample(["Initial reply", "An unseen turn"])) == .historyChanged)
     }
 
-    @Test func identityCannotFollowANewChat() {
-        let marker = "BRANCH DESKTOP test-code"
-        #expect(DesktopChatIdentity.url("chat-id").matches(sample(["Reply"])))
-        #expect(DesktopChatIdentity.url("other").matches(sample(["Reply"])) == false)
-        #expect(DesktopChatIdentity.marker(marker).matches(sample([marker, "Reply"])))
-        #expect(DesktopChatIdentity.marker(marker).matches(sample(["BRANCH DESKTOP\ntest-code"])))
-        #expect(DesktopChatIdentity.marker(marker).matches(sample(["A reply quoting \(marker)"])) == false)
+    @Test func stableConversationIDCannotFollowAnotherChat() {
+        let handle = AXUIElementCreateApplication(101)
+        let identity = ChatConnectionIdentity(chatID: "chat-id", element: handle, reply: "Existing reply")
+        #expect(identity.pairingID == "chat-id")
+        #expect(identity.matches(chatID: "chat-id", replies: [], elements: [handle]))
+        #expect(identity.matches(chatID: "different-chat", replies: [], elements: [handle]) == false)
     }
 
-    @Test func directPairingRequiresAnIdleRecognizedReplyAndChatURL() {
-        #expect(DesktopChatIdentity.verifiedURL(in: sample(["Reply"]))?.pairingID == "chat-id")
-        #expect(DesktopChatIdentity.verifiedURL(in: sample([])) == nil)
-        #expect(DesktopChatIdentity.verifiedURL(in: sample(["Reply"], generating: true)) == nil)
-        let noURL = ChatTranscript(conversationID: nil, title: "Test Chat", isGenerating: false, replies: ["Reply"])
-        #expect(DesktopChatIdentity.verifiedURL(in: noURL) == nil)
-    }
-
-    @Test func pairingCodeSurvivesOmittingPunctuation() throws {
-        let code = try #require(UUID(uuidString: "01234567-89ab-4cde-8f01-23456789abcd"))
-        let (identity, prompt) = DesktopChatIdentity.pairingChallenge(code: code)
-        let expected = "BRANCH DESKTOP 0123456789ab4cde8f0123456789abcd"
-        #expect(prompt.hasSuffix("BRANCH, DESKTOP, 0123456789ab4cde8f0123456789abcd"))
-        #expect(!prompt.contains(expected))
-        #expect(identity.matches(sample([expected])))
-        #expect(identity.matches(sample(["BRANCH DESKTOP 0123456789ab4cde8f0123456789abce"])) == false)
-        #expect(identity.matches(sample([prompt])) == false)
+    @Test func windowPairingRequiresTheSameReplyAndAccessibilityElement() {
+        let handle = AXUIElementCreateApplication(101)
+        let otherHandle = AXUIElementCreateApplication(102)
+        let reply = ChatTranscript.CompletedReply(containerIndex: 0, text: "Existing reply")
+        let otherReply = ChatTranscript.CompletedReply(containerIndex: 0, text: "Different reply")
+        let newReply = ChatTranscript.CompletedReply(containerIndex: 1, text: "New reply")
+        let identity = ChatConnectionIdentity(chatID: nil, element: handle, reply: reply.text)
+        #expect(identity.pairingID.hasPrefix("window:"))
+        #expect(identity.pairingID.contains(reply.text) == false)
+        #expect(identity.matches(chatID: nil, replies: [reply, newReply], elements: [handle, otherHandle]))
+        #expect(identity.matches(chatID: nil, replies: [reply], elements: [otherHandle]) == false)
+        #expect(identity.matches(chatID: nil, replies: [otherReply], elements: [handle]) == false)
+        #expect(identity.matches(chatID: nil, replies: [], elements: [handle]) == false)
     }
 
     private func sample(_ replies: [String], generating: Bool = false) -> ChatTranscript {
-        ChatTranscript(conversationID: "chat-id", title: "Test Chat", isGenerating: generating, replies: replies)
+        ChatTranscript(title: "Test Chat", isGenerating: generating, replies: replies)
     }
 }
