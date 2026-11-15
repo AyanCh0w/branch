@@ -79,7 +79,7 @@
     for (const p of nodes.values()) {
       const size=scale(p);
       ctx.fillStyle=`rgba(${color},${.95*size})`;
-      ctx.beginPath();ctx.arc(p.x,p.y,12*size,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(p.x,p.y,10*size,0,Math.PI*2);ctx.fill();
     }
     if(nodes.size && !reduced.matches) frame=requestAnimationFrame(paint);
     else if(!nodes.size) host.dataset.engaged='false';

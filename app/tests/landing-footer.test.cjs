@@ -67,7 +67,7 @@ test('points sit between background dots and smoothly grow before retracting',()
  function radius(time){b.draws.length=0;b.tick(time);return b.draws.find(d=>d.key==='arc').args;}
  const first=radius(start),settled=radius(start+180),retiring=radius(start+540);
  assert.equal(first[0]%32,0);assert.equal(first[1]%32,0);
- assert.ok(first[2]<settled[2]);assert.equal(settled[2],12);
- assert.ok(retiring[2]>0 && retiring[2]<12);
+ assert.ok(first[2]<settled[2]);assert.equal(settled[2],10);
+ assert.ok(retiring[2]>0 && retiring[2]<10);
  }finally{b.dom.window.close();}
 });
