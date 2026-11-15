@@ -328,3 +328,28 @@ html:not([data-theme=dark]) .landing-page :is(.demo-scroll-stage,.comparison-gri
  .site-header .nav-actions{gap:10px;font-size:13px}
  .site-header .button.small{gap:8px;padding:9px 10px;font-size:13px}
 }
+
+/* Keep mobile actions inside the glass body throughout the pill-to-notch morph. */
+@media(max-width:680px){
+ .site-header{width:min(calc(390px + 24px * var(--dock)),calc(100% - 24px))}
+ .site-header .nav{width:100%;min-width:0;padding-inline:16px;gap:8px}
+ .site-header .brand{flex-shrink:0}
+ .site-header .nav-actions{min-width:0;flex-shrink:0;gap:10px;font-size:13px}
+ .site-header .button.small{flex-shrink:0;gap:8px;padding:9px 10px;font-size:13px}
+}
+/* A phone-sized overview: shared context, one plan, and all three teammates. */
+@media(max-width:540px){
+ .hero .flow-canvas{gap:16px;padding:16px 14px 18px}
+ .hero .shared-node .flow-question{display:none}
+ .hero .shared-node>.flow-card{padding:10px 12px}
+ .hero .shared-node .flow-answer{padding:4px 0 6px}
+ .hero .shared-node .answer-label>span{display:none}
+ .hero .shared-node .flow-answer h3{margin:6px 0 0}
+ .hero .flow-branches{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding-top:10px}
+ .hero .flow-branches .flow-node{grid-column:auto;margin:0}
+ .hero .flow-branches :is(.flow-rail,h3,.demo-code,.inherited){display:none}
+ .hero .flow-branches .flow-card{height:100%;padding:10px 8px}
+ .hero .flow-branches .person-line{display:block;line-height:1.45;color:#626b79}
+ .hero .flow-branches .person{display:grid;margin-bottom:6px}
+ .hero .flow-foot{padding:7px 14px}
+}
