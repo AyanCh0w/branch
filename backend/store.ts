@@ -5,11 +5,13 @@ import {encode,decode} from './codec';
 export class Store {
  affectedUsers=new Set<string>();affectedBoards=new Set<string>();affectedTeams=new Set<string>();
  changedCollections=new Set<string>();
+ accessChanged=false;
  readCollections=new Set<string>();
  private reads=new Map<string,Promise<any>>();
  constructor(public sql:any,public writable=false){}
  touch(collection:string,id:string,data:any){
   this.changedCollections.add(collection);
+  if(['boardMembers','teamMembers','teams','boardLinks','linkMembers','sessions','users'].includes(collection))this.accessChanged=true;
   this.reads.delete(id);
   for(const key of ['userId','ownerId','initiatedBy'])if(data[key])this.affectedUsers.add(data[key]);
   if(collection==='users')this.affectedUsers.add(id);
@@ -55,7 +57,7 @@ export class Store {
  check(){if(!this.writable)throw Error('Read-only transaction');}
  validate(collection:string,data:any){if(collection!=='_storage')(schema as any)[collection].validator.parse(data);}
  async insert(collection:string,data:any){this.check();this.validate(collection,data);const id=collection+'_'+randomUUID().replaceAll('-','');await this.sql.query('insert into branch_private.records(id,collection,created_at,data) values($1,$2,$3,$4)',[id,collection,Date.now(),JSON.stringify(encode(data))]);this.touch(collection,id,data);return id;}
- async patch(id:string,patch:any){this.check();const {rows}=await this.sql.query('select * from branch_private.records where id=$1',[id]);if(!rows[0])throw Error('Record not found');const data=decode(rows[0].data);this.touch(rows[0].collection,id,data);for(const [key,value] of Object.entries(patch)){if(key.startsWith('_'))throw Error('Immutable field');if(value===undefined)delete data[key];else data[key]=value;}this.validate(rows[0].collection,data);this.touch(rows[0].collection,id,data);await this.sql.query('update branch_private.records set data=$2 where id=$1',[id,JSON.stringify(encode(data))]);}
- async replace(id:string,data:any){this.check();const {rows}=await this.sql.query('select collection from branch_private.records where id=$1',[id]);if(!rows[0])throw Error('Record not found');this.validate(rows[0].collection,data);this.touch(rows[0].collection,id,data);await this.sql.query('update branch_private.records set data=$2 where id=$1',[id,JSON.stringify(encode(data))]);}
- async delete(id:string){this.check();const {rows}=await this.sql.query('select collection,data from branch_private.records where id=$1',[id]);if(rows[0])this.touch(rows[0].collection,id,decode(rows[0].data));await this.sql.query('delete from branch_private.records where id=$1',[id]);}
+ async patch(id:string,patch:any){this.check();const {rows}=await this.sql.query('select * from branch_private.records where id=$1',[id]);if(!rows[0])throw Error('Record not found');const data=decode(rows[0].data);if(rows[0].collection==='boards'&&['ownerId','teamId','archived'].some(key=>Object.hasOwn(patch,key)&&patch[key]!==data[key]))this.accessChanged=true;this.touch(rows[0].collection,id,data);for(const [key,value] of Object.entries(patch)){if(key.startsWith('_'))throw Error('Immutable field');if(value===undefined)delete data[key];else data[key]=value;}this.validate(rows[0].collection,data);this.touch(rows[0].collection,id,data);await this.sql.query('update branch_private.records set data=$2 where id=$1',[id,JSON.stringify(encode(data))]);}
+ async replace(id:string,data:any){this.check();const {rows}=await this.sql.query('select collection,data from branch_private.records where id=$1',[id]);if(!rows[0])throw Error('Record not found');this.validate(rows[0].collection,data);if(rows[0].collection==='boards')this.accessChanged=true;this.touch(rows[0].collection,id,decode(rows[0].data));this.touch(rows[0].collection,id,data);await this.sql.query('update branch_private.records set data=$2 where id=$1',[id,JSON.stringify(encode(data))]);}
+ async delete(id:string){this.check();const {rows}=await this.sql.query('select collection,data from branch_private.records where id=$1',[id]);if(rows[0]){if(rows[0].collection==='boards')this.accessChanged=true;this.touch(rows[0].collection,id,decode(rows[0].data));}await this.sql.query('delete from branch_private.records where id=$1',[id]);}
 }

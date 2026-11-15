@@ -1,4 +1,5 @@
 import {startCursors} from './cursors';
+import {openLiveBoard,liveTextPreviews} from './live';
 import {avatarURL} from '../accounts/avatar';
 import * as Y from 'yjs';
 import { prepareLocalFiles } from './prepare-files.cjs';
@@ -12,7 +13,7 @@ const tabId = crypto.randomUUID();
 const host = window.BranchHost;
 let client, credentials, ready = false, applying = false, connected = false;
 let rows = [], active = null, focusTask = Promise.resolve(), queue = Promise.resolve();
-let lastState, timer, failure = null;
+let lastState, timer, failure = null, live, previews, flushTask=null, dirty=false;
 let writable=true;const subscriptions=[];
 const uploadedFiles = new Map();
 const docs = new Map(), pending = new Map(), overlays = new Map(), sending = new Set();
@@ -124,17 +125,23 @@ function changeText(text, value) {
   if(value.length-left-right)text.insert(left,value.slice(left,value.length-right));
 }
 function metadata(node) { const result = copy(node); for(const key of [...fields,'sharedVersion','sharedTextState','activeRun','activity','draftEpoch','messages','authorProfile','codingResult','codingNote','chatgptSynced','chatgptSyncOwner','chatgptLatestUpdate']) delete result[key]; return result; }
-function schedule() { clearTimeout(timer);timer=setTimeout(()=>flush().catch(()=>{}),70); }
+function schedule() { dirty=true;if(timer||flushTask)return;timer=setTimeout(()=>{timer=null;flush().catch(()=>{});},120); }
 function keepRecovery(){try{localStorage.setItem('branch-unsynced-'+credentials.boardId,JSON.stringify({savedAt:new Date().toISOString(),state:host.getState()}));}catch{}}
 function edit(node, field, value) {
   if (!ready || !writable || applying || !fields.includes(field)) return;
   const item=docs.get(node.id);
-  if(item)item.doc.transact(()=>changeText(item.doc.getText(field),value),localOrigin);
+  if(item&&item.doc.getText(field).toString()!==value){item.doc.transact(()=>changeText(item.doc.getText(field),value),localOrigin);live?.send({type:'text',nodeKey:node.id,field,text:value,epoch:item.epoch});}
   schedule();
 }
 function saveState(state) { if(ready&&writable&&!applying){for(const node of state.nodes)for(const field of fields)edit(node,field,String(node[field]||''));schedule();} }
-async function flush() {
-  clearTimeout(timer);
+async function flush(){
+  clearTimeout(timer);timer=null;
+  if(flushTask){await flushTask;if(dirty||pending.size)return flush();return;}
+  dirty=false;flushTask=flushOnce();
+  try{await flushTask;}finally{flushTask=null;}
+  if(dirty||pending.size)return flush();
+}
+async function flushOnce() {
   if(!ready||!writable||applying)return;
   if(failure)throw failure;
   const state=copy(host.getState()); const previous=new Map((lastState?.nodes||[]).map(n=>[n.id,n]));
@@ -214,7 +221,7 @@ function receive(snapshot){
     for(const [key,overlay]of overlays)if(!seen.has(key)&&overlay.create)nodes.push(copy(overlay.create));
     // Retire deleted documents before undo can restore their canonical text.
     for (const key of docs.keys()) if (!seen.has(key) && !overlays.get(key)?.create && !hidden.has(key)) forgetDeletedNode(key);
-    host.receive({title:snapshot.title,nodes});lastState=copy(host.getState());restoreCaret(caret);updateLocks();
+    host.receive({title:snapshot.title,nodes});lastState=copy(host.getState());restoreCaret(caret);previews?.render();updateLocks();
   }finally{applying=false;}
 }
 function currentUserId(){return credentials?.userId||window.BranchAccount?.userId||rows.find(r=>r.tabId===tabId)?.userId;}
@@ -234,7 +241,7 @@ function updateLocks(){
     let badge=el.querySelector('.editing-presence');if(people.size){if(!badge){badge=document.createElement('span');badge.className='editing-presence';el.querySelector('.composer-controls')?.prepend(badge);}badge.replaceChildren(...[...people].map(([id,name])=>{const person=editors.find(r=>r.userId===id);const img=document.createElement('img');img.src=avatarURL(name,person?.color);img.alt=name;img.width=22;img.height=22;return img;}));badge.removeAttribute('title');badge.dataset.tooltip=[...people.values()].join(', ');badge.setAttribute('aria-label',badge.dataset.tooltip);}else badge?.remove();
   }
 }
-function focusEditor(el){const field=fieldOf(el),key=el?.closest?.('.card')?.dataset.node;if(!ready||!writable||!key||!fields.includes(field)||applying)return;if(active?.key===key&&active.field===field)return;const next={key,field,expiresAt:0};active=next;updateLocks();focusTask=focusTask.catch(()=>{}).then(async()=>{if(active!==next)return;if(!docs.has(key)){const current=host.getState().nodes.find(n=>n.id===key);if(!current){if(active===next)active=null;return;}const node=copy(current);await client.mutation('boards:patchNodes',args({changes:[{id:key,create:node}]}));receive(await client.query('boards:read',args()));}await client.mutation('collaboration:focus',args({nodeKey:key,field,tabId})).then(r=>{if(r.deleted){if(active===next)active=null;}else next.expiresAt=r.expiresAt;});}).catch(error=>{failure=error;host.notify(error.message);updateLocks();});}
+function focusEditor(el){const field=fieldOf(el),key=el?.closest?.('.card')?.dataset.node;if(!ready||!writable||!key||!fields.includes(field)||applying)return;if(active?.key===key&&active.field===field)return;const next={key,field,expiresAt:0};active=next;previews?.render();const current=host.getState().nodes.find(n=>n.id===key);if(current)host.refreshText(current);updateLocks();focusTask=focusTask.catch(()=>{}).then(async()=>{if(active!==next)return;if(!docs.has(key)){const current=host.getState().nodes.find(n=>n.id===key);if(!current){if(active===next)active=null;return;}const node=copy(current);await client.mutation('boards:patchNodes',args({changes:[{id:key,create:node}]}));receive(await client.query('boards:read',args()));}await client.mutation('collaboration:focus',args({nodeKey:key,field,tabId})).then(r=>{if(r.deleted){if(active===next)active=null;}else next.expiresAt=r.expiresAt;});}).catch(error=>{failure=error;host.notify(error.message);updateLocks();});}
 async function blurEditor(el){if(applying||!active)return;const field=fieldOf(el),key=el?.closest?.('.card')?.dataset.node;if(active.key!==key||active.field!==field)return;const old=active;try{await flush();await focusTask;await client.mutation('collaboration:release',args({tabId,nodeKey:old.key,field:old.field}));if(active===old)active=null;updateLocks();}catch{updateLocks();}}
 async function send(key){
   if(!ready||!writable||sending.has(key))return;sending.add(key);updateLocks();try{await flush();updateLocks();if(otherPersonEditing(key))return host.notify('Someone else is editing this node. Send when they finish.');if(!connected||failure)throw Error('Reconnect and sync before sending');sending.add(key);updateLocks();const snapshot=await client.query('boards:read',args());const node=snapshot.nodes.find(n=>n.id===key);if(!node)throw Error('Chat not found');const videoTranscripts=await host.prepareVideoTranscripts(node.contexts||[]);const localFiles=await prepareLocalFiles(node.contexts||[],snapshot.nodes,{cache:uploadedFiles,read:host.readLocalFile,upload:file=>window.BoardShared.uploadFile(file)});await client.mutation('chat:send',args({nodeKey:key,requestId:crypto.randomUUID(),expectedVersion:node.sharedVersion,localFiles,videoTranscripts}));}catch(error){host.notify(typeof error.data==='string'?error.data:error.message);}finally{sending.delete(key);updateLocks();}
@@ -267,7 +274,7 @@ const coding = {
     nodeKey, handoffId, publish, ...(expectedPublishedId ? { expectedPublishedId } : {}),
   })),
 };
-window.BoardShared={coding,connect:start,async disconnect(){window.BranchCoding?.reset();await deletionQueue;if(ready&&writable&&!failure){try{await flush();await focusTask;await client.mutation('collaboration:release',args({tabId}));}catch{keepRecovery();}}ready=false;active=null;clearTimeout(timer);for(const off of subscriptions.splice(0))off();docs.clear();uploadedFiles.clear();pending.clear();overlays.clear();},get writable(){return writable;},headers(){return {'X-Board-Id':credentials?.boardId||'','X-Board-Token':credentials?.token||'',...(window.BranchAccount?.token?{Authorization:'Bearer '+window.BranchAccount.token}:{})};},get enabled(){return ready;},get applying(){return applying;},saveState,edit,send,deleteNode,moveNodes,async stop(key){try{await client.mutation('chat:stop',args({nodeKey:key}));}catch(error){host.notify(error.message);}},async uploadFile(file){
+window.BoardShared={coding,get liveConnected(){return !!live?.ready;},connect:start,async disconnect(){window.BranchCoding?.reset();await deletionQueue;if(ready&&writable&&!failure){try{await flush();await focusTask;await client.mutation('collaboration:release',args({tabId}));}catch{keepRecovery();}}ready=false;active=null;live?.close();live=null;previews?.clear();previews=null;clearTimeout(timer);timer=null;dirty=false;for(const off of subscriptions.splice(0))off();docs.clear();uploadedFiles.clear();pending.clear();overlays.clear();},get writable(){return writable;},headers(){return {'X-Board-Id':credentials?.boardId||'','X-Board-Token':credentials?.token||'',...(window.BranchAccount?.token?{Authorization:'Bearer '+window.BranchAccount.token}:{})};},get enabled(){return ready;},get applying(){return applying;},saveState,edit,send,deleteNode,moveNodes,async stop(key){try{await client.mutation('chat:stop',args({nodeKey:key}));}catch(error){host.notify(error.message);}},async uploadFile(file){
  const scope=args();const {ticket,url}=await client.mutation('files:uploadUrl',scope);
  const response=await fetch(url,{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream'},body:file});
  if(!response.ok)throw Error('File upload failed');
@@ -286,14 +293,18 @@ async function start(config){
   document.body.classList.add('shared-starting');status('Connecting shared board…');
   try{
     credentials=config;client=config.client;if(!client)throw Error('Missing shared transport');writable=config.role!=='viewer';
-    const snapshot=await client.query('boards:read',args());receive(snapshot);ready=true;connected=client.connectionState().isWebSocketConnected;
-    subscriptions.push(client.onUpdate('boards:read',args(),receive,error=>{failure=error;window.BranchCoding?.reset();document.body.classList.add('shared-starting');status('Access changed · return to your boards');host.notify('Access to this board changed. Return to your boards.');updateLocks();}));
+    live=openLiveBoard({client,scope:args(),tabId});
+    previews=liveTextPreviews({host,docs,tabId,isEditing:(key,field)=>active?.key===key&&active.field===field});
+    subscriptions.push(live.subscribe(message=>previews?.receive(message)));
+    const previewExpiry=setInterval(()=>previews?.render(),500);subscriptions.push(()=>clearInterval(previewExpiry));
+    const snapshot=config.snapshot||await client.query('boards:read',args());receive(snapshot);ready=true;connected=client.connectionState().isWebSocketConnected;
+    subscriptions.push(client.onUpdate(config.snapshot?'boards:open':'boards:read',args(),receive,error=>{failure=error;window.BranchCoding?.reset();document.body.classList.add('shared-starting');status('Access changed · return to your boards');host.notify('Access to this board changed. Return to your boards.');updateLocks();}));
     if (!config.token && config.userId && config.role !== 'viewer') subscriptions.push(coding.watch(value => {
       if (ready && writable) window.BranchCoding?.update({ ...value, endpoint: location.origin + '/api/backend?coding' });
     }, () => window.BranchCoding?.reset()));
     subscriptions.push(client.onUpdate('collaboration:editors',args(),value=>{rows=value;updateLocks();},()=>{}));
     subscriptions.push(client.subscribeToConnectionState(state=>{connected=state.isWebSocketConnected;syncStatus();updateLocks();}));
-    subscriptions.push(startCursors({client,scope:args(),tabId,host}));
+    subscriptions.push(startCursors({client,scope:args(),tabId,host,live,userId:config.userId}));
     document.body.classList.remove('shared-starting');status('Shared · saved');updateLocks();focusEditor(document.activeElement);
     // URL bookkeeping must never prevent live subscriptions or leave the canvas locked.
     try{const url=new URL(location.href);if(url.searchParams.get('board')!==String(config.boardId)){url.searchParams.set('board',config.boardId);const browserHistory=window.history;browserHistory.replaceState.call(browserHistory,null,'',url.href);}}catch{}

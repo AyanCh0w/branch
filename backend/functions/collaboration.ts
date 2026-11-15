@@ -133,3 +133,15 @@ export const attend = mutation({
     else await ctx.db.insert('boardPresence',{boardId:args.boardId,userId,tabId:args.tabId,expiresAt});
   },
 });
+
+// Short-lived relay permission; no raw application records leave this query.
+export const liveSession=query({args:{token:v.string(),boardId:v.id('boards')},handler:async(ctx,args)=>{
+ const {userId,membership}=await access(ctx,args.token,args.boardId);
+ const user=await ctx.db.get(userId);if(!user)throw Error('Account unavailable');
+ let expiresAt=Date.now()+45000;
+ // A link expiring naturally must stop live delivery at its actual expiry.
+ const grants=await ctx.db.query('linkMembers').withIndex('board_user',q=>q.eq('boardId',args.boardId).eq('userId',userId)).collect();
+ for(const grant of grants){const link=await ctx.db.get(grant.linkId);if(link&&!link.revoked&&link.expiresAt&&link.expiresAt>Date.now())expiresAt=Math.min(expiresAt,link.expiresAt);}
+ if(args.token){const {tokenHash}=await import('./access');const hash=await tokenHash(args.token);const session=await ctx.db.query('sessions').withIndex('token',q=>q.eq('tokenHash',hash)).unique();if(session)expiresAt=Math.min(expiresAt,session.expiresAt);}
+ return {userId,role:membership.role,name:user.name||'Collaborator',color:user.color||'#6685cf',expiresAt};
+}});
