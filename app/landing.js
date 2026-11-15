@@ -95,7 +95,6 @@ function drawFlowWires() {
     }
     flow.querySelector(`[data-wire="${name}"]`).setAttribute('d',route);
   }
-  renderFlow(playhead);
 }
 function reveal(el, visible) {
   el.classList.toggle('not-yet',!visible);
@@ -108,11 +107,12 @@ function renderFlow(time) {
     flowButtons.forEach((button,i)=>button.setAttribute('aria-pressed',String(i===stage)));
     flow.querySelector('#flow-caption').textContent=flowCaptions[stage];
   }
+  let geometryChanged=stage !== Number(flow.dataset.measuredStage);
   const typing=time>=1300 && time<3700;
   flow.classList.toggle('is-typing',typing);
   flow.classList.toggle('is-generating',time>=4400 && time<7000);
   const count=typing?Math.min(questionText.length,Math.floor((time-1300)/2100*questionText.length)):-1;
-  if(count!==lastTyped){draft.textContent=typing?questionText.slice(0,count):'Keep building together…';lastTyped=count;}
+  if(count!==lastTyped){draft.textContent=typing?questionText.slice(0,count):'Keep building together…';lastTyped=count;geometryChanged=true;}
   reveal(question,time>=3700);
   reveal(answer,time>=4400);
   const wordCount=Math.max(0,Math.min(answerWords.length,Math.floor((time-4400)/2300*answerWords.length)));
@@ -121,7 +121,8 @@ function renderFlow(time) {
   reveal(flow.querySelector('.plan-node'),time>=9300);
   reveal(flow.querySelector('.design-node'),time>=9700);
   reveal(flow.querySelector('.qa-node'),time>=10000);
-  codeSamples.forEach((sample,i)=>{const count=Math.max(0,Math.min(sample.text.length,Math.floor((time-(9300+i*350))/2200*sample.text.length)));if(count!==sample.count){sample.el.textContent=sample.text.slice(0,count);sample.count=count;}});
+  codeSamples.forEach((sample,i)=>{const count=Math.max(0,Math.min(sample.text.length,Math.floor((time-(9300+i*350))/2200*sample.text.length)));if(count!==sample.count){sample.el.textContent=sample.text.slice(0,count);sample.count=count;geometryChanged=true;}});
+  if(geometryChanged){drawFlowWires();flow.dataset.measuredStage=String(stage);}
   reveal(flow.querySelector('.flow-composer>div'),time>=800);
   for(const name of ['source','interviews']) reveal(flow.querySelector(`[data-wire="${name}"]`),time>=800);
   reveal(flow.querySelector('[data-wire="branch"]'),time>=9300);

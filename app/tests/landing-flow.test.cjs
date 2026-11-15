@@ -55,3 +55,12 @@ test('mobile presents the completed compact demo without autoplay',()=>{
   assert.equal(d.querySelector('.plan-node').getAttribute('aria-hidden'),'false');
  }finally{dom.window.close();}
 });
+test('wire endpoints follow cards after their code expands without a canvas resize',()=>{
+ const {dom,d}=boot();try{
+ const port=d.querySelector('[data-port="second"]'),code=d.querySelector('.design-node .demo-code');
+ port.getBoundingClientRect=()=>({left:420,top:code.textContent.length,width:10,height:10});
+ d.querySelector('[data-flow-step="3"]').click();
+ const coords=d.querySelector('[data-wire="second"]').getAttribute('d').match(/-?\d+(?:\.\d+)?/g).map(Number);
+ assert.equal(coords.at(-2),425);assert.equal(coords.at(-1),code.textContent.length+5);
+ }finally{dom.window.close();}
+});

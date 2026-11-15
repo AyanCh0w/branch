@@ -1,0 +1,29 @@
+#canvas-tour{position:fixed;inset:auto 24px 98px auto;margin:0;width:min(420px,calc(100vw - 32px));max-height:calc(100dvh - 128px);overflow:auto;padding:22px;border:1px solid var(--theme-border,#e1e4e8);border-radius:22px;background:var(--theme-surface,#fff);color:var(--theme-ink,#292b30);box-shadow:0 18px 65px #11182720,0 3px 10px #11182708;font:14px/1.55 BDO,Arial,sans-serif}
+#canvas-tour::backdrop{background:#11182716;backdrop-filter:none}
+#canvas-tour[open]{animation:tour-arrive 220ms cubic-bezier(.2,.8,.2,1)}
+#canvas-tour .tour-top,#canvas-tour .tour-controls{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#canvas-tour .tour-count{color:var(--theme-muted,#787d86);font-size:12px}
+#canvas-tour button{font:inherit;min-height:40px;padding:8px 12px;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:10px;background:transparent;color:inherit;cursor:pointer}
+#canvas-tour button:focus-visible{outline:2px solid #6685cf;outline-offset:3px}
+#canvas-tour button:active{transform:scale(.97)}
+#canvas-tour button:disabled{opacity:.3;cursor:default}
+#canvas-tour [data-tour=skip]{font-size:12px;color:var(--theme-muted,#787d86);padding-right:0}
+#canvas-tour [data-tour=next]{background:var(--theme-ink,#292b30);color:var(--theme-surface,#fff);min-width:84px}
+#canvas-tour .tour-art{position:relative;height:110px;margin:12px 0 4px;display:flex;align-items:center;justify-content:space-around;gap:9px;background:radial-gradient(var(--theme-border,#d8dce3) .8px,transparent .8px) 0 0/14px 14px;border-radius:12px}
+#canvas-tour .tour-art svg{position:absolute;width:100%;height:100%;inset:0;fill:none;stroke:#6685cf;stroke-width:1.5;stroke-dasharray:3 5}
+#canvas-tour .tour-tile{position:relative;padding:9px 10px;max-width:110px;font-size:11px;line-height:1.35;text-align:center;border:1px solid var(--theme-border,#e0e4ea);border-radius:9px;background:var(--theme-surface,#fff);box-shadow:0 3px 8px #11182706}
+#canvas-tour .tour-tile:nth-of-type(2){transform:translateY(-18px)}
+#canvas-tour .tour-tile:nth-of-type(3){transform:translateY(17px)}
+#canvas-tour .tour-guide{width:64px;height:64px;margin:10px 0 -5px 4px;position:relative;z-index:1;transform:rotate(-6deg)}
+#canvas-tour .tour-guide img{display:block;width:100%;height:100%;object-fit:contain}
+#canvas-tour .tour-message{padding:16px 18px 18px;background:var(--theme-control,#f5f6f8);border-radius:4px 16px 16px 16px;min-height:158px}
+#canvas-tour h2{font-size:21px;letter-spacing:-.65px;line-height:1.2;font-weight:500;margin:0 0 10px}
+#canvas-tour p{font-size:14px;line-height:1.6;color:var(--theme-muted,#626974);margin:0}
+#canvas-tour .tour-controls{margin-top:18px}
+#canvas-tour .tour-dots{display:flex;gap:5px}
+#canvas-tour .tour-dots i{height:5px;width:5px;border-radius:99px;background:var(--theme-border,#d9dde4)}
+#canvas-tour .tour-dots i.current{width:16px;background:#6685cf}
+body.canvas-tour-open #first-use-tip{visibility:hidden}
+@keyframes tour-arrive{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+@media(max-width:600px){#canvas-tour{right:16px;bottom:88px;padding:18px;max-height:calc(100dvh - 110px)}#canvas-tour .tour-message{min-height:0}#canvas-tour .tour-art{height:86px}#canvas-tour .tour-guide{width:52px;height:52px}}
+@media(prefers-reduced-motion:reduce){#canvas-tour[open]{animation:none}#canvas-tour button:active{transform:none}}
