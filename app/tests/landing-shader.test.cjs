@@ -3,10 +3,10 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const {JSDOM}=require('jsdom');
-function boot({webgl=true,reduced=false,saved}={}) {
+function boot({webgl=true,reduced=false,mobile=false,contrast=false,saved}={}) {
   const dom=new JSDOM('<div id="paper-background"></div><input id="paper-background-on" type="checkbox"><input id="paper-background-strength" type="range" min="0" max="100"><output id="paper-background-value"></output><p id="paper-background-status"></p><button id="nav-appearance-reset"></button>',{url:'https://example.test',runScripts:'outside-only',pretendToBeVisual:true});
   const w=dom.window, frames=new Map();let id=0, visibility;
-  w.matchMedia=query=>({matches:query.includes('reduced-motion')&&reduced,addEventListener(){}});
+  w.matchMedia=query=>({matches:(query.includes('reduced-motion')&&reduced)||(query.includes('max-width')&&mobile)||(query.includes('prefers-contrast')&&contrast),addEventListener(){}});
   w.requestAnimationFrame=fn=>{frames.set(++id,fn);return id;};
   w.cancelAnimationFrame=id=>frames.delete(id);
   w.IntersectionObserver=class{constructor(cb){visibility=cb;}observe(){}};
@@ -39,4 +39,22 @@ test('offscreen and disabled effects suspend rendering; returning resumes one lo
     visibility([{isIntersecting:true}]);assert.equal(frames.size,1);visibility([{isIntersecting:true}]);assert.equal(frames.size,1);
     const toggle=w.document.querySelector('#paper-background-on');toggle.checked=false;toggle.dispatchEvent(new w.Event('change'));assert.equal(frames.size,0);
   }finally{dom.window.close();}
+});
+
+test('mobile scroll fades to a visible floor and restores full intensity at the top',()=>{
+  const {dom,w,host}=boot({mobile:true,reduced:true});
+  try{
+    assert.equal(Number(host.style.opacity),.45);
+    w.scrollY=200;w.dispatchEvent(new w.Event('scroll'));
+    assert.ok(Number(host.style.opacity)<.45 && Number(host.style.opacity)>.26);
+    w.scrollY=5000;w.dispatchEvent(new w.Event('scroll'));
+    assert.ok(Math.abs(Number(host.style.opacity)-.261)<.00001);
+    w.scrollY=0;w.dispatchEvent(new w.Event('scroll'));assert.equal(Number(host.style.opacity),.45);
+    const toggle=w.document.querySelector('#paper-background-on');toggle.checked=false;toggle.dispatchEvent(new w.Event('change'));
+    w.scrollY=5000;w.dispatchEvent(new w.Event('scroll'));assert.equal(host.style.opacity,'0');
+  }finally{dom.window.close();}
+});
+test('high contrast overrides persistent mobile background',()=>{
+  const {dom,w,host}=boot({mobile:true,contrast:true});
+  try{w.scrollY=5000;w.dispatchEvent(new w.Event('scroll'));assert.equal(host.style.opacity,'0');}finally{dom.window.close();}
 });

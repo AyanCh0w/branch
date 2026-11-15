@@ -10,6 +10,7 @@
   const status = document.getElementById('paper-background-status');
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const contrast = matchMedia('(prefers-contrast: more)');
+  const mobile = matchMedia('(max-width: 600px)');
   const fine = matchMedia('(hover: hover) and (pointer: fine)');
   const key = 'branch.paper-background.v1';
   let enabled = true, amount = 45;
@@ -143,9 +144,16 @@
   }
   function wake() {if (!frame && canAnimate()) frame=requestAnimationFrame(tick);}
   function save() {try {localStorage.setItem(key,JSON.stringify({enabled,amount}));} catch {}}
+  // A viewport-sized mobile layer stays present beyond the hero without a tall GPU surface.
+  function syncOpacity() {
+    const progress = Math.max(0, Math.min(1, window.scrollY / Math.max(400, window.innerHeight * .8)));
+    const eased = progress * progress * (3 - 2 * progress);
+    const fade = mobile.matches ? 1 - .42 * eased : 1;
+    host.style.opacity = enabled && !contrast.matches ? String(amount / 100 * fade) : '0';
+  }
   function sync() {
     toggle.checked=enabled; strength.value=amount; strength.disabled=!enabled; output.value=`${amount}%`;
-    host.style.opacity=enabled && !contrast.matches ? String(amount/100) : '0';
+    syncOpacity();
     host.dataset.motion=reduced.matches ? 'static' : 'animated';
     status.textContent=reduced.matches ? 'Monochrome · Still vortex' : 'Monochrome · Connected vortex';
     stop(); draw(); wake();
@@ -156,6 +164,10 @@
   const themeObserver=new MutationObserver(draw);
   themeObserver.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
   new ResizeObserver(resize).observe(host);
+  window.addEventListener('scroll',syncOpacity,{passive:true});
+  window.addEventListener('resize',syncOpacity,{passive:true});
+  window.addEventListener('pageshow',syncOpacity);
+  mobile.addEventListener('change',syncOpacity);
   window.addEventListener('pointermove',event=>{
     if (event.pointerType!=='mouse' || !fine.matches || reduced.matches) return;
     const rect=host.getBoundingClientRect();
