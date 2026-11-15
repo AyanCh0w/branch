@@ -10,7 +10,7 @@ export const list = query({args:{},handler:async ctx=>{
   const linked=await ctx.db.query('linkMembers').withIndex('user',q=>q.eq('userId',userId)).collect();
   const memberships=await ctx.db.query('teamMembers').withIndex('user',q=>q.eq('userId',userId)).collect();
   const teamBoards=(await Promise.all(memberships.map(m=>ctx.db.query('boards').withIndex('team',q=>q.eq('teamId',m.teamId)).collect()))).flat();
-  const ids=[...new Set([...direct,...linked].map(m=>m.boardId).concat(teamBoards.map(b=>b._id)))];const result=[];
+  const ids=[...new Set([...direct,...linked].map(m=>m.boardId).concat(teamBoards.map(b=>b._id)))];const result:any[]=[];
   for(const boardId of ids){let permission;try{permission=await access(ctx,'',boardId);}catch{continue;}
     const {board,membership}=permission;
     const nodes=await ctx.db.query('nodes').withIndex('board_key',q=>q.eq('boardId',boardId)).collect();

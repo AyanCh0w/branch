@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {handoff,appURL} from '../app/desktop-setup';
-import { api, useMutation, useQuery } from '../backend/react';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '../convex/_generated/api';
 import { isChromeSyncOrigin } from '../collaboration/chrome-sync.cjs';
 
 export const chromeSyncAvailable = isChromeSyncOrigin(location.origin);

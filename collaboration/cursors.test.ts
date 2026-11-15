@@ -21,7 +21,7 @@ it('shares authorized human positions, permits viewers, isolates sessions and ex
  await expect(t.query(api.collaboration.cursors,{...a,token:'invalid'})).rejects.toThrow();
  await t.mutation(api.collaboration.point,{...b,tabId:'same-tab',position:{x:8,y:9}});
  expect(await t.query(api.collaboration.cursors,a)).toMatchObject([{x:8,y:9}]);
- vi.advanceTimersByTime(15001);
+ vi.advanceTimersByTime(30001);
  expect(await t.query(api.collaboration.cursors,a)).toEqual([]);
  await t.mutation(api.collaboration.point,{...b,tabId:'same-tab',position:{x:1,y:2}});
  expect(await t.run(ctx=>ctx.db.query('cursors').collect())).toHaveLength(1);

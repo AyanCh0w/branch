@@ -12,9 +12,9 @@ it.each([false,true])('receives live board changes even when URL replacement fai
  const replace=vi.spyOn(w.history,'replaceState');
  if(rejectHistory)replace.mockImplementation(()=>{throw new TypeError('Can only call History.replaceState on instances of History');});
  const callbacks=new Map<string,(value:any)=>void>();
- const stops=[vi.fn(),vi.fn(),vi.fn()];
+ const stops=[vi.fn(),vi.fn(),vi.fn(),vi.fn()];
  let connection:(value:any)=>void=()=>{};
- const client={query:vi.fn(async()=>({title:'Initial',role:'owner',nodes:[]})),mutation:vi.fn(async()=>{}),connectionState:()=>({isWebSocketConnected:true}),onUpdate:vi.fn((name:string,_args:any,callback:any)=>{callbacks.set(name,callback);return stops[callbacks.size-1];}),subscribeToConnectionState:vi.fn((callback:any)=>{connection=callback;return stops[2];})};
+ const client={query:vi.fn(async()=>({title:'Initial',role:'owner',nodes:[]})),mutation:vi.fn(async()=>{}),connectionState:()=>({isWebSocketConnected:true}),onUpdate:vi.fn((name:string,_args:any,callback:any)=>{callbacks.set(name,callback);return stops[callbacks.size-1];}),subscribeToConnectionState:vi.fn((callback:any)=>{connection=callback;return stops[3];})};
  let state:any={title:'',nodes:[]};
  const notify=vi.fn();
  (w as any).BranchHost={getState:()=>state,receive:(next:any)=>{state=next;},notify};
@@ -23,7 +23,7 @@ it.each([false,true])('receives live board changes even when URL replacement fai
  await shared.connect({client,boardId:'board',token:'test'});
  expect(shared.enabled).toBe(true);
  expect(w.document.body.classList.contains('shared-starting')).toBe(false);
- expect(callbacks.size).toBe(2);
+ expect(callbacks.size).toBe(3);
  expect(replace).toHaveBeenCalledOnce();
  if(!rejectHistory)expect(w.location.search).toBe('?board=board');
  callbacks.get('boards:read')!({title:'Live update',role:'owner',nodes:[]});

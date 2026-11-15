@@ -1,7 +1,7 @@
 import {convexTest} from 'convex-test';
 import {it,expect,vi,afterEach} from 'vitest';
 import schema from '../convex/schema';
-import {api} from '../convex/_generated/api';
+import {api,internal} from '../convex/_generated/api';
 const modules=import.meta.glob('../convex/**/*.ts');
 afterEach(()=>{vi.unstubAllEnvs();vi.useRealTimers();});
 it('lists people once, preserves other tabs, expires attendance and filters revoked access',async()=>{
@@ -20,9 +20,11 @@ it('lists people once, preserves other tabs, expires attendance and filters revo
  expect(await t.query(api.collaboration.activeUsers,a)).toHaveLength(2);
  await t.mutation(api.collaboration.attend,{...b,tabId:'two',active:false});
  expect(await t.query(api.collaboration.activeUsers,a)).toMatchObject([{userId:alice.userId}]);
- vi.advanceTimersByTime(15001);
+ vi.advanceTimersByTime(60001);
  expect(await t.query(api.collaboration.activeUsers,a)).toEqual([]);
  await t.mutation(api.collaboration.attend,{...b,tabId:'two',active:true});
+ // Expired rows are hidden immediately and reclaimed by the scheduled sweep.
+ await t.mutation(internal.collaboration.sweep,{});
  expect(await t.run(ctx=>ctx.db.query('boardPresence').collect())).toHaveLength(1);
  await t.run(async ctx=>{const row=await ctx.db.query('boardMembers').withIndex('board_user',q=>q.eq('boardId',alice.boardId).eq('userId',bob.userId)).unique();await ctx.db.delete(row!._id);});
  expect(await t.query(api.collaboration.activeUsers,a)).toEqual([]);

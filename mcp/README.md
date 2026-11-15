@@ -4,8 +4,8 @@ This local stdio MCP server lets an agent create real shared Branch boards, publ
 
 ## Setup
 
-1. Install dependencies with `npm ci`. The MCP client uses Branch's permission-checked HTTP API backed by Supabase; no Convex deployment is needed.
-2. Use the live app at `https://branch.eshteremberg.workers.dev`, or start a configured local backend with `npm run dev` (http://127.0.0.1:4387).
+1. Install dependencies with `npm ci`. The MCP client calls Branch's Convex functions directly with your account's permissions.
+2. Use the live app at `https://joinbranch.dev`, or run `npx convex dev` and `npm run dev` (http://127.0.0.1:4387) locally.
 3. Configure a stdio MCP client with the absolute path to `mcp/server.cjs` and the private environment values below. Use an existing Branch account, or create a dedicated agent account in Branch and share only the boards it needs. Keep credentials in the client's private environment/secret configuration, never a committed file or tool argument.
 
 ```json
@@ -15,7 +15,8 @@ This local stdio MCP server lets an agent create real shared Branch boards, publ
       "command": "node",
       "args": ["/ABSOLUTE/PATH/TO/board/mcp/server.cjs"],
       "env": {
-        "BRANCH_APP_URL": "https://branch.eshteremberg.workers.dev",
+        "BRANCH_CONVEX_URL": "https://YOUR-DEPLOYMENT.convex.cloud",
+        "BRANCH_APP_URL": "https://joinbranch.dev",
         "BRANCH_USERNAME": "YOUR-BRANCH-USERNAME",
         "BRANCH_PASSWORD": "YOUR-BRANCH-PASSWORD"
       }
@@ -24,7 +25,7 @@ This local stdio MCP server lets an agent create real shared Branch boards, publ
 }
 ```
 
-Client configuration formats vary; use these command, arguments and environment values in its MCP settings. Launch `node` directly, not npm, to keep stdout exclusively for MCP messages. `npm run mcp` is a manual convenience. The process does not load `.env.local` automatically. Username/password sessions refresh in memory; nothing is persisted to disk. An existing short-lived Supabase account access token can instead be supplied as `BRANCH_AUTH_TOKEN`; reconnect after it expires. This does not use ChatGPT/Codex authentication or require an OpenAI key.
+Client configuration formats vary; use these command, arguments and environment values in its MCP settings. Launch `node` directly, not npm, to keep stdout exclusively for MCP messages. `npm run mcp` is a manual convenience. The process does not load `.env.local` automatically. Username/password sessions refresh in memory; nothing is persisted to disk. An existing short-lived Convex Auth access token can instead be supplied as `BRANCH_AUTH_TOKEN`; reconnect after it expires. This does not use ChatGPT/Codex authentication or require an OpenAI key.
 
 ## Agent workflow
 

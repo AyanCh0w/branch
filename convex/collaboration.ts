@@ -1,16 +1,18 @@
-import { mutation, query } from './_generated/server';
+import { mutation, query, internalMutation } from './_generated/server';
 import { v } from 'convex/values';
 import * as Y from 'yjs';
 import { access, accessForUser } from './access';
 import { loadDocument, encodeDocument } from './documents';
 
-export const LEASE_MS = 15000;
+export const LEASE_MS = 30000;
+// Cursor/attendance rows outlive the client heartbeat (10s / 20s) with margin for a missed beat.
+export const CURSOR_MS = 30000, PRESENCE_MS = 60000;
 export const editors = query({
   args: { token: v.string(), boardId: v.id('boards') },
   handler: async (ctx, args) => {
     await access(ctx, args.token, args.boardId);
     const rows = await ctx.db.query('editors').withIndex('board', q => q.eq('boardId', args.boardId)).collect();
-    return Promise.all(rows.map(async row => ({ ...row, name: (await ctx.db.get(row.userId))?.name || 'Collaborator', color:(await ctx.db.get(row.userId))?.color||'#6685cf' })));
+    return Promise.all(rows.map(async row => { const user = await ctx.db.get(row.userId); return { ...row, name: user?.name || 'Collaborator', color: user?.color || '#6685cf' }; }));
   },
 });
 export const focus = mutation({
@@ -69,7 +71,7 @@ export const cursors = query({
   handler: async(ctx,args)=>{
     const {userId}=await access(ctx,args.token,args.boardId);
     const rows=await ctx.db.query('cursors').withIndex('board',q=>q.eq('boardId',args.boardId)).collect();
-    const result=[];
+    const result:any[]=[];
     for(const row of rows){
       if(row.userId===userId||row.expiresAt<=Date.now())continue;
       try{await accessForUser(ctx,row.userId,args.boardId);}catch{continue;}
@@ -85,14 +87,10 @@ export const point = mutation({
     const {userId}=await access(ctx,args.token,args.boardId);
     if(!args.tabId||args.tabId.length>100)throw Error('Invalid cursor session');
     if(args.position&&(!Number.isFinite(args.position.x)||!Number.isFinite(args.position.y)||Math.abs(args.position.x)>1e7||Math.abs(args.position.y)>1e7))throw Error('Invalid cursor position');
-    const rows=await ctx.db.query('cursors').withIndex('board',q=>q.eq('boardId',args.boardId)).collect();
-    let current;
-    for(const row of rows){
-      if(row.expiresAt<=Date.now())await ctx.db.delete(row._id);
-      else if(row.userId===userId&&row.tabId===args.tabId)current=row;
-    }
+    // Read only this tab's row: reading every cursor would make concurrent pointers conflict.
+    const current=await ctx.db.query('cursors').withIndex('tab',q=>q.eq('boardId',args.boardId).eq('userId',userId).eq('tabId',args.tabId)).first();
     if(!args.position){if(current)await ctx.db.delete(current._id);return;}
-    const patch={...args.position,expiresAt:Date.now()+15000};
+    const patch={...args.position,expiresAt:Date.now()+CURSOR_MS};
     if(current)await ctx.db.patch(current._id,patch);
     else await ctx.db.insert('cursors',{boardId:args.boardId,userId,tabId:args.tabId,...patch});
   },
@@ -121,15 +119,21 @@ export const attend = mutation({
   handler:async(ctx,args)=>{
     const {userId}=await access(ctx,args.token,args.boardId);
     if(!args.tabId||args.tabId.length>100)throw Error('Invalid presence session');
-    const rows=await ctx.db.query('boardPresence').withIndex('board',q=>q.eq('boardId',args.boardId)).collect();
-    let current;
-    for(const row of rows){
-      if(row.expiresAt<=Date.now())await ctx.db.delete(row._id);
-      else if(row.userId===userId&&row.tabId===args.tabId)current=row;
-    }
+    const current=await ctx.db.query('boardPresence').withIndex('tab',q=>q.eq('boardId',args.boardId).eq('userId',userId).eq('tabId',args.tabId)).first();
     if(!args.active){if(current)await ctx.db.delete(current._id);return;}
-    const expiresAt=Date.now()+15000;
+    const expiresAt=Date.now()+PRESENCE_MS;
     if(current)await ctx.db.patch(current._id,{expiresAt});
     else await ctx.db.insert('boardPresence',{boardId:args.boardId,userId,tabId:args.tabId,expiresAt});
+  },
+});
+
+// Expired cursors, attendance and editing leases are hidden by their readers; this sweep only reclaims storage.
+export const sweep = internalMutation({
+  args: {},
+  handler: async ctx => {
+    const now = Date.now();
+    for (const table of ['cursors', 'boardPresence', 'editors'] as const) {
+      for (const row of await ctx.db.query(table).withIndex('expiry', q => q.lte('expiresAt', now)).take(500)) await ctx.db.delete(row._id);
+    }
   },
 });

@@ -27,6 +27,8 @@ export async function access(ctx: QueryCtx | MutationCtx, token: string, boardId
 export async function accessForUser(ctx: QueryCtx | MutationCtx, userId: Id<'users'>, boardId: Id<'boards'>, edit = false) {
   const board = await ctx.db.get(boardId);
   if (!board||board.archived) throw Error('Board not found');
+  // Ownership already grants the strongest role; no other grant can revoke it.
+  if(board.ownerId===userId)return {userId,board,membership:{role:'owner' as const}};
   const member = await ctx.db.query('boardMembers').withIndex('board_user', q => q.eq('boardId', boardId).eq('userId', userId)).unique();
   let role: 'owner'|'editor'|'viewer'|null=board.ownerId===userId?'owner':member?.role||null;
   if(board.teamId){const teamMember=await ctx.db.query('teamMembers').withIndex('team_user',q=>q.eq('teamId',board.teamId!).eq('userId',userId)).unique();if(teamMember&&(!role||role==='viewer'))role='editor';}

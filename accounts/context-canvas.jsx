@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { api, useQuery } from '../backend/react';
+import { useQuery } from 'convex/react';
+import { api } from '../convex/_generated/api';
 
 const stepX = 378;
 const stepY = 174;

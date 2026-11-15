@@ -1,4 +1,4 @@
-// Signup rules match backend/service.ts. Sign-in must also accept migrated usernames.
+// Signup rules match the Convex account functions. Sign-in must also accept migrated usernames.
 function validateSignup(username,password){
  const normalized=String(username).trim().normalize('NFKC').toLowerCase(),errors={};
  if(!/^[a-z0-9_-]{3,64}$/.test(normalized))errors.username=normalized.includes('@')?'Choose a username, not an email address. Use 3–64 letters, numbers, underscores or dashes.':'Your username needs 3–64 letters, numbers, underscores or dashes.';

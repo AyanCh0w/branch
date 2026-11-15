@@ -2,10 +2,11 @@ import { canvasAction } from './agentCanvas';
 import { stepsValidator, writePlan } from './visualPlan';
 import { connectionForUser } from './chatgpt';
 import { planRequest, providerError, completedResponse } from '../collaboration/chatgpt/requests.cjs';
-import { mutation, internalMutation, internalQuery, internalAction } from './_generated/server';
+import { mutation, internalMutation, internalQuery, internalAction, query } from './_generated/server';
 import { internal } from './_generated/api';
 import { v, ConvexError } from 'convex/values';
 import { ASSISTANT_ROLE, WEB_INSTRUCTIONS, webOptions, citedText, reasoningOptions, activityForEvent } from '../collaboration/web-search.cjs';
+import { githubTools, GITHUB_INSTRUCTIONS } from '../collaboration/github.cjs';
 import { contextInput } from '../collaboration/context-input.cjs';
 import { hydrateVideos } from '../app/video-context.js';
 import { BOARD_TOOLS, PLAN_TOOL, CANVAS_TOOL, CANVAS_INSTRUCTIONS, PASSES, nodeArgs, researchSources } from '../collaboration/agent.cjs';
@@ -82,18 +83,51 @@ export const setTitle = internalMutation({args:{nodeId:v.id('nodes'),original:v.
   const doc=loadDocument(node.textState);const title=doc.getText('title');if(title.toString()!==args.original){doc.destroy();return;}
   title.delete(0,title.length);title.insert(0,args.title.slice(0,64));await ctx.db.patch(node._id,{textState:encodeDocument(doc),textVersion:node.textVersion+1,data:{...node.data,titleGenerated:true}});doc.destroy();
 }});
+const streamFor = (ctx: any, runId: any) => ctx.db.query('streams').withIndex('run', (q: any) => q.eq('runId', runId)).unique();
+const messageText = (node: any, run: any) => node.data.messages.find((m: any) => m.id === run.assistantId)?.text ?? '';
+// Write the streamed text into the card once, then drop the stream row.
+async function settleStream(ctx: any, run: any, node: any, extra: (data: any) => void) {
+  const stream = await streamFor(ctx, run._id);
+  if (node) {
+    const text = stream ? stream.text : messageText(node, run);
+    const data = { ...node.data, messages: node.data.messages.map((m: any) => m.id === run.assistantId ? { ...m, text } : m) };
+    delete data.activeRun; delete data.activity; extra(data);
+    await ctx.db.patch(node._id, { data });
+  }
+  if (stream) await ctx.db.delete(stream._id);
+}
 export const append = internalMutation({
   args: { runId: v.id('runs'), text: v.string(), done: v.optional(v.boolean()), error: v.optional(v.string()), usage: v.optional(v.any()), finalText: v.optional(v.string()), activity: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const run = await ctx.db.get(args.runId); if (!run || ['complete','failed','cancelled'].includes(run.status)) return;
     const node = await ctx.db.query('nodes').withIndex('board_key', q => q.eq('boardId', run.boardId).eq('key', run.nodeKey)).unique();
     // Keep a deleted node’s in-flight transcript current so undo cannot revive a stuck run.
-    if (node && node.data.activeRun === run._id) {
-      const messages = node.data.messages.map((m: any) => m.id === run.assistantId ? { ...m, text: args.finalText ?? (m.text + args.text), ...(args.error ? { error: args.error } : {}) } : m);
-      const data = { ...node.data, messages, ...(args.activity ? {activity:args.activity} : {}) }; if (args.done || args.error) {delete data.activeRun;delete data.activity;if(run.input.agent)data.agentStage=args.error?'Needs attention':'Complete';}
-      await ctx.db.patch(node._id, { data });
+    const live = node && node.data.activeRun === run._id ? node : null;
+    const stream = await streamFor(ctx, run._id);
+    const text = args.finalText ?? ((stream ? stream.text : live ? messageText(live, run) : '') + args.text);
+    if (args.done || args.error) {
+      if (stream) await ctx.db.patch(stream._id, { text });
+      else if (live) await ctx.db.insert('streams', { runId: run._id, boardId: run.boardId, nodeKey: run.nodeKey, messageId: run.assistantId, text });
+      await settleStream(ctx, run, live, data => {
+        if (args.error) data.messages = data.messages.map((m: any) => m.id === run.assistantId ? { ...m, error: args.error } : m);
+        if (run.input.agent) data.agentStage = args.error ? 'Needs attention' : 'Complete';
+      });
+    } else if (live) {
+      // In flight: only the small stream row changes, so the board query does not re-run for every viewer.
+      const patch = { text, ...(args.activity ? { activity: args.activity } : {}) };
+      if (stream) await ctx.db.patch(stream._id, patch);
+      else await ctx.db.insert('streams', { runId: run._id, boardId: run.boardId, nodeKey: run.nodeKey, messageId: run.assistantId, ...patch });
     }
     await ctx.db.patch(run._id, { status: args.error ? 'failed' : args.done ? 'complete' : 'streaming', ...(args.error ? { error: args.error } : {}), ...(args.usage ? { usage: args.usage } : {}) });
+  },
+});
+// Live text for replies still being written on this board. Small rows, so re-runs are cheap.
+export const streams = query({
+  args: { token: v.string(), boardId: v.id('boards') },
+  handler: async (ctx, args) => {
+    await access(ctx, args.token, args.boardId);
+    const rows = await ctx.db.query('streams').withIndex('board', q => q.eq('boardId', args.boardId)).collect();
+    return rows.map(r => ({ nodeKey: r.nodeKey, messageId: r.messageId, text: r.text, activity: r.activity ?? null }));
   },
 });
 // Cancellation leaves the acknowledged transcript intact and rejects late writes/tools.
@@ -103,8 +137,7 @@ export const stop = mutation({args:{token:v.string(),boardId:v.id('boards'),node
   if(!node?.data.activeRun)return;
   const run=await ctx.db.get(node.data.activeRun);if(!run)return;
   await ctx.db.patch(run._id,{status:'cancelled'});
-  const data={...node.data,agentStage:'Stopped'};delete data.activeRun;delete data.activity;
-  await ctx.db.patch(node._id,{data});
+  await settleStream(ctx,run,node,data=>{data.agentStage='Stopped';});
 }});
 export const claim = internalMutation({args:{runId:v.id('runs')},handler:async(ctx,args)=>{
  const run=await ctx.db.get(args.runId);if(!run||run.status!=='queued')return null;
@@ -121,6 +154,7 @@ export const checkpoint = internalMutation({args:{runId:v.id('runs'),checkpoint:
  await ctx.db.patch(run._id,{checkpoint:args.checkpoint,usage:args.usage,status:'queued'});
  const node=await ctx.db.query('nodes').withIndex('board_key',q=>q.eq('boardId',run.boardId).eq('key',run.nodeKey)).unique();
  if(node&&!node.deleted&&node.data.activeRun===run._id){await ctx.db.patch(node._id,{data:{...node.data,agentStage:['Discovering pages','Verifying findings','Synthesizing answer'][args.checkpoint.phase]||'Synthesizing answer',messages:node.data.messages.map((m:any)=>m.id===run.assistantId?{...m,text:''}:m)}});}
+ const stream=await streamFor(ctx,run._id);if(stream)await ctx.db.patch(stream._id,{text:''});
  await ctx.scheduler.runAfter(0,internal.chat.generate,{runId:run._id});
 }});
 export const createNode = internalMutation({args:{runId:v.id('runs'),callId:v.string(),node:v.any(),research:v.optional(v.boolean())},handler:async(ctx,args)=>{
@@ -138,7 +172,10 @@ export const createNode = internalMutation({args:{runId:v.id('runs'),callId:v.st
  const type=a.kind==='note'?'plan':a.kind==='chat'?'thread':'web';
  const sourceIndex=created.filter(n=>n.data.researchSource).length;
  const location=place(rows.filter(n=>!n.deleted).map(n=>n.data),{x:origin.data.x+(args.research?-520*(1+sourceIndex%2):(origin.data.width||520)+100),y:origin.data.y+(args.research?Math.floor(sourceIndex/2)*260:0)},type==='thread'?520:type==='web'?440:380,type==='thread'?640:type==='web'?160:260);
- const transcript=origin.data.messages.filter((m:any)=>m.text&&!m.error).map((m:any)=>m.role+': '+m.text).join('\n\n');
+ // The reply in progress lives in its stream row until the run settles.
+ const stream=await streamFor(ctx,run._id);
+ const messages=origin.data.messages.map((m:any)=>stream&&m.id===run.assistantId?{...m,text:stream.text}:m);
+ const transcript=messages.filter((m:any)=>m.text&&!m.error).map((m:any)=>m.role+': '+m.text).join('\n\n');
  const inherited=origin.data.contexts||[];
  const parentContext={id:key+'-context',source:run.nodeKey,title:origin.data.title,body:transcript,cutoff:run.assistantId,revision:origin.data.revision||1,enabled:true,inherited};
  const data:any={id:key,type,title:a.title,titleEdited:true,...location,width:type==='thread'?520:type==='web'?440:380,revision:1,autoGroup:run.nodeKey,createdByRun:run._id,researchSource:!!args.research,author:origin.data.agentName||'AI',...(!args.research?{contexts:[parentContext]}:{}),...(type==='thread'?{messages:[],draft:a.content,contexts:[parentContext]}:type==='web'?{url:a.url,body:a.content}:{body:a.content})};
@@ -164,8 +201,9 @@ export const generate = internalAction({
       const research=!!run.input.agent&&phase<2;
       if(run.input.agent&&!saved.continuing)input.push({role:'developer',content:PASSES[phase]});
       const options=webOptions(run.input.messages,run.input.contexts);
-      const tools=saved.turn>=18?[{type:'web_search'}]:[...options.tools,CANVAS_TOOL,PLAN_TOOL,...BOARD_TOOLS];
-      const request:any={ model:run.model, instructions:WEB_INSTRUCTIONS+CANVAS_INSTRUCTIONS, tools, tool_choice:run.input.agent&&saved.turn===0?{type:'function',name:'update_plan'}:run.input.agent&&saved.turn===1?{type:'function',name:'inspect_board'}:saved.turn===0&&options.tool_choice==='required'?{type:'web_search'}:'auto', include:['reasoning.encrypted_content','web_search_call.action.sources'], reasoning:reasoningOptions(run.input.modelStage), input, stream:true, store:false, max_output_tokens:12000, max_tool_calls:research?12:8 };
+      const repos=[...new Set((run.input.contexts||[]).filter((c:any)=>c.githubRepo).map((c:any)=>String(c.githubRepo.repo)))] as string[];
+      const tools=saved.turn>=18?[{type:'web_search'}]:[...options.tools,CANVAS_TOOL,PLAN_TOOL,...BOARD_TOOLS,...(repos.length?githubTools(repos):[])];
+      const request:any={ model:run.model, instructions:WEB_INSTRUCTIONS+CANVAS_INSTRUCTIONS+(repos.length?GITHUB_INSTRUCTIONS:''), tools, tool_choice:run.input.agent&&saved.turn===0?{type:'function',name:'update_plan'}:run.input.agent&&saved.turn===1?{type:'function',name:'inspect_board'}:saved.turn===0&&options.tool_choice==='required'?{type:'web_search'}:'auto', include:['reasoning.encrypted_content','web_search_call.action.sources'], reasoning:reasoningOptions(run.input.modelStage), input, stream:true, store:false, max_output_tokens:12000, max_tool_calls:research?12:8 };
       const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' }, body: JSON.stringify(connected?planRequest(request):request), signal: AbortSignal.timeout(150000) });
       if (!response.ok) throw Error(connected?providerError(response.status):'OpenAI request failed (' + response.status + ')');
       const reader = response.body!.getReader(); const decoder = new TextDecoder(); let buffer = ''; let complete = false;let sourceEvent=0;
@@ -179,7 +217,7 @@ export const generate = internalAction({
           if(run.input.agent&&event.type==='response.output_item.done'&&event.item?.type==='web_search_call'){for(const source of researchSources({output:[event.item]})){try{await ctx.runMutation(internal.chat.createNode,{runId:run._id,callId:'live-source-'+saved.turn+'-'+sourceEvent++,node:{kind:'website',title:source.title,content:'',url:source.url},research:true});}catch{}}}
           const nextActivity = activityForEvent(event);if(nextActivity && nextActivity!==activity){activity=nextActivity;await ctx.runMutation(internal.chat.append,{runId:run._id,text:'',activity});}
           if (!research && (event.type === 'response.output_text.delta' || event.type === 'response.refusal.delta')) pending += event.delta;
-          if (pending && Date.now() - lastFlush >= 100) { await ctx.runMutation(internal.chat.append, { runId: run._id, text: pending }); pending = ''; lastFlush = Date.now(); }
+          if (pending && Date.now() - lastFlush >= 250) { await ctx.runMutation(internal.chat.append, { runId: run._id, text: pending }); pending = ''; lastFlush = Date.now(); }
           if (event.type === 'response.completed') {
             const response=event.response;
             if(!research){await ctx.runMutation(internal.chat.append,{runId:run._id,text:'',finalText:citedText(response)});pending='';}
@@ -187,7 +225,7 @@ export const generate = internalAction({
             const usage={input_tokens:(run.usage?.input_tokens||0)+(response.usage?.input_tokens||0),output_tokens:(run.usage?.output_tokens||0)+(response.usage?.output_tokens||0),total_tokens:(run.usage?.total_tokens||0)+(response.usage?.total_tokens||0)};
             const calls=(response.output||[]).filter((item:any)=>item.type==='function_call');
             const nextInput=[...input,...(response.output||[])];
-            for(const call of calls){let result;try{if(call.name==='update_plan'){const plan=JSON.parse(call.arguments);result=await ctx.runMutation(internal.chat.updatePlan,{runId:run._id,...plan});}else if(BOARD_TOOLS.some((tool:any)=>tool.name===call.name)){result=await ctx.runMutation(internal.chat.canvasActionTool,{runId:run._id,callId:call.call_id,name:call.name,args:JSON.parse(call.arguments)});}else {if(call.name!=='create_node')throw Error('Unknown tool');result=await ctx.runMutation(internal.chat.createNode,{runId:run._id,callId:call.call_id,node:nodeArgs(call.arguments)});}}catch(error:any){result={error:error.message};}nextInput.push({type:'function_call_output',call_id:call.call_id,output:JSON.stringify(result)});}
+            for(const call of calls){let result;try{if(call.name==='update_plan'){const plan=JSON.parse(call.arguments);result=await ctx.runMutation(internal.chat.updatePlan,{runId:run._id,...plan});}else if(repos.length&&String(call.name).startsWith('github_')){result=await ctx.runAction(internal.githubActions.runTool,{runId:run._id,name:call.name,args:JSON.parse(call.arguments)});}else if(BOARD_TOOLS.some((tool:any)=>tool.name===call.name)){result=await ctx.runMutation(internal.chat.canvasActionTool,{runId:run._id,callId:call.call_id,name:call.name,args:JSON.parse(call.arguments)});}else {if(call.name!=='create_node')throw Error('Unknown tool');result=await ctx.runMutation(internal.chat.createNode,{runId:run._id,callId:call.call_id,node:nodeArgs(call.arguments)});}}catch(error:any){result={error:error.message};}nextInput.push({type:'function_call_output',call_id:call.call_id,output:JSON.stringify(result)});}
             if((research||calls.length)&&saved.turn<19){
               await ctx.runMutation(internal.chat.checkpoint,{runId:run._id,checkpoint:{phase:calls.length?phase:phase+1,turn:saved.turn+1,input:nextInput,continuing:!!calls.length},usage});
               return;

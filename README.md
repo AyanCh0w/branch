@@ -1,6 +1,6 @@
 # Branch
 
-A collaborative canvas for branching conversations, research, notes, and media. Built with a local Node.js frontend server, React account/workspace UI, Supabase, and Yjs. AI responses use server-side OpenAI Responses API calls with `gpt-5.4-mini` by default. An approval-gated Sign in with ChatGPT integration lets connected users choose models available to their own plan.
+A collaborative canvas for branching conversations, research, notes, and media. Built with a local Node.js frontend server, React account/workspace UI, Convex, and Yjs. AI responses use server-side OpenAI Responses API calls with `gpt-5.4-mini` by default. An approval-gated Sign in with ChatGPT integration lets connected users choose models available to their own plan.
 
 ## Local setup
 
@@ -11,13 +11,13 @@ npm ci
 cp .env.example .env.local
 ```
 
-Configure Supabase using [the migration and deployment guide](supabase/README.md), including the SQL migration and private `.env.local` settings. Shared AI generation requires the API server **and** a running background worker. This migration branch is not a verified production cutover yet.
+Configure Convex using [the Convex guide](docs/convex.md). `npx convex dev` creates or links a deployment, writes `CONVEX_URL`/`CONVEX_SITE_URL` to `.env.local`, and keeps functions in sync. AI generation, crons and scheduled jobs run on Convex; there is no separate worker.
 
 ```sh
+npx convex dev   # leave running
+# In another terminal:
 npm run build
 npm run dev
-# In another terminal:
-npm run worker
 ```
 
 Open http://127.0.0.1:4387 for the landing page or http://127.0.0.1:4387/app for accounts and boards. The frontend binds to loopback; sharing with other devices requires a reachable frontend deployment. Publishing this repository does not deploy the application or copy existing board data.
@@ -35,17 +35,16 @@ The tests include local HTTP server checks, which require permission to listen o
 
 - `app/`: canvas, landing page, local server, media viewers, assets, and browser-oriented tests.
 - `accounts/`: React accounts, board library, sharing, and workspace UI.
-- `backend/`: Supabase-backed accounts, permissions, shared documents, and durable AI jobs.
-- `supabase/`: database migration and deployment/import guide.
 - `docs/github.md`: connecting a board to GitHub repositories (GitHub App setup).
-- `convex/`: original backend retained for rollback and parity tests.
+- `convex/`: backend: accounts, permissions, shared documents, AI runs, HTTP actions and crons.
+- `docs/convex.md`: setup, deployment and the call budget that keeps Branch on the free plan.
 - `collaboration/`: Yjs client integration, context processing, research helpers, and backend tests.
 
 See [shared-board architecture and limitations](collaboration/README.md) and [canvas interactions](app/README.md) for details. Email recovery and billing are not implemented.
 
 ## Vercel hosting
 
-Vercel uses `npm run build:vercel` to copy browser assets into `public/`, with Node API handlers in `api/`. Configure the Supabase and provider server environment there. The persistent background worker needs separate Node hosting; deploying the frontend alone does not process AI jobs. See the migration guide before changing production.
+Vercel uses `npm run build:vercel` to copy browser assets into `public/`, with Node API handlers in `api/`. Configure `CONVEX_URL`, `CONVEX_SITE_URL`, `BRANCH_PROXY_SECRET` and provider settings there. Backend functions deploy separately with `npx convex deploy`.
 
 The Vercel project should connect to `AyanCh0w/branch` with `main` as its production branch. The landing page is `/`, accounts and boards are `/app`, and existing `/?board=…` URLs still open the canvas. Local startup remains `npm run dev`. Development identity migration routes are disabled in hosted mode; do not configure the development bridge secret on Vercel.
 

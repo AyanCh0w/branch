@@ -12,7 +12,7 @@ it('throttles board positions, reprojects remote cursors, expires them and clean
  const stop=startCursors({client,host,scope:{boardId:'one',token:'test'},tabId:'local'});
  const board=w.document.getElementById('board')!;
  for(let x=0;x<100;x++)board.dispatchEvent(new w.MouseEvent('pointermove',{bubbles:true,clientX:x,clientY:100}));
- await vi.advanceTimersByTimeAsync(80);
+ await vi.advanceTimersByTimeAsync(250);
  expect(client.mutation).toHaveBeenCalledTimes(1);
  expect(client.mutation.mock.calls[0]).toEqual(['collaboration:point',{boardId:'one',token:'test',tabId:'local',position:{x:49.5,y:20}}]);
  receive([{userId:'other',tabId:'remote',x:10,y:20,name:'<script>Alice</script>',color:'#123456',expiresAt:Date.now()+15000}]);
@@ -21,9 +21,13 @@ it('throttles board positions, reprojects remote cursors, expires them and clean
  expect(cursor().querySelector('span')!.textContent).toBe('<script>Alice</script>');expect(cursor().querySelector('script')).toBeNull();
  zoom=1;w.document.dispatchEvent(new w.Event('branch-camera'));
  expect(cursor().style.transform).toBe('translate3d(10px,20px,0)');
+ // Convex reports a state change per request; only real reconnects may publish.
+ await vi.advanceTimersByTimeAsync(1000);const writes=client.mutation.mock.calls.length;
+ for(let i=0;i<20;i++)connection({isWebSocketConnected:true,hasInflightRequests:i%2===0});
+ await vi.advanceTimersByTimeAsync(1000);expect(client.mutation).toHaveBeenCalledTimes(writes);
  connection({isWebSocketConnected:false});expect(cursor()).toBeNull();
  connection({isWebSocketConnected:true});expect(cursor()).not.toBeNull();
- w.dispatchEvent(new w.Event('blur'));await vi.advanceTimersByTimeAsync(80);
+ w.dispatchEvent(new w.Event('blur'));await vi.advanceTimersByTimeAsync(250);
  expect(client.mutation.mock.lastCall![1].position).toBeNull();
  await vi.advanceTimersByTimeAsync(16000);expect(cursor()).toBeNull();
  stop();expect(w.document.querySelector('.human-cursors')).toBeNull();expect(off).toHaveBeenCalledTimes(2);

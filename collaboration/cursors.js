@@ -25,7 +25,7 @@ export function startCursors({client,scope,tabId,host}){
   try{await client.mutation('collaboration:point',{...scope,tabId,position});}catch{/* Presence failure must not disable editing. */}
   finally{writing=false;if(disposed){if(position)client.mutation('collaboration:point',{...scope,tabId,position:null}).catch(()=>{});}else if(pending!==undefined)schedule();}
  }
- function schedule(){if(!timer&&!writing)timer=setTimeout(flush,Math.max(0,80-(Date.now()-lastSent)));}
+ function schedule(){if(!timer&&!writing)timer=setTimeout(flush,Math.max(0,250-(Date.now()-lastSent)));}
  function publish(){pending=pointer&&!document.hidden?host.boardPoint(pointer.x,pointer.y):null;schedule();}
  function move(e){
   if(!e.target.closest?.('#board')||e.target.closest('iframe'))return leave();
@@ -36,7 +36,7 @@ export function startCursors({client,scope,tabId,host}){
  function camera(){render();if(pointer)publish();}
  function visibility(){if(document.hidden)leave();render();}
  const offRows=client.onUpdate('collaboration:cursors',scope,value=>{rows=value;render();},()=>{rows=[];render();});
- const offConnection=client.subscribeToConnectionState(value=>{online=value.isWebSocketConnected;render();if(online)publish();});
+ const offConnection=client.subscribeToConnectionState(value=>{if(value.isWebSocketConnected===online)return;online=value.isWebSocketConnected;render();if(online)publish();});
  document.addEventListener('pointermove',move);document.addEventListener('pointerdown',move);
  document.addEventListener('pointerup',up);document.addEventListener('pointercancel',leave);
  document.addEventListener('visibilitychange',visibility);document.addEventListener('branch-camera',camera);

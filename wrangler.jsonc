@@ -36,36 +36,7 @@
     "not_found_handling": "none"
   },
   "vars": {
-    "CLOUDFLARE_WORKER": "true",
-    "SUPABASE_URL": "https://gwjjsbyljfdguaehixin.supabase.co"
-  },
-  "hyperdrive": [
-    {
-      "binding": "HYPERDRIVE",
-      "id": "c50bd7ccbff344b58cbae93a20461758"
-    }
-  ],
-  "queues": {
-    "producers": [
-      {
-        "binding": "JOBS",
-        "queue": "branch-jobs"
-      }
-    ],
-    "consumers": [
-      {
-        "queue": "branch-jobs",
-        "max_batch_size": 1,
-        "max_batch_timeout": 1,
-        "max_retries": 3,
-        "max_concurrency": 4
-      }
-    ]
-  },
-  "triggers": {
-    "crons": [
-      "* * * * *"
-    ]
+    "CLOUDFLARE_WORKER": "true"
   },
   "preview_urls": false
 }

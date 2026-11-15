@@ -20,7 +20,7 @@ export const suggestions=query({args:{prefix:v.string(),boardId:v.optional(v.id(
  }
  const prefix=args.prefix.trim().replace(/^@/,'').normalize('NFKC').toLowerCase();
  if(prefix.length<2||prefix.length>64)return [];
- const matches=[];
+ const matches:any[]=[];
  for await(const user of ctx.db.query('users')){
   if(user.kind!=='account'||excluded.has(user._id))continue;
   const username=await ctx.runQuery(components.authUsername.public.getUsername,{userId:user._id});

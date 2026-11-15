@@ -1,5 +1,6 @@
 import {startCursors} from './cursors';
 import {avatarURL} from '../accounts/avatar';
+import { ConvexClient } from 'convex/browser';
 import * as Y from 'yjs';
 import { prepareLocalFiles } from './prepare-files.cjs';
 
@@ -12,7 +13,7 @@ const tabId = crypto.randomUUID();
 const host = window.BranchHost;
 let client, credentials, ready = false, applying = false, connected = false;
 let rows = [], active = null, focusTask = Promise.resolve(), queue = Promise.resolve();
-let lastState, timer, failure = null;
+let lastState, timer, failure = null, lastFlush = 0, lastSnapshot = null, streams = new Map();
 let writable=true;const subscriptions=[];
 const uploadedFiles = new Map();
 const docs = new Map(), pending = new Map(), overlays = new Map(), sending = new Set();
@@ -124,7 +125,8 @@ function changeText(text, value) {
   if(value.length-left-right)text.insert(left,value.slice(left,value.length-right));
 }
 function metadata(node) { const result = copy(node); for(const key of [...fields,'sharedVersion','sharedTextState','activeRun','activity','draftEpoch','messages','authorProfile','codingResult','codingNote','chatgptSynced','chatgptSyncOwner','chatgptLatestUpdate']) delete result[key]; return result; }
-function schedule() { clearTimeout(timer);timer=setTimeout(()=>flush().catch(()=>{}),70); }
+// Each save re-sends the board to every viewer, so batch keystrokes: ≤ ~2 saves/s while typing.
+function schedule() { if(timer)return;timer=setTimeout(()=>{timer=null;lastFlush=Date.now();flush().catch(()=>{});},Math.max(150,600-(Date.now()-lastFlush))); }
 function keepRecovery(){try{localStorage.setItem('branch-unsynced-'+credentials.boardId,JSON.stringify({savedAt:new Date().toISOString(),state:host.getState()}));}catch{}}
 function edit(node, field, value) {
   if (!ready || !writable || applying || !fields.includes(field)) return;
@@ -134,7 +136,7 @@ function edit(node, field, value) {
 }
 function saveState(state) { if(ready&&writable&&!applying){for(const node of state.nodes)for(const field of fields)edit(node,field,String(node[field]||''));schedule();} }
 async function flush() {
-  clearTimeout(timer);
+  clearTimeout(timer);timer=null;
   if(!ready||!writable||applying)return;
   if(failure)throw failure;
   const state=copy(host.getState()); const previous=new Map((lastState?.nodes||[]).map(n=>[n.id,n]));
@@ -201,13 +203,15 @@ function selectionOffset(el){if(el instanceof HTMLTextAreaElement)return [el.sel
 function caretSnapshot(){const el=document.activeElement,field=fieldOf(el),key=el?.closest?.('.card')?.dataset.node,item=docs.get(key);if(!item||!fields.includes(field))return null;const offsets=selectionOffset(el);if(!offsets)return null;return {key,field,positions:offsets.map(i=>Y.createRelativePositionFromTypeIndex(item.doc.getText(field),i))};}
 function restoreCaret(saved){if(!saved)return;const item=docs.get(saved.key);if(!item)return;const el=document.querySelector(`[data-node="${saved.key}"] ${saved.field==='draft'?'[data-prompt]':`[data-edit="${saved.field}"]`}`);if(!el)return;const offsets=saved.positions.map(p=>Y.createAbsolutePositionFromRelativePosition(p,item.doc)?.index||0);el.focus({preventScroll:true});if(el instanceof HTMLTextAreaElement){el.setSelectionRange(...offsets);return;}const point=index=>{const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let leaf,last;while(leaf=walker.nextNode()){last=leaf;if(index<=leaf.length)return [leaf,index];index-=leaf.length;}return last?[last,last.length]:[el,0];};getSelection().setBaseAndExtent(...point(offsets[0]),...point(offsets[1]));}
 function receive(snapshot){
-  if(!snapshot)return;writable=snapshot.role!=='viewer';document.body.classList.toggle('board-viewer',!writable);if(!writable)window.BranchCoding?.reset();const caret=caretSnapshot();applying=true;
+  if(!snapshot)return;lastSnapshot=snapshot;writable=snapshot.role!=='viewer';document.body.classList.toggle('board-viewer',!writable);if(!writable)window.BranchCoding?.reset();const caret=caretSnapshot();applying=true;
   try{
     const nodes=[];const seen=new Set();
     for(const remote of snapshot.nodes){
       seen.add(remote.id);const overlay=overlays.get(remote.id);if(overlay?.remove||hidden.has(remote.id))continue;
       const item=makeDoc(remote.id,remote.sharedTextState,remote.draftEpoch||0);Y.applyUpdate(item.doc,new Uint8Array(remote.sharedTextState),'remote');item.epoch=remote.draftEpoch||0;
       const data={...remote,...overlay?.patch};delete data.sharedTextState;
+      const live=data.activeRun&&streams.get(remote.id);
+      if(live){data.messages=(data.messages||[]).map(m=>m.id===live.messageId?{...m,text:live.text}:m);if(live.activity)data.activity=live.activity;}
       for(const field of fields)data[field]=item.doc.getText(field).toString();
       nodes.push(data);
     }
@@ -276,7 +280,7 @@ window.BoardShared={coding,connect:start,async disconnect(){window.BranchCoding?
 document.addEventListener('keydown',e=>{if(ready&&(e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'&&fields.includes(fieldOf(e.target))){e.preventDefault();e.stopImmediatePropagation();window.BoardShared.undo(e.shiftKey);}},true);
 document.addEventListener('focusin',e=>focusEditor(e.target));
 document.addEventListener('focusout',e=>blurEditor(e.target));
-setInterval(()=>{updateLocks();if(active&&connected&&!document.hidden){const current=active;focusTask=focusTask.catch(()=>{}).then(async()=>{if(active!==current)return;const result=await client.mutation('collaboration:focus',args({nodeKey:current.key,field:current.field,tabId}));if(result.deleted){if(active===current)active=null;}else current.expiresAt=result.expiresAt;}).catch(error=>{failure=error;updateLocks();});}},4000);
+setInterval(()=>{updateLocks();if(active&&connected&&!document.hidden){const current=active;focusTask=focusTask.catch(()=>{}).then(async()=>{if(active!==current)return;const result=await client.mutation('collaboration:focus',args({nodeKey:current.key,field:current.field,tabId}));if(result.deleted){if(active===current)active=null;}else current.expiresAt=result.expiresAt;}).catch(error=>{failure=error;updateLocks();});}},10000);
 document.addEventListener('click',e=>{if(ready&&!writable&&e.target.closest('#cards,#chat-panel')&&!e.target.closest('[data-shared-context],.coding-note-body a,.coding-note-body [data-copy-code],[data-source-info],[data-context],[data-play-video],.resource,[data-media-credit],.collapse-card,.chat-preview-toggle,.open-chat-panel,[data-close-chat-panel]')){e.preventDefault();e.stopImmediatePropagation();}},true);
 document.addEventListener('submit',e=>{if(ready&&!writable&&e.target.closest('#cards,#chat-panel')){e.preventDefault();e.stopImmediatePropagation();}},true);
 document.addEventListener('click',async e=>{const link=e.target.closest('a[href]');if(!ready||!link||e.defaultPrevented||e.metaKey||e.ctrlKey)return;const target=new URL(link.href,location.href);if(target.origin!==location.origin||target.pathname!=='/')return;e.preventDefault();await window.BoardShared.disconnect();location.assign(target.href);});
@@ -285,13 +289,14 @@ window.addEventListener('pagehide',()=>{if(ready)client.mutation('collaboration:
 async function start(config){
   document.body.classList.add('shared-starting');status('Connecting shared board…');
   try{
-    credentials=config;client=config.client;if(!client)throw Error('Missing shared transport');writable=config.role!=='viewer';
+    credentials=config;client=config.client||new ConvexClient(config.url);writable=config.role!=='viewer';
     const snapshot=await client.query('boards:read',args());receive(snapshot);ready=true;connected=client.connectionState().isWebSocketConnected;
     subscriptions.push(client.onUpdate('boards:read',args(),receive,error=>{failure=error;window.BranchCoding?.reset();document.body.classList.add('shared-starting');status('Access changed · return to your boards');host.notify('Access to this board changed. Return to your boards.');updateLocks();}));
     if (!config.token && config.userId && config.role !== 'viewer') subscriptions.push(coding.watch(value => {
       if (ready && writable) window.BranchCoding?.update({ ...value, endpoint: location.origin + '/api/backend?coding' });
     }, () => window.BranchCoding?.reset()));
     subscriptions.push(client.onUpdate('collaboration:editors',args(),value=>{rows=value;updateLocks();},()=>{}));
+    subscriptions.push(client.onUpdate('chat:streams',args(),value=>{streams=new Map((value||[]).map(row=>[row.nodeKey,row]));if(lastSnapshot&&!failure)receive(lastSnapshot);},()=>{}));
     subscriptions.push(client.subscribeToConnectionState(state=>{connected=state.isWebSocketConnected;syncStatus();updateLocks();}));
     subscriptions.push(startCursors({client,scope:args(),tabId,host}));
     document.body.classList.remove('shared-starting');status('Shared · saved');updateLocks();focusEditor(document.activeElement);
