@@ -1,4 +1,5 @@
 import {startCursors} from './cursors';
+import {createSaveScheduler} from './save-scheduler';
 import {openLiveBoard,liveTextPreviews} from './live';
 import {avatarURL} from '../accounts/avatar';
 import * as Y from 'yjs';
@@ -13,7 +14,7 @@ const tabId = crypto.randomUUID();
 const host = window.BranchHost;
 let client, credentials, ready = false, applying = false, connected = false;
 let rows = [], active = null, focusTask = Promise.resolve(), queue = Promise.resolve();
-let lastState, timer, failure = null, live, previews, flushTask=null, dirty=false;
+let lastState, failure = null, live, previews;
 let writable=true;const subscriptions=[];
 const uploadedFiles = new Map();
 const docs = new Map(), pending = new Map(), overlays = new Map(), sending = new Set();
@@ -125,7 +126,9 @@ function changeText(text, value) {
   if(value.length-left-right)text.insert(left,value.slice(left,value.length-right));
 }
 function metadata(node) { const result = copy(node); for(const key of [...fields,'sharedVersion','sharedTextState','activeRun','activity','draftEpoch','messages','authorProfile','codingResult','codingNote','chatgptSynced','chatgptSyncOwner','chatgptLatestUpdate']) delete result[key]; return result; }
-function schedule() { dirty=true;if(timer||flushTask)return;timer=setTimeout(()=>{timer=null;flush().catch(()=>{});},120); }
+// Character previews use the live socket; durability is a separate bounded batch.
+const saves=createSaveScheduler({save:flushOnce,hasPending:()=>pending.size>0});
+function schedule(){saves.schedule();}
 function keepRecovery(){try{localStorage.setItem('branch-unsynced-'+credentials.boardId,JSON.stringify({savedAt:new Date().toISOString(),state:host.getState()}));}catch{}}
 function edit(node, field, value) {
   if (!ready || !writable || applying || !fields.includes(field)) return;
@@ -134,13 +137,7 @@ function edit(node, field, value) {
   schedule();
 }
 function saveState(state) { if(ready&&writable&&!applying){for(const node of state.nodes)for(const field of fields)edit(node,field,String(node[field]||''));schedule();} }
-async function flush(){
-  clearTimeout(timer);timer=null;
-  if(flushTask){await flushTask;if(dirty||pending.size)return flush();return;}
-  dirty=false;flushTask=flushOnce();
-  try{await flushTask;}finally{flushTask=null;}
-  if(dirty||pending.size)return flush();
-}
+function flush(){return saves.flush();}
 async function flushOnce() {
   if(!ready||!writable||applying)return;
   if(failure)throw failure;
@@ -274,7 +271,7 @@ const coding = {
     nodeKey, handoffId, publish, ...(expectedPublishedId ? { expectedPublishedId } : {}),
   })),
 };
-window.BoardShared={coding,get liveConnected(){return !!live?.ready;},connect:start,async disconnect(){window.BranchCoding?.reset();await deletionQueue;if(ready&&writable&&!failure){try{await flush();await focusTask;await client.mutation('collaboration:release',args({tabId}));}catch{keepRecovery();}}ready=false;active=null;live?.close();live=null;previews?.clear();previews=null;clearTimeout(timer);timer=null;dirty=false;for(const off of subscriptions.splice(0))off();docs.clear();uploadedFiles.clear();pending.clear();overlays.clear();},get writable(){return writable;},headers(){return {'X-Board-Id':credentials?.boardId||'','X-Board-Token':credentials?.token||'',...(window.BranchAccount?.token?{Authorization:'Bearer '+window.BranchAccount.token}:{})};},get enabled(){return ready;},get applying(){return applying;},saveState,edit,send,deleteNode,moveNodes,async stop(key){try{await client.mutation('chat:stop',args({nodeKey:key}));}catch(error){host.notify(error.message);}},async uploadFile(file){
+window.BoardShared={coding,get liveConnected(){return !!live?.ready;},connect:start,async disconnect(){window.BranchCoding?.reset();await deletionQueue;if(ready&&writable&&!failure){try{await flush();await focusTask;await client.mutation('collaboration:release',args({tabId}));}catch{keepRecovery();}}ready=false;active=null;live?.close();live=null;previews?.clear();previews=null;saves.cancel();for(const off of subscriptions.splice(0))off();docs.clear();uploadedFiles.clear();pending.clear();overlays.clear();},get writable(){return writable;},headers(){return {'X-Board-Id':credentials?.boardId||'','X-Board-Token':credentials?.token||'',...(window.BranchAccount?.token?{Authorization:'Bearer '+window.BranchAccount.token}:{})};},get enabled(){return ready;},get applying(){return applying;},saveState,edit,send,deleteNode,moveNodes,async stop(key){try{await client.mutation('chat:stop',args({nodeKey:key}));}catch(error){host.notify(error.message);}},async uploadFile(file){
  const scope=args();const {ticket,url}=await client.mutation('files:uploadUrl',scope);
  const response=await fetch(url,{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream'},body:file});
  if(!response.ok)throw Error('File upload failed');
@@ -287,7 +284,8 @@ setInterval(()=>{updateLocks();if(active&&connected&&!document.hidden){const cur
 document.addEventListener('click',e=>{if(ready&&!writable&&e.target.closest('#cards,#chat-panel')&&!e.target.closest('[data-shared-context],.coding-note-body a,.coding-note-body [data-copy-code],[data-source-info],[data-context],[data-play-video],.resource,[data-media-credit],.collapse-card,.chat-preview-toggle,.open-chat-panel,[data-close-chat-panel]')){e.preventDefault();e.stopImmediatePropagation();}},true);
 document.addEventListener('submit',e=>{if(ready&&!writable&&e.target.closest('#cards,#chat-panel')){e.preventDefault();e.stopImmediatePropagation();}},true);
 document.addEventListener('click',async e=>{const link=e.target.closest('a[href]');if(!ready||!link||e.defaultPrevented||e.metaKey||e.ctrlKey)return;const target=new URL(link.href,location.href);if(target.origin!==location.origin||target.pathname!=='/')return;e.preventDefault();await window.BoardShared.disconnect();location.assign(target.href);});
-window.addEventListener('pagehide',()=>{if(ready)client.mutation('collaboration:release',args({tabId})).catch(()=>{});});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&ready&&writable)flush().catch(keepRecovery);});
+window.addEventListener('pagehide',()=>{if(ready&&writable){keepRecovery();flush().then(()=>client.mutation('collaboration:release',args({tabId}))).catch(()=>{});}});
 
 async function start(config){
   document.body.classList.add('shared-starting');status('Connecting shared board…');

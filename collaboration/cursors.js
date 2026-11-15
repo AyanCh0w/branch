@@ -22,12 +22,14 @@ export function startCursors({client,scope,tabId,host,live,userId}){
   clearTimeout(timer);timer=null;
   if(pending===undefined||!online&&!live?.ready)return;
   if(live?.ready){const position=pending;pending=undefined;lastSent=Date.now();live.send({type:'cursor',position});return;}
+  // A reconnect must never turn pointer movement into database traffic.
+  if(live){pending=undefined;return;}
   if(writing)return;
   const position=pending;pending=undefined;writing=true;lastSent=Date.now();
   try{await client.mutation('collaboration:point',{...scope,tabId,position});}catch{/* Presence failure must not disable editing. */}
   finally{writing=false;if(disposed){if(position)client.mutation('collaboration:point',{...scope,tabId,position:null}).catch(()=>{});}else if(pending!==undefined)schedule();}
  }
- function schedule(){if(!timer&&(!writing||live?.ready))timer=setTimeout(flush,Math.max(0,(live?.ready?33:80)-(Date.now()-lastSent)));}
+ function schedule(){if(!timer&&(!writing||live?.ready))timer=setTimeout(flush,Math.max(0,(live?33:1000)-(Date.now()-lastSent)));}
  function publish(){pending=pointer&&!document.hidden?host.boardPoint(pointer.x,pointer.y):null;schedule();}
  function move(e){
   if(!e.target.closest?.('#board')||e.target.closest('iframe'))return leave();
@@ -37,7 +39,7 @@ export function startCursors({client,scope,tabId,host,live,userId}){
  function up(e){if(e.pointerType==='touch')leave();}
  function camera(){render();if(pointer)publish();}
  function visibility(){if(document.hidden)leave();render();}
- function fallback(){offRows();offRows=()=>{};if(!live?.ready)offRows=client.onUpdate('collaboration:cursors',scope,value=>{rows=value;render();},()=>{rows=[];render();});}
+ function fallback(){offRows();offRows=()=>{};if(!live)offRows=client.onUpdate('collaboration:cursors',scope,value=>{rows=value;render();},()=>{rows=[];render();});}
  const offLive=live?.subscribe(message=>{
   const key=message.userId+':'+message.tabId;
   if(message.type==='reset')liveRows.clear();
@@ -60,6 +62,6 @@ export function startCursors({client,scope,tabId,host,live,userId}){
   document.removeEventListener('pointerup',up);document.removeEventListener('pointercancel',leave);
   document.removeEventListener('visibilitychange',visibility);document.removeEventListener('branch-camera',camera);
   document.documentElement.removeEventListener('pointerleave',leave);window.removeEventListener('blur',leave);window.removeEventListener('pagehide',leave);
-  if(live?.ready)live.send({type:'cursor',position:null});else if(!writing)client.mutation('collaboration:point',{...scope,tabId,position:null}).catch(()=>{});
+  if(live?.ready)live.send({type:'cursor',position:null});else if(!live&&!writing)client.mutation('collaboration:point',{...scope,tabId,position:null}).catch(()=>{});
  };
 }
