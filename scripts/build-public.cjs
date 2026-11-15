@@ -8,3 +8,17 @@ for(const file of files)fs.copyFileSync(path.join(source,file),path.join(output,
 fs.copyFileSync(path.join(source,'landing.html'),path.join(output,'index.html'));
 fs.copyFileSync(path.join(source,'index.html'),path.join(output,'workspace.html'));
 for(const dir of ['fonts','icons','katex','pdfjs'])fs.cpSync(path.join(source,dir),path.join(output,dir),{recursive:true});
+
+// A release build can ship a notarized installer staged by the release operator.
+const macInstaller=process.env.BRANCH_MAC_INSTALLER;
+if(macInstaller){
+ const installer=path.resolve(macInstaller);
+ if(path.extname(installer).toLowerCase()!=='.dmg'||!fs.statSync(installer).isFile()){
+  throw Error('BRANCH_MAC_INSTALLER must point to a notarized .dmg file.');
+ }
+ require('node:child_process').execFileSync('xcrun',['stapler','validate',installer],{stdio:'inherit'});
+ const downloads=path.join(output,'downloads');
+ fs.mkdirSync(downloads);
+ fs.copyFileSync(installer,path.join(downloads,'branch-for-mac.dmg'));
+ fs.writeFileSync(path.join(downloads,'mac-release.json'),JSON.stringify({installer:'/downloads/branch-for-mac.dmg'}));
+}

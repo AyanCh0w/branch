@@ -14,12 +14,18 @@ open 'build/Branch for Mac.app'
 
 Keep using the same signing identity across builds so macOS can recognize updates. `BRANCH_CODESIGN_IDENTITY` overrides the checkout setting. Without an identity, the script builds the separate ad hoc **Branch Desktop Probe** for diagnostics. Use one consistent Developer ID Application identity and notarize the signed app before distributing it to users.
 
-1. Open a board at https://joinbranch.dev/app, then **ChatGPT sync → Connect ChatGPT to this board**. The Mac app opens with that board already authorized. No local web server or copied key is needed. For a first install, use **Set up with your agent** below that button.
+1. Open a board at https://joinbranch.dev/app, then **ChatGPT sync → Connect ChatGPT to this board**. The Mac app opens with that board already authorized. No local web server or copied key is needed. For a first install, follow the [employee setup page](https://joinbranch.dev/mac-setup.html).
 2. Open the ChatGPT conversation you want to sync, then open **Branch → ChatGPT Sync**. On first use, click **Allow Accessibility…** and approve **Branch for Mac** in the macOS prompt to load the window list. On later uses, the app finds conversations automatically when opened or brought forward. If no chat is visible yet, it keeps looking while the setup window is open. Branch hides Computer Use control windows and preselects the conversation when it finds one window. Confirm the selection with **Connect chat**.
 3. Branch uses the existing completed replies in the selected chat to check that it can read the conversation. When started from a board, Branch connects as soon as it can read the selected chat. When started from the menu bar without a board authorization, choose the destination board in the browser.
 4. Wait for **Connected** in Branch for Mac before sending another message. After the first save, the app confirms the reply was saved and **Open in Branch** opens the saved replies. Use **Stop syncing** from the app or **Disconnect ChatGPT chats** on the board to revoke access.
 
 Each pairing starts with the existing chat history as a baseline. The app stops if the window changes, the chat becomes unreadable, or it cannot confirm a streaming cycle. Keep the chat window open while syncing. Pending replies and the scoped write key live in memory. The pairing expires within eight hours and needs to be renewed after quitting. Chrome and Mac connections each have their own conversation card.
+
+## Release the employee installer
+
+Sign Branch for Mac with the team’s Developer ID Application certificate, then package and notarize a disk image containing the app. See [Apple’s distribution guide](https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution). Test the downloaded installer on a Mac independently of the development build.
+
+Set `BRANCH_MAC_INSTALLER` to the notarized and stapled `.dmg` when building the website on a Mac with Xcode. The public build checks the staple, publishes the file at `/downloads/branch-for-mac.dmg`, and enables the download button on the setup page. Keep the installer outside the repository and supply it on each release build. Without an installer, the setup page points employees to their workplace’s software catalog or IT.
 
 ## Desktop Sync Probe
 

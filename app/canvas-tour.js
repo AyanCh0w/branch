@@ -26,10 +26,10 @@
      <p>Bring new replies from one ChatGPT conversation into this board’s Context.</p>
      <button type="button" class="tour-action tour-open-mac" data-tour="connect-mac">Connect ChatGPT to this board</button>
      <p>Choose your chat in Branch for Mac. Send a message once it says Connected.</p>
-     <button type="button" data-tour="copy-setup">Set up with your agent</button>
+     <button type="button" data-tour="copy-setup">Copy setup instructions</button>
      <a class="tour-setup-link" href="/mac-setup.html" target="_blank" rel="noopener noreferrer">Installation guide ↗</a>
-     <p class="tour-setup-note">Nothing opened? Use the setup handoff to install the companion on your Mac.</p>
-     <textarea readonly rows="5" aria-label="Agent setup instructions" data-setup-fallback hidden></textarea>
+     <p class="tour-setup-note">If Branch for Mac didn’t open, use the installation guide.</p>
+     <textarea readonly rows="5" aria-label="ChatGPT setup instructions" data-setup-fallback hidden></textarea>
      <details class="tour-troubleshooting"><summary>Troubleshooting an installed app</summary><p>Only use this check after installation, if the app asks you to verify what it can read.</p>
       <textarea readonly rows="3" aria-label="Baseline prompt" data-baseline></textarea>
       <button type="button" data-tour="copy-baseline">Copy compatibility prompt</button>
@@ -163,8 +163,8 @@
  async function copySetup(){
   const value=window.BranchMacSetup.handoff(new URLSearchParams(location.search).get('board'));
   const field=dialog.querySelector('[data-setup-fallback]');
-  try{await navigator.clipboard.writeText(value);field.hidden=true;connectionStatus.textContent='Setup instructions copied. Paste them into your coding agent on your Mac.';}
-  catch{field.value=value;field.hidden=false;field.focus();field.select();connectionStatus.textContent='Copy the selected instructions and paste them into your coding agent.';}
+  try{await navigator.clipboard.writeText(value);field.hidden=true;connectionStatus.textContent='Setup instructions copied. Paste them into the ChatGPT conversation you want to connect.';}
+  catch{field.value=value;field.hidden=false;field.focus();field.select();connectionStatus.textContent='Copy the selected instructions and paste them into your ChatGPT conversation.';}
  }
  async function copyBaseline(){
   try{

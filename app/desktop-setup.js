@@ -12,16 +12,15 @@
  }
  function handoff(boardId){
   const board=boardSetupURL(boardId);
-  return `Set up Branch for Mac now so new completed replies in this exact ChatGPT desktop chat can go to my Branch board.
+  return `Help me connect this ChatGPT conversation to my team’s Branch board.
 
-Repository: https://github.com/AyanCh0w/branch
-Setup guide: https://joinbranch.dev/mac-setup.html
-Destination: ${board}
+Branch for Mac setup: https://joinbranch.dev/mac-setup.html
+My board: ${board}
 
-1. Use Branch for Mac 0.5.3 or newer. If a build is needed, preserve local changes and follow desktop/README.md. Run swift test --package-path desktop and sh desktop/build-probe.sh. Open Destination in my signed-in browser. If the exact title of this ChatGPT window is available, add it as the URL-encoded mac-chat field in the same URL fragment so Branch can select this chat. Keep this chat open. If it has no earlier replies, finish your response so Branch has a completed reply to read.
-2. Leave me at Connect ChatGPT to this board. That action opens the Mac app with this board already authorized. If the chat was not identified, help me select this chat there. If macOS asks for Accessibility access, let me grant it.
+1. If Branch for Mac is missing, open the setup page. Use the Branch download if available, or tell me to install it through my workplace’s software catalog or IT.
+2. Open my board and leave me at Connect ChatGPT to this board. If you know this chat’s exact title, include it in the URL-encoded mac-chat field in the board link’s fragment. If Branch asks, help me select this conversation and grant Accessibility access.
 
-Carry out the setup steps you can, then report Branch’s status. New completed replies in this chat go to the board’s Context view.`;
+Keep this chat open. When Branch says Connected, new completed replies appear in the board’s Context view. Tell me where setup stopped if you can’t finish.`;
  }
  const api={handoff,appURL,boardSetupURL};if(typeof module!=='undefined'&&module.exports)module.exports=api;
  if(root)root.BranchMacSetup=api;

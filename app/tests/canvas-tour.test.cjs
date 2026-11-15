@@ -83,11 +83,12 @@ test('installation handoff contains setup and only the board destination, not UR
   w.history.replaceState({},'', '/?board=boards_test&token=private-test-token#secret');
   let copied;Object.defineProperty(w.navigator,'clipboard',{value:{async writeText(value){copied=value;}}});
   tour.start({userId:'one',scene:'connections'});click('copy-setup');await new Promise(setImmediate);
-  assert.match(copied,/swift test --package-path desktop/);assert.match(copied,/sh desktop\/build-probe.sh/);
+  assert.match(copied,/https:\/\/joinbranch.dev\/mac-setup.html/);
+  assert.match(copied,/software catalog or IT/);
   assert.match(copied,/https:\/\/joinbranch.dev\/app\?board=boards_test/);assert.doesNotMatch(copied,/private-test-token|#secret|branch_desktop_launch_/);
   assert.match(copied,/#mac-sync=1/);
-  assert.match(copied,/exact title of this ChatGPT window/);assert.match(copied,/Connect ChatGPT to this board/);
-  assert.doesNotMatch(copied,/pairing prompt|baseline prompt/);
+  assert.match(copied,/this chat’s exact title/);assert.match(copied,/Connect ChatGPT to this board/);
+  assert.doesNotMatch(copied,/github|swift|build-probe|checkout|pairing prompt|baseline prompt/i);
   assert.equal(d.querySelector('details').open,false);assert.equal(d.querySelector('[data-setup-fallback]').hidden,true);
   assert.match(d.querySelector('.tour-setup-link').href,/mac-setup.html\?board=boards_test/);
  }finally{dom.window.close();}
@@ -104,7 +105,31 @@ test('clipboard failure exposes selectable installation instructions',async()=>{
  const {dom,w,d,tour,click}=boot();try{
   Object.defineProperty(w.navigator,'clipboard',{value:{async writeText(){throw Error('denied');}}});
   tour.start({userId:'one',scene:'connections'});click('copy-setup');await new Promise(setImmediate);
-  const field=d.querySelector('[data-setup-fallback]');assert.equal(field.hidden,false);assert.match(field.value,/Set up Branch for Mac now/);
+  const field=d.querySelector('[data-setup-fallback]');assert.equal(field.hidden,false);assert.match(field.value,/Help me connect this ChatGPT conversation/);
   const count=d.querySelector('.tour-count').textContent;field.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));assert.equal(d.querySelector('.tour-count').textContent,count);
  }finally{dom.window.close();}
+});
+
+test('employee setup shows a download only when the first-party installer is published',async()=>{
+ const markup=fs.readFileSync(require.resolve('../mac-setup.html'),'utf8');
+ const setupScript=fs.readFileSync(require.resolve('../mac-setup.js'),'utf8');
+ const linkScript=fs.readFileSync(require.resolve('../desktop-setup.js'),'utf8');
+ assert.doesNotMatch(markup,/github|Swift|developer preview|build scripts/i);
+ for(const manifest of [null,{installer:'https://elsewhere.example/installer.dmg'},{installer:'/downloads/branch-for-mac.dmg'}]){
+  const dom=new JSDOM(markup,{url:'https://joinbranch.dev/mac-setup.html?board=boards_test',runScripts:'outside-only'});
+  try{
+   const {window:w}=dom;
+   w.fetch=async url=>{
+    assert.equal(url,'/downloads/mac-release.json');
+    return {ok:!!manifest,json:async()=>manifest};
+   };
+   w.eval(linkScript);
+   w.eval(setupScript);
+   await new Promise(setImmediate);
+   const published=manifest?.installer==='/downloads/branch-for-mac.dmg';
+   assert.equal(w.document.getElementById('direct-install').hidden,!published);
+   assert.equal(w.document.getElementById('managed-install').hidden,published);
+   assert.equal(w.document.getElementById('open-mac').href,'https://joinbranch.dev/app?board=boards_test#mac-sync=1');
+  }finally{dom.window.close();}
+ }
 });

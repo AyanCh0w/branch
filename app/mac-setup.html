@@ -1,9 +1,46 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Set up Branch for Mac</title><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/mac-setup.css"></head>
-<body><header><a class="brand" href="/">branch</a><a href="/app">Back to your boards ↗</a></header>
-<main><p class="eyebrow">CHATGPT → YOUR TEAM’S CONTEXT</p><h1>Bring your chat<br>into the picture.</h1><p class="intro">Branch for Mac saves new completed replies from a ChatGPT conversation to the board you choose.</p>
-<section class="setup"><h2>Connect this board.</h2><p>Open your board and click Connect ChatGPT to this board. Then choose the ChatGPT conversation in Branch for Mac.</p><a id="open-mac" class="primary-link" href="/app">Open your board ↗</a><p class="preview">If you need to install or update the Mac app, use the setup instructions below.</p></section>
-<section class="setup"><h2>First time? Install with your agent.</h2><p>Copy the setup handoff into your agent on your Mac. It includes the app source, build steps, permissions, pairing, and a live connection test.</p><button id="copy-setup">Copy agent setup instructions</button><p id="copy-status" role="status" aria-live="polite"></p><textarea id="setup-fallback" aria-label="Agent setup instructions" readonly hidden></textarea><p class="preview">Developer preview · macOS 14+ · Built locally with Swift 6.1+. A signed, notarized installer is not available yet.</p></section>
-<ol class="steps"><li><h2>Install the companion.</h2><p>Your agent checks this Mac, tests the app, and builds it from the <a href="https://github.com/AyanCh0w/branch/tree/main/desktop" target="_blank" rel="noopener noreferrer">Branch source</a>. Without a signing identity, the preview is called <strong>Branch Desktop Probe</strong>.</p></li><li><h2>Choose what to share.</h2><p>Open the app and approve Accessibility when macOS asks. This permission lets the app read screen text. Start the connection from your Branch board and choose the ChatGPT conversation you want to sync. People with access to that board can read saved replies.</p></li><li><h2>Watch a new reply arrive.</h2><p>Wait for <strong>Connected</strong>, send a new message in ChatGPT, and open your board’s <strong>Context</strong> view. The completed reply should appear without a refresh. Earlier chat history is not imported.</p></li></ol>
-<details><summary>Already installed, or need help?</summary><p>Open the Mac menu-bar app, select <strong>ChatGPT Sync</strong>, and it will find your conversation automatically. If needed, click <strong>Refresh list</strong>. Choose your conversation and click <strong>Connect chat</strong>.</p><p>If a security warning or system authentication blocks setup, stop and review it yourself. Do not disable macOS protections. The compatibility probe checks what ChatGPT exposes; it does not install or connect the app.</p><p>Use <strong>Stop syncing</strong> in the Mac app or <strong>Disconnect ChatGPT chats</strong> in the board to stop future saves. Pair again after quitting the app or when the connection expires.</p></details>
-<footer><span>Branch for Mac</span><a href="https://github.com/AyanCh0w/branch/blob/main/desktop/README.md" target="_blank" rel="noopener noreferrer">Full setup documentation ↗</a></footer></main><script src="/desktop-setup.js"></script><script src="/mac-setup.js"></script></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Set up Branch for Mac</title>
+  <link rel="icon" href="/favicon.svg">
+  <link rel="stylesheet" href="/mac-setup.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="/">branch</a>
+    <a href="/app">Your boards ↗</a>
+  </header>
+  <main>
+    <h1>Set up Branch for Mac</h1>
+    <p class="intro">Send new replies from a ChatGPT conversation to your team’s Branch board.</p>
+
+    <section class="setup" aria-labelledby="install-heading">
+      <h2 id="install-heading">Install Branch for Mac</h2>
+      <p id="managed-install">On a work Mac, look for Branch for Mac in your company’s software catalog or ask IT to install it. Requires macOS 14 or later.</p>
+      <div id="direct-install" hidden>
+        <p>Open the download and drag Branch for Mac into Applications. Requires macOS 14 or later.</p>
+        <a id="mac-download" class="primary-link" href="/downloads/branch-for-mac.dmg" download>Download Branch for Mac</a>
+      </div>
+    </section>
+
+    <section class="setup" aria-labelledby="connect-heading">
+      <h2 id="connect-heading">Connect a ChatGPT conversation</h2>
+      <ol>
+        <li>Open your board, then select <strong>ChatGPT sync → Connect ChatGPT to this board</strong>.</li>
+        <li>Choose the conversation in Branch for Mac. If macOS asks, allow Branch for Mac in Accessibility so it can read completed replies.</li>
+      </ol>
+      <a id="open-mac" class="primary-link" href="/app">Open your board ↗</a>
+      <p>When Branch says <strong>Connected</strong>, new completed replies will appear in <strong>Context</strong>. Anyone with access to the board can read them.</p>
+    </section>
+
+    <details>
+      <summary>Stop syncing or reconnect</summary>
+      <p>Choose <strong>Stop syncing</strong> in the Mac app or <strong>Disconnect ChatGPT chats</strong> on the board. To reconnect, keep your ChatGPT conversation open and start again from the board.</p>
+    </details>
+  </main>
+  <script src="/desktop-setup.js"></script>
+  <script src="/mac-setup.js"></script>
+</body>
+</html>
