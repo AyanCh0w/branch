@@ -253,32 +253,32 @@ html[data-scroll-design=enhanced] :is(.comparison,.branching,.feature-list){padd
 }
 
 /* The footer is a small playable canvas, not a second hero. */
-.site-footer{display:block;position:relative;isolation:isolate;margin:16px 16px 0;padding:32px 32px 88px;border:1px solid #e5e8ee;border-bottom:0;border-radius:24px 24px 0 0;background:#fcfdff;color:#30343a}
+.site-footer{display:block;position:relative;isolation:isolate;margin:16px 16px 0;padding:32px 32px 88px;border:1px solid #3b3b3b;border-bottom:0;border-radius:24px 24px 0 0;background:#222222;color:#f2f2f0}
 .footer-top,.footer-bottom{display:flex;align-items:center;justify-content:space-between;gap:24px;max-width:1360px;margin:auto}
-.site-footer .brand{color:#30343a;font-size:var(--type-heading);letter-spacing:-1.4px}
+.site-footer .brand{color:#f2f2f0;font-size:var(--type-heading);letter-spacing:-1.4px}
 .footer-top nav{display:flex;gap:32px;font-size:var(--type-body)}
-.footer-top nav a{display:inline-flex;align-items:center;min-height:44px;color:#636a75}
-.footer-top nav a:hover{color:#326bff}
-.footer-playground{position:relative;height:400px;max-width:1360px;margin:24px auto;overflow:hidden;border-radius:12px;touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none;background-image:radial-gradient(circle,#c9d0dc 1px,transparent 1.2px);background-size:24px 24px;background-position:0 0}
+.footer-top nav a{display:inline-flex;align-items:center;min-height:44px;color:#c2c2c2}
+.footer-top nav a:hover{color:#ffffff}
+.footer-playground{position:relative;height:400px;max-width:1360px;margin:24px auto;overflow:hidden;border-radius:12px;touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none;background-image:radial-gradient(circle,#3c3c3c 1px,transparent 1.2px);background-size:24px 24px;background-position:0 0}
 .footer-playground canvas{display:block;position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.footer-play{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:12px;min-height:44px;padding:10px 18px;border:1px solid #e3e7ef;border-radius:24px;background:#fcfdfff0;color:#697384;font-size:var(--type-body);white-space:nowrap}
-.footer-play:hover{color:#326bff;border-color:#9cb7f5}.footer-play:active{background:#edf3ff}
-.footer-touch-hint{display:none}.footer-playground[data-engaged=true] .footer-play{color:#326bff}
-.footer-bottom{padding-top:20px;border-top:1px solid #e5e8ee;font-size:var(--type-body);color:#7a818d}
-.footer-bottom small{width:auto}.footer-cta{display:inline-flex;align-items:center;gap:16px;color:#30343a;min-height:44px}
-.footer-cta:hover{color:#326bff}.site-footer .theme-toggle{background:transparent;color:#697384;border:1px solid #e3e7ef;border-radius:24px;padding:10px 16px;min-height:44px}
-html[data-theme=dark] .site-footer{background:#16181c;color:#e7eaf0;border-color:#303540}
-html[data-theme=dark] .site-footer .brand,html[data-theme=dark] .footer-cta{color:#e7eaf0}
-html[data-theme=dark] .footer-top nav a,html[data-theme=dark] .footer-bottom{color:#a8afbd}
-html[data-theme=dark] .footer-playground{background-image:radial-gradient(circle,#444b59 1px,transparent 1.2px)}
-html[data-theme=dark] .footer-play,html[data-theme=dark] .site-footer .theme-toggle{background:#191d24ed;color:#a6bcf1;border-color:#394252}
-html[data-theme=dark] .footer-bottom{border-color:#303540}
+.footer-play{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:12px;min-height:44px;padding:10px 18px;border:1px solid #444444;border-radius:24px;background:#242424f0;color:#bcbcbc;font-size:var(--type-body);white-space:nowrap}
+.footer-play:hover{color:#ffffff;border-color:#888888}.footer-play:active{background:#383838}
+.footer-touch-hint{display:none}.footer-playground[data-engaged=true] .footer-play{color:#ffffff}
+.footer-bottom{padding-top:20px;border-top:1px solid #3b3b3b;font-size:var(--type-body);color:#aaaaaa}
+.footer-bottom small{width:auto}.footer-cta{display:inline-flex;align-items:center;gap:16px;color:#f2f2f0;min-height:44px}
+.footer-cta:hover{color:#ffffff}.site-footer .theme-toggle{background:transparent;color:#bcbcbc;border:1px solid #444444;border-radius:24px;padding:10px 16px;min-height:44px}
 @media(hover:none),(pointer:coarse),(max-width:700px){.footer-pointer-hint{display:none}.footer-touch-hint{display:inline}}
 @media(max-width:700px){
  .site-footer{margin:12px 10px 0;padding:24px 16px 86px;border-radius:20px 20px 0 0}
  .site-footer .brand{font-size:var(--type-body);letter-spacing:-.7px;gap:5px}.site-footer .brand img{width:20px;height:20px}
  .footer-top{gap:12px}.footer-top nav{gap:18px}.footer-top nav a:first-child{display:none}
  .footer-playground{height:336px;margin:18px auto}.footer-play{width:max-content;padding-inline:14px;gap:8px;max-width:calc(100% - 12px);white-space:normal;text-align:center}
- .footer-bottom{display:grid;grid-template-columns:1fr auto;gap:12px}.footer-cta{grid-column:1/-1;grid-row:1;justify-content:space-between;border-bottom:1px solid #e5e8ee;padding-bottom:12px}.footer-bottom small{grid-column:1}
+ .footer-bottom{display:grid;grid-template-columns:1fr auto;gap:12px}.footer-cta{grid-column:1/-1;grid-row:1;justify-content:space-between;border-bottom:1px solid #3b3b3b;padding-bottom:12px}.footer-bottom small{grid-column:1}
 }
 @media(prefers-contrast:more){.footer-playground{background-image:radial-gradient(circle,#747b86 1px,transparent 1.2px)}.footer-play,.footer-top nav a,.footer-bottom{color:inherit}}
+
+/* Keep the footer a contrasting charcoal canvas in either page theme. */
+html[data-theme] .site-footer{background:#222;color:#f2f2f0;border-color:#3b3b3b}
+html[data-theme] .site-footer .brand img{filter:invert(1)}
+html[data-theme] .site-footer .theme-toggle{background:transparent;color:#bcbcbc;border-color:#444}
+.site-footer a:focus-visible,.site-footer button:focus-visible{outline-color:#ddd}
