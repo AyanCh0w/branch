@@ -47,3 +47,31 @@ body.canvas-tour-open :is(.nib,[data-branch-point]).tour-highlight{opacity:1!imp
 @media(max-width:699px){#canvas-tour{width:calc(100vw - 32px);max-height:calc(100dvh - 110px)}#canvas-tour .tour-guide{width:44px;height:44px}#canvas-tour .tour-message{padding:14px}#canvas-tour h2{font-size:19px}}
 @media(prefers-reduced-motion:reduce){#canvas-tour{transition:none}}
 body.canvas-tour-open #empty-note{visibility:hidden}
+/* The opening example teaches shared visibility, planning and context first. */
+.tour-samples{width:1110px;height:650px}
+.tour-samples .tour-overview-frame{position:absolute;inset:0 auto auto 0;width:740px;height:650px;pointer-events:none}
+.tour-samples .tour-branch-frame{position:absolute;left:400px;top:0;width:710px;height:350px;pointer-events:none}
+.tour-samples svg{width:1110px;height:650px}
+.tour-samples .tour-example{width:300px;padding:20px 22px}
+.tour-samples .tour-example small{display:flex;align-items:center;gap:7px;min-height:22px;margin-bottom:12px}
+.tour-samples .tour-example strong{font-size:20px}
+.tour-samples .tour-example p{font-size:15px;margin-top:10px}
+.tour-samples .tour-example ul{padding-left:18px;margin:12px 0 0;font-size:14px;line-height:1.85;color:var(--theme-muted,#727985)}
+.tour-samples [data-tour-example=brief]{left:0;top:120px}
+.tour-samples [data-tour-example=design]{left:410px;top:0}
+.tour-samples [data-tour-example=data]{left:410px;top:220px}
+.tour-samples [data-tour-example=you]{left:410px;top:440px}
+.tour-samples [data-tour-example=plan]{left:0;top:400px}
+.tour-samples [data-tour-example=branch]{left:800px;top:120px}
+.tour-samples .tour-example .tour-prompt{background:var(--theme-control,#f1f3f6);padding:9px 11px;border-radius:11px;font-size:14px;line-height:1.4;color:var(--theme-ink,#363a42)}
+.tour-person{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;font:11px/1 BDO,Arial,sans-serif;color:#3d4658;background:#e8eef9}
+.tour-person.coral{background:#f6e9e3}.tour-person.green{background:#e7efe6}
+.tour-example-input{position:absolute;width:8px;height:24px;background:#6685cf;border-radius:10px;left:-18px;top:78px}
+.tour-samples .tour-example,.tour-samples svg{transition:opacity 250ms ease}
+.tour-samples[data-scene=brief] :is(.tour-thread,[data-tour-example=plan],svg),.tour-samples:not([data-scene=branch]) :is([data-tour-example=branch],.tour-branch-wire){opacity:0;visibility:hidden}
+.tour-samples[data-scene=team]{visibility:hidden}
+@media(prefers-reduced-motion:reduce){.tour-samples .tour-example,.tour-samples svg{transition:none}}
+.tour-samples .tour-thread{padding:16px 18px}
+.tour-samples .tour-thread small{margin-bottom:8px}
+.tour-samples .tour-thread strong{font-size:18px}
+.tour-samples .tour-thread p{font-size:14px;line-height:1.45;margin-top:8px}

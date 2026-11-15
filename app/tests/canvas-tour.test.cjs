@@ -10,15 +10,19 @@ test('tour cleans up examples, highlights and restores the exact starting camera
  const start={x:123,y:-67,z:.65};let view={...start};w.BranchHost={captureView:()=>({...view}),setView:v=>{view={...v};}};
  w.requestAnimationFrame=()=>1;w.cancelAnimationFrame=()=>{};
  d.body.insertAdjacentHTML('beforeend','<main id="board"><div id="world"><div id="cards"></div></div></main><button data-dock="agent"></button>');
- tour.start({userId:'one'});assert.ok(d.querySelector('[data-dock=agent]').classList.contains('tour-highlight'));
+ tour.start({userId:'one'});assert.ok(d.querySelector('[data-tour-example=brief]').classList.contains('tour-highlight'));assert.equal(d.querySelector('.tour-samples').dataset.scene,'brief');
  click('next');click('next');assert.equal(d.querySelectorAll('.tour-samples').length,1);assert.equal(d.querySelector('#cards').children.length,0);
  view={x:500,y:800,z:1.18};click('skip');assert.deepEqual(view,start);assert.equal(d.querySelectorAll('.tour-samples,.tour-highlight').length,0);
  }finally{dom.window.close();}
 });
-test('branch tour uses a real card when one already has a branching control',()=>{
+test('the story starts on a brief and reveals team threads without modifying existing cards',()=>{
  const {dom,d,tour,click}=boot();try{
- d.body.insertAdjacentHTML('beforeend','<div id="world"><div id="cards"><article class="card"><span class="nib"></span></article></div></div>');
- tour.start({userId:'one'});click('next');click('next');assert.equal(d.querySelectorAll('.tour-samples').length,0);assert.ok(d.querySelector('.nib').classList.contains('tour-highlight'));
- tour.dismiss();assert.equal(d.querySelectorAll('#cards .card').length,1);assert.equal(d.querySelectorAll('.tour-highlight').length,0);
+ d.body.insertAdjacentHTML('beforeend','<div id="world"><div id="cards"><article class="card"><span class="nib"></span><p>Existing work</p></article></div></div>');
+ const original=d.querySelector('#cards').innerHTML;
+ tour.start({userId:'one'});assert.equal(d.querySelector('.tour-samples').dataset.scene,'brief');assert.equal(d.querySelector('#canvas-tour-title').textContent,'Start with one shared node.');
+ assert.equal(d.querySelectorAll('.tour-thread').length,3);click('next');assert.equal(d.querySelector('.tour-samples').dataset.scene,'overview');assert.match(d.querySelector('#canvas-tour-copy').textContent,/Everyone’s threads/);
+ click('next');assert.ok(d.querySelector('[data-tour-example=brief] .tour-example-nib').classList.contains('tour-highlight'));
+ click('next');assert.ok(d.querySelector('[data-tour-example=plan]').classList.contains('tour-highlight'));
+ tour.dismiss();assert.equal(d.querySelector('#cards').innerHTML,original);assert.equal(d.querySelectorAll('.tour-samples,.tour-highlight').length,0);
  }finally{dom.window.close();}
 });
