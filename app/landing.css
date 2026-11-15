@@ -211,3 +211,7 @@ html[data-scroll-design=enhanced] :is(.comparison,.branching,.feature-list){padd
   .closing{padding-block:40px}
 }
 @media(max-width:540px){.flow-demo .flow-controls,.flow-demo .flow-composer{display:none!important}}
+
+/* Desktop has room for the fuller explanation; the hero stays identical. */
+.mobile-copy{display:none}
+@media(max-width:540px){.desktop-copy{display:none}.mobile-copy{display:contents}}
