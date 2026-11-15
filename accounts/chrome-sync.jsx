@@ -54,7 +54,7 @@ export function ConnectChatGPTSync({ request, desktop = false }) {
   return <main className="a-link-landing a-chatgpt-consent">
     <h1>{desktop ? 'Connect ChatGPT on Mac' : 'Sync this ChatGPT conversation'}</h1>
     <p>New replies will save to the board you choose. Anyone with access to that board can read them.</p>
-    {completed ? <><p role="status">Board approved. Return to Branch for Mac and wait for “Syncing,” then send a new message in ChatGPT.</p>
+    {completed ? <><p role="status">Board approved. Return to Branch for Mac and wait until the app shows it is connected and syncing, then send a new message in ChatGPT.</p>
       <p><a className="a-primary" href={appURL()}>Return to Branch for Mac ↗</a></p><a href={'/app?board='+encodeURIComponent(selected?.id || '')}>Open this board ↗</a></> : valid ? <form onSubmit={async event => {
       event.preventDefault();
       if (busy || !selected) return;

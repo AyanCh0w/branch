@@ -124,33 +124,35 @@ final class BranchConversationPicker: NSPopUpButton {
     }
 }
 
-/// Shows where replies will go before the board has been chosen.
+/// Shows whether Branch is waiting or has started syncing.
 @MainActor
-final class BranchSyncRoute: NSView {
-    override var intrinsicContentSize: NSSize { NSSize(width: 220, height: 44) }
+final class BranchSyncStatus: NSView {
+    private var caption = ""
+    private var connected = false
+    private var pending = false
+
+    override var intrinsicContentSize: NSSize { NSSize(width: 220, height: 38) }
+
+    func show(_ caption: String, connected: Bool, pending: Bool) {
+        guard self.caption != caption || self.connected != connected || self.pending != pending else { return }
+        self.caption = caption
+        self.connected = connected
+        self.pending = pending
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
+        setAccessibilityValue(caption)
+        needsDisplay = true
+        if window?.isVisible == true { NSAccessibility.post(element: self, notification: .valueChanged) }
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         BranchSyncTheme.surface(bounds, fill: BranchSyncTheme.canvas)
-        let source = BranchSyncTheme.chromeText("ChatGPT", size: 12, color: BranchSyncTheme.ink, strong: true)
-        let target = BranchSyncTheme.chromeText("Board Context", size: 12, color: BranchSyncTheme.ink, strong: true)
-        let sourceX: CGFloat = 16
-        let targetX = bounds.width - target.size().width - 16
-        source.draw(at: NSPoint(x: sourceX, y: (bounds.height - source.size().height) / 2))
-        target.draw(at: NSPoint(x: targetX, y: (bounds.height - target.size().height) / 2))
-
-        let start = sourceX + source.size().width + 16
-        let end = targetX - 16
-        let y = bounds.midY
-        let wire = NSBezierPath()
-        wire.move(to: NSPoint(x: start, y: y))
-        wire.line(to: NSPoint(x: end - 7, y: y))
-        wire.setLineDash([3, 3], count: 2, phase: 0)
-        BranchSyncTheme.blue.setStroke()
-        wire.stroke()
-        let arrow = NSBezierPath()
-        arrow.move(to: NSPoint(x: end - 4, y: y + 3))
-        arrow.line(to: NSPoint(x: end, y: y))
-        arrow.line(to: NSPoint(x: end - 4, y: y - 3))
-        arrow.stroke()
+        let active = NSColor(srgbRed: 0.12, green: 0.45, blue: 0.29, alpha: 1)
+        let indicator = connected ? active : pending ? BranchSyncTheme.blue : BranchSyncTheme.muted
+        indicator.setFill()
+        NSBezierPath(ovalIn: NSRect(x: 14, y: bounds.midY - 4, width: 8, height: 8)).fill()
+        let text = BranchSyncTheme.chromeText(caption, size: 13, color: BranchSyncTheme.ink, strong: true)
+        text.draw(in: NSRect(x: 30, y: bounds.midY - text.size().height / 2,
+                             width: bounds.width - 44, height: ceil(text.size().height)))
     }
 }
