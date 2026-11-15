@@ -1,6 +1,6 @@
-const branch = 'http://localhost:4390';
+const branch = 'https://joinbranch.dev';
 const callback = chrome.identity.getRedirectURL('branch');
-const storageKey = chat => 'supabase:' + chat;
+const storageKey = chat => branch + ':' + chat;
 const disconnected = 'chrome_sync_disconnected';
 const updates = new Map();
 const connections = new Map();
@@ -41,7 +41,7 @@ async function connect(chat) {
   try {
     result = await chrome.identity.launchWebAuthFlow({ url: start.href, interactive: true });
   } catch {
-    throw Error('Could not open Branch. Make sure the local app is running, then try again.');
+    throw Error('Could not open Branch. Sign in at joinbranch.dev, then try again.');
   }
   const redirect = result && new URL(result);
   const fields = new URLSearchParams(redirect?.hash.slice(1));
@@ -68,7 +68,7 @@ async function callBranch(config, name, args = {}) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...args, key: config.key }),
     signal: AbortSignal.timeout(8000), credentials: 'omit', redirect: 'error',
-  }).catch(() => { throw Error('Could not reach Branch. Check that it is running.'); });
+  }).catch(() => { throw Error('Could not reach Branch. Check your internet connection.'); });
   const body = await response.json();
   if (response.ok) return body.value;
   if (response.status === 401 && body.error === disconnected) throw Error(disconnected);
@@ -108,7 +108,7 @@ async function status(chat, config) {
     return view({ ...config, ...await callBranch(config, 'status') });
   } catch (error) {
     if (error.message === disconnected) return forgetRevoked(chat, config);
-    return { ...view(config), notice: 'Could not check the connection. Make sure Branch is running.' };
+    return { ...view(config), notice: 'Could not check the connection. Check your internet connection.' };
   }
 }
 

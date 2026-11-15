@@ -33,6 +33,7 @@ async function main() {
     try {
       await db.query('select id from branch_private.runtime_lock where id=1 for update');
       await db.query("delete from branch_private.jobs where args->>'runId' in (select id from branch_private.records where collection='runs' and data->>'boardId'=any($1::text[]))", [boardIds]);
+      await db.query("delete from branch_private.records where collection='chatgptUpdates' and data->>'threadId' in (select id from branch_private.records where collection='chatgptThreads' and data->>'boardId'=any($1::text[]))", [boardIds]);
       await db.query('delete from branch_private.accounts where auth_id=any($1::uuid[])', [authIds]);
       await db.query('delete from public.branch_revisions where user_id=any($1::uuid[])', [authIds]);
       await db.query("delete from branch_private.records where id=any($1::text[]) or data->>'boardId'=any($2::text[]) or data->>'userId'=any($3::text[])", [[...boardIds, ...userIds, ...fixture.storagePaths.map(p => p.split('/').at(-1))], boardIds, userIds]);

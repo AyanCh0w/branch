@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Branch ChatGPT Sync",
-  "version": "0.2.0",
-  "description": "Save completed replies from selected ChatGPT conversations to your local Branch boards.",
+  "version": "0.3.0",
+  "description": "Save completed replies from selected ChatGPT conversations to your Branch boards.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv1wMwNfvGpU9BmjBdqOLNPzPDp+LDex/Mz3u/Wa9LV6IblvH7l4ajXKLVDs4rZV6Q5zMtC14lKq82ry6nWARN3w0D2XAUbdBOsS/TCwsPomwxSIierXlGtr6pZ7WIK0UbKMqCBUGyHQCx96WfAzXFsf8wd9lNQFX8EmNDg2sdhK0XAvf6WwZf/xFfmGJPi+SUl7WrLoTAGnBwMHi9EBZrN3qpi0ijD2oqhIdf7fW4fYh4aYWAOjVRPo23TPDMCla3F+7cmg7Q+74qG1Y+Uv/GLywcSXQYicMjFZ66KcWGseezfOa9+2JK8ikzpyX12UqV/aIzSmunrlYaSgrFKuHSwIDAQAB",
   "permissions": ["identity", "storage"],
-  "host_permissions": ["http://localhost/*"],
+  "host_permissions": ["https://joinbranch.dev/*"],
   "background": { "service_worker": "worker.js", "type": "module" },
   "content_scripts": [{
     "matches": ["https://chatgpt.com/*"],

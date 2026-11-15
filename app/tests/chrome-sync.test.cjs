@@ -89,7 +89,7 @@ test('extension worker keeps the write key private and routes saves only from th
         getRedirectURL: () => callback,
         launchWebAuthFlow: async ({ url }) => {
           const start = new URL(url);
-          assert.equal(start.origin, 'http://localhost:4390');
+          assert.equal(start.origin, 'https://joinbranch.dev');
           const state = new URLSearchParams(start.hash.slice(1)).get('state');
           return callback + '#' + new URLSearchParams({ state, key, board: boardId, title: 'Target',  });
         },
@@ -103,7 +103,7 @@ test('extension worker keeps the write key private and routes saves only from th
       runtime: { onMessage: { addListener: listener => { handle = listener; } } },
     },
     fetch: async (url, { body }) => {
-      assert.match(url, /^http:\/\/localhost:4390\/api\/backend\?chrome=(save|stop)$/);
+      assert.match(url, /^https:\/\/joinbranch\.dev\/api\/backend\?chrome=(save|stop)$/);
       const request = JSON.parse(body);
       writes.push({ url, request });
       return { ok: true, json: async () => ({ value: { cardId: 'saved-card', boardTitle: 'Target' } }) };

@@ -1,8 +1,8 @@
 # ChatGPT sync on Mac
 
-Branch for Mac sends new replies from one selected ChatGPT desktop conversation to one local Branch board. Updates appear on a conversation card in **Context**. The app reads the selected chat through macOS Accessibility and sends plain text replies after it sees streaming finish. The sync window shares Branch’s mark and BDO Grotesk type with the web app.
+Branch for Mac sends new replies from one selected ChatGPT desktop conversation to one Branch board on joinbranch.dev. Updates appear on a conversation card in **Context**. The app reads the selected chat through macOS Accessibility and sends plain text replies after it sees streaming finish. The sync window shares Branch’s mark and BDO Grotesk type with the web app.
 
-Build locally with Swift 6.2 or later and an Apple Development signing identity in your Keychain. List available identities with `security find-identity -v -p codesigning`. Configure the certificate name or fingerprint once per checkout.
+Build locally with Swift 6.1 or later and an Apple Development signing identity in your Keychain. List available identities with `security find-identity -v -p codesigning`. Configure the certificate name or fingerprint once per checkout.
 
 ```sh
 git config --local branch.desktopSigningIdentity '<Apple Development identity>'
@@ -14,7 +14,7 @@ open 'build/Branch for Mac.app'
 
 Keep using the same signing identity across builds so macOS can recognize updates. `BRANCH_CODESIGN_IDENTITY` overrides the checkout setting. Without an identity, the script builds the separate ad hoc **Branch Desktop Probe** for diagnostics. Use one consistent Developer ID Application identity and notarize the signed app before distributing it to users.
 
-1. Run Branch with local Supabase on `http://localhost:4390/app`. Sign in and create a board with edit access. Follow the [local setup guide](../supabase/README.md#isolated-chatgpt-sync-development).
+1. Open https://joinbranch.dev/app. Sign in and create a board with edit access. No local web server is needed.
 2. Open the ChatGPT conversation you want to sync, then open **Branch → ChatGPT Sync**. On first use, click **Allow Accessibility…** and approve **Branch for Mac** in the macOS prompt to load the window list. On later uses, click **Find ChatGPT windows**. Branch preselects the conversation when it finds one window. Confirm the selection with **Connect chat**.
 3. If Branch needs a test reply to verify the conversation, click **Copy pairing prompt** and send it in that chat. When Branch opens the board picker, select a board and approve it.
 4. Wait for **Syncing** before sending another message. After the first save, **Open in Branch** opens the saved replies. Use **Stop syncing** from the app or **Disconnect ChatGPT chats** on the board to revoke access.

@@ -23,7 +23,7 @@
      <button type="button" data-tour="provider" data-provider="claude" aria-pressed="false">Claude Code</button>
     </div>
     <div class="tour-provider-panel" data-tour-panel="chatgpt">
-     <p>For a local board, open Branch for Mac, approve Accessibility once, then choose your ChatGPT conversation. Use the baseline prompt with Desktop Sync Probe if you need to check what Branch can read.</p>
+     <p>Open Branch for Mac, approve Accessibility once, then choose your ChatGPT conversation. Use the baseline prompt with Desktop Sync Probe if you need to check what Branch can read.</p>
      <textarea readonly rows="3" aria-label="Baseline prompt"></textarea>
      <button type="button" class="tour-action" data-tour="copy-baseline">Copy baseline prompt</button>
      <button type="button" data-tour="chrome" hidden>Set up Chrome sync</button>

@@ -218,7 +218,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
             do { try await sync(windowIndex: index) }
             catch is CancellationError { return }
             catch DesktopSyncClient.Failure.disconnected { finish("The board disconnected. Pair again to resume.") }
-            catch DesktopSyncClient.Failure.temporary { finish("Couldn’t reach local Branch. Check that it is running on port 4390.") }
+            catch DesktopSyncClient.Failure.temporary { finish("Couldn’t reach Branch. Check your internet connection and try again.") }
             catch { finish("Branch could not approve this chat. Start a new pairing and try again.") }
         }
         updateControls()

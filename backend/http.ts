@@ -2,7 +2,7 @@ import {engine,configured,publicConfig,requestClient,authenticate,upload,rateLim
 import {encode,decode} from './codec';
 import {createHash} from 'node:crypto';
 import {codingRequest} from './coding-http';
-import {isChromeSyncOrigin} from '../collaboration/chrome-sync.cjs';
+import {isChromeSyncOrigin,validSyncClient,EXTENSION_ORIGIN} from '../collaboration/chrome-sync.cjs';
 export async function route(req:any,res:any,url:URL){
  const json=(status:number,data:any)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store','Referrer-Policy':'no-referrer'});res.end(JSON.stringify(encode(data)));};
  if(!configured())return json(503,{error:'Supabase is not configured yet.'});
@@ -24,13 +24,15 @@ export async function route(req:any,res:any,url:URL){
  }
  if (url.searchParams.has('chrome') || url.searchParams.has('desktop')) {
   const desktop = url.searchParams.has('desktop');
-  const extensionOrigin = 'chrome-extension://lgbhkehiipjkjhpdkkmakodccahllneh';
-  const loopback = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket?.remoteAddress);
-  const invalidClient = desktop
-   ? url.searchParams.has('chrome') || !loopback || req.headers.origin !== undefined || req.headers['sec-fetch-site'] !== undefined
-   : !!req.headers.origin && req.headers.origin !== extensionOrigin;
-  if (!isChromeSyncOrigin(url.origin) || invalidClient) {
+  if ((desktop && url.searchParams.has('chrome')) || !validSyncClient(url.origin,req.headers,req.socket?.remoteAddress,desktop)) {
    return json(403, { error: 'Invalid origin' });
+  }
+  if(!desktop&&req.headers.origin===EXTENSION_ORIGIN){
+   res.setHeader('Access-Control-Allow-Origin',EXTENSION_ORIGIN);res.setHeader('Vary','Origin');
+   if(req.method==='OPTIONS'){
+    if(req.headers['access-control-request-method']!=='POST'||String(req.headers['access-control-request-headers']||'').split(',').some((h:string)=>h.trim()&&h.trim().toLowerCase()!=='content-type'))return json(403,{error:'Invalid preflight'});
+    res.setHeader('Access-Control-Allow-Methods','POST');res.setHeader('Access-Control-Allow-Headers','Content-Type');res.writeHead(204);return res.end();
+   }
   }
   if (req.method !== 'POST') return json(405, { error: 'Method not allowed' });
   if (!req.headers['content-type']?.startsWith('application/json')) return json(415, { error: 'JSON required' });
@@ -63,7 +65,7 @@ export async function route(req:any,res:any,url:URL){
   const {kind,name,args={}}=body;
   if(!['query','mutation','action'].includes(kind)||typeof name!=='string')return json(400,{error:'Invalid operation'});
   await rateLimit('rpc:'+createHash('sha256').update(ip).digest('hex'),4000,60);
-  if (name.startsWith('chatgptBrowser:') && !isChromeSyncOrigin(url.origin)) return json(403, { error: 'ChatGPT sync requires local Branch.' });
+  if (name.startsWith('chatgptBrowser:') && !isChromeSyncOrigin(url.origin)) return json(403, { error: 'ChatGPT sync is unavailable on this origin.' });
   const result=await requestClient(req)[kind](name,args);return json(200,{value:result});
  }catch(error:any){
   // Log only stack locations; never SQL, arguments, tokens, or error messages.

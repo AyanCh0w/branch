@@ -45,12 +45,13 @@ actor ChatWindows {
     func list() -> [String] {
         guard AXIsProcessTrusted() else { return [] }
         let bundleIDs = ["com.openai.codex", "com.openai.chat"]
-        choices = bundleIDs.flatMap { bundleID in
-            NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).flatMap { application in
+        choices = []
+        for bundleID in bundleIDs {
+            for application in NSRunningApplication.runningApplications(withBundleIdentifier: bundleID) {
                 let app = AXUIElementCreateApplication(application.processIdentifier)
                 AXUIElementSetMessagingTimeout(app, 0.15)
-                return windows(of: app).map { element in
-                    Window(app: app, element: element, title: title(of: element))
+                for element in windows(of: app) {
+                    choices.append(Window(app: app, element: element, title: title(of: element)))
                 }
             }
         }

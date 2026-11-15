@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-/// One session key and the local endpoints used to approve and write to its board.
+/// One session key and the hosted endpoints used to approve and write to its board.
 struct DesktopSyncClient: Sendable {
     struct Board: Decodable, Sendable {
         let boardId: String
@@ -26,7 +26,7 @@ struct DesktopSyncClient: Sendable {
     private struct Response<Value: Decodable>: Decodable { let value: Value }
     private struct Acknowledgment: Decodable {}
 
-    // A local service must never be able to redirect an upload to a different origin.
+    // Never follow a redirect that could send the capability or reply to another origin.
     private final class RejectRedirects: NSObject, URLSessionTaskDelegate, Sendable {
         func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                         newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
@@ -34,7 +34,7 @@ struct DesktopSyncClient: Sendable {
         }
     }
 
-    static let origin = URL(string: "http://localhost:4390")!
+    static let origin = URL(string: "https://joinbranch.dev")!
     private static let session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpShouldSetCookies = false
