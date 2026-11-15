@@ -7,7 +7,7 @@
   const ctx = canvas.getContext('2d');
   if (!ctx) { button.hidden = true; return; }
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-  const step = 32, hold = 500, removalInterval = 50;
+  const step = 32, hold = 500, removalInterval = 50, transition = 140;
   const footer = host.closest('.site-footer');
   const toneToggle = document.querySelector('[data-footer-tone-toggle]');
   function setTone(tone) {
@@ -24,14 +24,16 @@
   let lastRemoval = 0;
   let width = 1, height = 1, frame = 0, visible = true, previous = null, touchStart = null;
   let nodes = new Map(), edges = [];
-  const snap = n => Math.round((n - 16) / step) * step + 16;
+  // Background dots sit at 16 + 32n; active points occupy the gaps between them.
+  const snap = n => Math.round(n / step) * step;
   const key = p => `${p.x}:${p.y}`;
   const point = (x, y) => ({x: snap(x), y: snap(y)});
   function stop() { cancelAnimationFrame(frame); frame = 0; }
   function clear() { stop(); nodes.clear(); edges = []; previous = null; touchStart = null; host.dataset.engaged='false'; lastRemoval = 0; ctx.clearRect(0,0,width,height); }
   function add(p, time) {
     if (p.x < 0 || p.y < 0 || p.x > width || p.y > height - 68) return false;
-    nodes.delete(key(p)); nodes.set(key(p), {...p, time});
+    const existing = nodes.get(key(p));
+    nodes.delete(key(p)); nodes.set(key(p), {...p, time, born: existing?.born ?? time});
     while (nodes.size > 160) nodes.delete(nodes.keys().next().value);
     return true;
   }
@@ -45,23 +47,39 @@
     if (!visible || document.hidden) return;
     ctx.clearRect(0,0,width,height);
     const color = footer?.dataset.footerTone === 'dark' ? '126,165,230' : '70,111,181';
-    // A short hold, then ordered retraction from the oldest point. No blanket fade.
+    // Retract in order, but let each point settle and shrink instead of popping.
     if (!reduced.matches) {
       for (const [id,p] of nodes) {
-        const due = Math.max(p.time + hold, lastRemoval + removalInterval);
-        if (time < due) break;
-        nodes.delete(id); lastRemoval = due;
+        if (p.retire === undefined) {
+          const due = Math.max(p.time + hold, lastRemoval + removalInterval);
+          if (time < due) break;
+          p.retire = due; lastRemoval = due;
+        }
+        if (time >= p.retire + transition) nodes.delete(id);
       }
     }
+    const ease = t => 1 - Math.pow(1 - Math.max(0, Math.min(1,t)),3);
+    const scale = p => reduced.matches ? 1 : ease((time-p.born)/transition) *
+      (p.retire === undefined ? 1 : 1-ease((time-p.retire)/transition));
     edges = edges.filter(edge=>nodes.has(key(edge.a)) && nodes.has(key(edge.b)));
-    for (const edge of edges) {
-      ctx.strokeStyle=`rgba(${color},${.58})`; ctx.lineWidth=1; ctx.lineCap='round';
-      ctx.beginPath();ctx.moveTo(edge.a.x,edge.a.y);ctx.lineTo(edge.b.x,edge.b.y);ctx.stroke();
+    for (let i=0;i<edges.length;i++) {
+      const edge=edges[i];
+      const strength = Math.min(scale(nodes.get(key(edge.a))),scale(nodes.get(key(edge.b))));
+      ctx.strokeStyle=`rgba(${color},${.58*strength})`; ctx.lineWidth=1.5; ctx.lineCap='round';
+      // Shared tangents carry the curve through points without rigid elbows.
+      const before=edges[i-1],after=edges[i+1];
+      const start=before && key(before.b)===key(edge.a) ? before.a : edge.a;
+      const end=after && key(after.a)===key(edge.b) ? after.b : edge.b;
+      ctx.beginPath();ctx.moveTo(edge.a.x,edge.a.y);
+      ctx.bezierCurveTo(
+        edge.a.x+(edge.b.x-start.x)/6,edge.a.y+(edge.b.y-start.y)/6,
+        edge.b.x-(end.x-edge.a.x)/6,edge.b.y-(end.y-edge.a.y)/6,
+        edge.b.x,edge.b.y);ctx.stroke();
     }
-    for (const [id,p] of nodes) {
-      const radius=12;
-      ctx.fillStyle=`rgba(${color},${.95})`;
-      ctx.beginPath();ctx.arc(p.x,p.y,radius,0,Math.PI*2);ctx.fill();
+    for (const p of nodes.values()) {
+      const size=scale(p);
+      ctx.fillStyle=`rgba(${color},${.95*size})`;
+      ctx.beginPath();ctx.arc(p.x,p.y,12*size,0,Math.PI*2);ctx.fill();
     }
     if(nodes.size && !reduced.matches) frame=requestAnimationFrame(paint);
     else if(!nodes.size) host.dataset.engaged='false';
@@ -82,7 +100,7 @@
     for(const [dx,dy] of [[-2,-2],[2,-1],[1,2]]) {
       const elbow=point(center.x+dx*step,center.y);
       const tip=point(elbow.x,center.y+dy*step);
-      connect(center,elbow,now);connect(elbow,tip,now);
+      connect(center,tip,now);
     }
     wake();
   }
@@ -108,9 +126,6 @@
       let from=previous;
       for(let i=1;i<=count;i++) {
         const next=point(previous.x+(p.x-previous.x)*i/count,previous.y+(p.y-previous.y)*i/count);
-        if(from.x!==next.x && from.y!==next.y) {
-          const corner={x:next.x,y:from.y};connect(from,corner,now);from=corner;
-        }
         connect(from,next,now);from=next;
       }
     } else add(p,now);

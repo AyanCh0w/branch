@@ -21,14 +21,14 @@ test('hover draws connected grid points and the animation sleeps after retractio
  const b=boot();try{
  assert.equal(b.frames.size,0);
  b.pointer('pointermove',36,60);b.pointer('pointermove',180,84);b.tick(b.w.performance.now());
- assert.ok(b.draws.some(d=>d.key==='lineTo'));assert.ok(b.draws.some(d=>d.key==='arc'));assert.equal(b.frames.size,1);
+ assert.ok(b.draws.some(d=>d.key==='bezierCurveTo'));assert.ok(b.draws.some(d=>d.key==='arc'));assert.equal(b.frames.size,1);
  b.tick(b.w.performance.now()+2200);assert.equal(b.frames.size,0);assert.equal(b.host.dataset.engaged,'false');
  }finally{b.dom.window.close();}
 });
 test('touch taps create a branch while scrolling and cancellation do not draw',()=>{
  const b=boot();try{
  const down=b.pointer('pointerdown',180,130,'touch');assert.equal(down.defaultPrevented,false);assert.equal(b.frames.size,0);b.pointer('pointerup',180,130,'touch');b.tick(b.w.performance.now());
- assert.ok(b.draws.filter(d=>d.key==='lineTo').length>=6);
+ assert.ok(b.draws.filter(d=>d.key==='bezierCurveTo').length>=3);
  b.pointer('pointercancel',180,130,'touch');b.tick(b.w.performance.now()+2200);
  b.pointer('pointermove',260,200,'touch');assert.equal(b.frames.size,0);
  b.pointer('pointerdown',180,130,'touch');b.pointer('pointermove',180,190,'touch');b.pointer('pointerup',180,190,'touch');assert.equal(b.frames.size,0);
@@ -46,10 +46,10 @@ test('trail holds briefly and retracts oldest points in sequence',()=>{
  b.pointer('pointermove',48,80);b.pointer('pointermove',176,80);
  const start=b.w.performance.now();
  function points(time){b.draws.length=0;b.tick(time);return b.draws.filter(d=>d.key==='arc').map(d=>d.args[0]);}
- assert.deepEqual(points(start),[48,80,112,144,176]);
- assert.deepEqual(points(start+400),[48,80,112,144,176]);
- assert.deepEqual(points(start+520),[80,112,144,176]);
- assert.deepEqual(points(start+570),[112,144,176]);
+ assert.deepEqual(points(start),[64,96,128,160,192]);
+ assert.deepEqual(points(start+400),[64,96,128,160,192]);
+ assert.deepEqual(points(start+650),[96,128,160,192]);
+ assert.deepEqual(points(start+700),[128,160,192]);
  }finally{b.dom.window.close();}
 });
 test('footer tone defaults dark and toggles independently with a saved preference',()=>{
@@ -58,5 +58,16 @@ test('footer tone defaults dark and toggles independently with a saved preferenc
  assert.equal(footer.dataset.footerTone,'dark');assert.equal(toggle.getAttribute('aria-pressed'),'true');
  toggle.click();assert.equal(footer.dataset.footerTone,'light');assert.equal(b.w.localStorage.getItem('branch-footer-tone'),'light');
  toggle.click();assert.equal(footer.dataset.footerTone,'dark');assert.equal(b.w.document.documentElement.dataset.theme,undefined);
+ }finally{b.dom.window.close();}
+});
+
+test('points sit between background dots and smoothly grow before retracting',()=>{
+ const b=boot();try{
+ b.pointer('pointermove',61,63); const start=b.w.performance.now();
+ function radius(time){b.draws.length=0;b.tick(time);return b.draws.find(d=>d.key==='arc').args;}
+ const first=radius(start),settled=radius(start+180),retiring=radius(start+540);
+ assert.equal(first[0]%32,0);assert.equal(first[1]%32,0);
+ assert.ok(first[2]<settled[2]);assert.equal(settled[2],12);
+ assert.ok(retiring[2]>0 && retiring[2]<12);
  }finally{b.dom.window.close();}
 });
