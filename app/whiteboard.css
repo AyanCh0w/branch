@@ -11,15 +11,12 @@
 #selection-marquee { position: fixed; pointer-events: none; border: 1px solid #568be6; border-radius: 5px; background: #4b89f012; z-index: 19; }
 #cards .card.board-selected { outline: 1.5px solid #739ee5; outline-offset: 5px; }
 #cards .card.board-selected:has([contenteditable]:focus,textarea:focus) { outline: none; }
-#empty-note { position: fixed; top: 44%; left: 50%; transform: translate(-50%,-50%); width: min(460px,calc(100vw - 40px)); text-align: center; padding: 24px; color: var(--theme-ink,#252931); z-index: 2; }
-#empty-note h1 { font-size: 24px; line-height: 1.2; letter-spacing: -.6px; font-weight: 500; margin: 0 0 12px; }
-#empty-note p { margin: 0 auto 24px; font-size: 14px; line-height: 1.65; color: var(--theme-muted,#727780); max-width: 350px; }
-.empty-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
-.empty-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 11px 15px; background: var(--theme-surface,#fff); border: 1px solid var(--theme-line,#e3e5e8); border-radius: 9px; color: var(--theme-ink,#252931); font-size: 13px; box-shadow: 0 2px 4px #20202005; }
-.empty-actions button:first-child { background: var(--theme-control,#292c30); color: var(--theme-on-dark,#fff); }
-#empty-note .icon { width: 18px; height: 18px; }
-#empty-note small { display: block; margin-top: 20px; font-size: 12px; line-height: 1.6; color: var(--theme-muted,#727780); }
-.empty-actions button:active { transform: translateY(1px); }
+#empty-note { position: fixed; top: 44%; left: 50%; transform: translate(-50%,-50%); display: flex; align-items: center; gap: 12px; padding: 16px 19px; background: var(--theme-surface, #fff); border: 1px solid var(--theme-line, #e3e5e8); border-radius: 12px; box-shadow: 0 2px 4px #20202005; color: var(--theme-muted, #727780); font-size: 14px; z-index: 2; }
+#empty-note .icon { width: 20px; height: 20px; }
+#empty-note kbd { font: inherit; font-size: 10px; color: var(--theme-muted, #969ba3); border: 1px solid var(--theme-line, #e5e7ea); border-radius: 4px; padding: 2px 5px; }
+@media (hover:hover) and (pointer:fine) {
+ #empty-note:hover { background: var(--theme-raised, #f0f2f5); }
+}
 body:not(.account-mode) #fit { display: inline-flex; align-items: center; gap: 6px; width: auto; padding: 6px 9px; font-size: 12px; }
 @media(min-width:900px) { #creation-dock button[data-dock=plan],#creation-dock button[data-dock=thread] { width: auto; display: flex; gap: 7px; padding: 0 12px; font-size: 12px; } }
 .dock-label { display: none; }

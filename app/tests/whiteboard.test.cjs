@@ -22,8 +22,8 @@ test('notes are the default creation action and use a single plaintext editor wi
  try{
   assert.equal(d.querySelector('[data-create]').dataset.create,'plan');assert.equal(d.querySelector('[data-dock]').dataset.dock,'plan');
   assert.deepEqual(Array.from(d.querySelectorAll('[data-dock]'),el=>el.dataset.dock),['plan','image','file','website','github','video','search','thread','agent']);
-  assert.equal(d.querySelector('#empty-note').hidden,false);d.querySelector('[data-start=brief]').click();
-  const n=w.BranchHost.getState().nodes[0];assert.equal(n.type,'plan');assert.equal(n.title,'Project brief');assert.match(n.body,/Next steps & owners/);assert.equal(d.activeElement.getAttribute('aria-label'),'Note text');
+  assert.equal(d.querySelector('#empty-note').hidden,false);d.querySelector('#empty-note').click();
+  const n=w.BranchHost.getState().nodes[0];assert.equal(n.type,'plan');assert.equal(n.body,'');assert.equal(d.activeElement.getAttribute('aria-label'),'Note text');
   assert.equal(d.querySelector('.plan-body').getAttribute('contenteditable'),'plaintext-only');
   assert.equal(d.querySelector('.plain-note .composer,.plain-note .card-footer,.plain-note .node-controls,.plain-note .note-preview-toggle'),null);
   assert.equal(d.querySelector('#empty-note').hidden,true);
@@ -103,19 +103,19 @@ test('remote deletion prunes local selection and never resurrects a removed node
  try{selectAll(w);w.BranchHost.receive({title:'Test',nodes:[note('b',500,200)]});assert.equal(d.querySelectorAll('.board-selected').length,1);key(w,'d',{ctrlKey:true});assert.equal(w.BranchHost.getState().nodes.length,2);assert.equal(w.BranchHost.getState().nodes.some(n=>n.id==='a'),false);}finally{w.dispatchEvent(new w.Event('pagehide'));w.close();}
 });
 
-test('empty-board actions create an editable chat, preserve undo, and cannot mutate view-only boards',()=>{
+test('empty-note action preserves undo and cannot mutate view-only boards',()=>{
  const dom=boot(),w=dom.window,d=w.document;
  try {
-  d.querySelector('[data-start=chat]').click();
+  d.querySelector('#empty-note').click();
   assert.equal(w.BranchHost.getState().nodes.length,1);
-  assert.equal(w.BranchHost.getState().nodes[0].type,'thread');
-  assert.ok(d.activeElement.matches('[data-prompt]'));
+  assert.equal(w.BranchHost.getState().nodes[0].type,'plan');
+  assert.ok(d.activeElement.matches('.plan-body'));
   d.querySelector('#undo').click();
   assert.equal(w.BranchHost.getState().nodes.length,0);
   assert.equal(d.querySelector('#empty-note').hidden,false);
   w.BoardShared={enabled:true,writable:false};w.BranchWhiteboard.sync();
   assert.equal(d.querySelector('#empty-note').hidden,true);
-  d.querySelector('[data-start=brief]').click();
+  d.querySelector('#empty-note').click();
   assert.equal(w.BranchHost.getState().nodes.length,0);
  } finally {w.dispatchEvent(new w.Event('pagehide'));w.close();}
 });
