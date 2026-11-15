@@ -87,7 +87,7 @@ async function stop(chat, config) {
     await callBranch(config, 'stop');
     return view(null);
   } catch {
-    return { ...view(null), notice: 'Sync is off here. When Branch is online, revoke this connection in the board’s ChatGPT sync settings.' };
+    return { ...view(null), notice: 'Sync is off here. When Branch is online, revoke this connection in the board’s sync settings.' };
   }
 }
 

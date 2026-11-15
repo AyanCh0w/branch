@@ -1,6 +1,6 @@
-# ChatGPT sync on Mac
+# Conversation sync on Mac
 
-Branch for Mac sends new replies from one selected ChatGPT desktop conversation to one Branch board on joinbranch.dev. Updates appear on a conversation card in **Context**. The app reads the selected chat through macOS Accessibility and sends plain text replies after it sees streaming finish. The sync window shares Branch’s mark and BDO Grotesk type with the web app.
+Branch for Mac sends new replies from a selected conversation in the ChatGPT desktop app to one Branch board on joinbranch.dev. Updates appear on a conversation card in **Context**.
 
 Build locally with Swift 6.1 or later and an Apple Development signing identity in your Keychain. List available identities with `security find-identity -v -p codesigning`. Configure the certificate name or fingerprint once per checkout.
 
@@ -14,12 +14,12 @@ open 'build/Branch for Mac.app'
 
 Keep using the same signing identity across builds so macOS can recognize updates. `BRANCH_CODESIGN_IDENTITY` overrides the checkout setting. Without an identity, the script builds the separate ad hoc **Branch Desktop Probe** for diagnostics. Use one consistent Developer ID Application identity and notarize the signed app before distributing it to users.
 
-1. Open a board at https://joinbranch.dev/app, then **ChatGPT sync → Connect ChatGPT to this board**. The Mac app opens with that board already authorized. No local web server or copied key is needed. For a first install, follow the [employee setup page](https://joinbranch.dev/mac-setup.html).
-2. Open the ChatGPT conversation you want to sync, then open **Branch → ChatGPT Sync**. On first use, click **Allow Accessibility…** and approve **Branch for Mac** in the macOS prompt to load the window list. On later uses, the app finds conversations automatically when opened or brought forward. If no chat is visible yet, it keeps looking while the setup window is open. Branch hides Computer Use control windows and preselects the conversation when it finds one window. Confirm the selection with **Connect chat**.
-3. Branch uses the existing completed replies in the selected chat to check that it can read the conversation. When started from a board, Branch connects as soon as it can read the selected chat. When started from the menu bar without a board authorization, choose the destination board in the browser.
-4. Wait for **Connected** in Branch for Mac before sending another message. After the first save, the app confirms the reply was saved and **Open in Branch** opens the saved replies. Use **Stop syncing** from the app or **Disconnect ChatGPT chats** on the board to revoke access.
+1. Open a board at https://joinbranch.dev/app, then **Conversation sync → Set up with your agent**. Paste the copied instructions into the conversation you want to sync. The included board link opens Branch for Mac with that board already authorized. For a first install, follow the [employee setup page](https://joinbranch.dev/mac-setup.html).
+2. Open a Chat, Work, or Codex conversation, then click the Branch logo in the Mac menu bar to open **Conversation Sync**. On first use, allow Accessibility so Branch can list open windows. Choose the conversation and click **Connect conversation**.
+3. When started from a board, Branch connects as soon as it can read the selected chat. When started from the menu bar without a board authorization, choose the destination board in the browser.
+4. Wait for **Sync is on** in Branch for Mac before sending another message. After the first save, the app confirms the reply was saved and **Open in Branch** opens the saved replies. Use **Stop syncing** from the app or **Disconnect conversations** on the board to revoke access.
 
-Each pairing starts with the existing chat history as a baseline. The app stops if the window changes, the chat becomes unreadable, or it cannot confirm a streaming cycle. Keep the chat window open while syncing. Pending replies and the scoped write key live in memory. The pairing expires within eight hours and needs to be renewed after quitting. Chrome and Mac connections each have their own conversation card.
+Each pairing uses existing history as a baseline. Branch checks the selected window through Accessibility first. When it can read the window but needs another way to capture replies, it tries to match a uniquely titled local conversation through the Codex App Server. Window-based capture pauses when you switch chats and resumes when Branch recognizes the paired conversation again. Local thread sync follows the paired ID when you switch chats and sends final replies from completed turns after pairing. Work conversations can sync when their window exposes readable completed replies or the conversation is available locally. Pending replies and the scoped write key live in memory. The pairing expires within eight hours and needs to be renewed after quitting.
 
 ## Release the employee installer
 
@@ -29,9 +29,9 @@ Set `BRANCH_MAC_INSTALLER` to the notarized and stapled `.dmg` when building the
 
 ## Desktop Sync Probe
 
-Open **Branch → Desktop Sync Probe** or click **Check window compatibility** after a failed setup to check whether a ChatGPT build exposes reply text and a reliable streaming signal. The diagnostic reads one selected window and copies only yes-or-no flags when you click **Copy results**.
+Right-click the Branch logo in the Mac menu bar and choose **Desktop Sync Probe**, or click **Check window compatibility** after a failed setup. The probe checks whether ChatGPT exposes reply text and a reliable streaming signal. It reads one selected window and copies only yes-or-no flags when you click **Copy results**.
 
-1. On a Branch board, open **Account → Connect an agent → ChatGPT** and click **Copy baseline prompt**. The probe also has a copy button for the same prompt. Paste and send it in a new regular **Chat** in the ChatGPT macOS app. Wait for the reply, then pop that chat out into its own window.
+1. On a Branch board, open **Account → Connect an agent → ChatGPT desktop → Troubleshooting an installed app** and click **Copy compatibility prompt**. The probe also has a copy button for the same prompt. Paste and send it in a new regular **Chat** in the ChatGPT macOS app. Wait for the reply, then pop that chat out into its own window.
 2. In the probe, click **Request Accessibility Access…** if prompted, and allow the app under **System Settings → Privacy & Security → Accessibility**. Click **Find ChatGPT windows**, select the test window, and click **Watch selected window**.
 3. When the probe finds the baseline, click **Copy streaming prompt** and send it in the same ChatGPT window. Leave that window open until the probe reports a result. Click **Copy results** to share the diagnostic flags.
 
@@ -39,4 +39,4 @@ A pass requires an idle baseline, a new reply with both markers, and a stop cont
 
 ## Website-to-app link
 
-Version 0.5.3 accepts a short-lived, single-use ticket when the signed-in editor clicks **Connect ChatGPT to this board**. The server records only the ticket hash, checks that the editor still has access when the Mac app redeems it, and binds the resulting sync key to the selected conversation and board. Earlier links can still give the Mac app a board hint, but those links open the browser board chooser. The setup handoff can supply an exact window title to select the current chat automatically. That title is passed only to the local Mac app.
+Version 0.5.3 accepts a short-lived, single-use ticket when the signed-in editor starts a desktop connection from the board. The server records only the ticket hash, checks that the editor still has access when the Mac app redeems it, and binds the resulting sync key to the selected conversation and board. Earlier links can still give the Mac app a board hint, but those links open the browser board chooser. The setup handoff can supply an exact window title to select the current chat automatically. That title is passed only to the local Mac app.

@@ -100,14 +100,30 @@ struct ReplyCapture {
     private var candidate: SHA256Digest?
     private var stableSamples = 0
     private var idleSamples = 0
+    private var isResuming = false
 
     mutating func interruptSample() {
         candidate = nil
         stableSamples = 0
     }
 
+    mutating func pause() {
+        isResuming = true
+        generated = false
+        idleSamples = 0
+        interruptSample()
+    }
+
     mutating func observe(_ snapshot: ChatTranscript) -> Event {
         let hashes = snapshot.replies.map { SHA256.hash(data: Data($0.utf8)) }
+        if isResuming {
+            guard !hashes.isEmpty, !snapshot.isGenerating || hashes == baseline else {
+                return .waitingForHistory
+            }
+            // Treat any replies that finished while away as history.
+            baseline = hashes
+            isResuming = false
+        }
         guard let baseline else {
             guard !snapshot.isGenerating, !hashes.isEmpty else { return .waitingForHistory }
             self.baseline = hashes

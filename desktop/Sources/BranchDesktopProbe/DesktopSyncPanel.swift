@@ -5,7 +5,7 @@ import AppKit
 @MainActor
 final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     private enum Phase {
-        case idle, checking, approval, preparing, connected
+        case idle, checking, approval, preparing, connected, paused
 
         var status: String {
             switch self {
@@ -14,6 +14,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
             case .approval: "Waiting for board approval"
             case .preparing: "Getting the chat ready"
             case .connected: "Connected · Sync is on"
+            case .paused: "Connected · Waiting for your chat"
             }
         }
     }
@@ -24,19 +25,19 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     private let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 312),
                                   styleMask: [.titled, .closable], backing: .buffered, defer: false)
     private let content = NSStackView()
-    private let heading = NSTextField(labelWithString: "Connect ChatGPT")
+    private let heading = NSTextField(labelWithString: "Connect a conversation")
     private let intro = NSTextField(wrappingLabelWithString: "")
     private let conversationLabel = NSTextField(labelWithString: "Conversation")
     private let chatPicker = BranchConversationPicker()
     private let status = NSTextField(wrappingLabelWithString: "")
-    private lazy var findButton = button("Find ChatGPT windows", #selector(findChats))
+    private lazy var findButton = button("Find conversations", #selector(findChats))
     private lazy var settingsButton = button("Open Accessibility Settings", #selector(openAccessibilitySettings))
-    private lazy var startButton = button("Connect chat", #selector(start))
+    private lazy var startButton = button("Connect conversation", #selector(start))
     private lazy var stopButton = button("Stop syncing", #selector(stop))
     private lazy var openButton = button("Open in Branch", #selector(openCard))
     private lazy var approvalButton = button("Open board approval", #selector(openApproval))
     private lazy var diagnosticButton = button("Check window compatibility", #selector(openProbe))
-    private lazy var chatGPTButton = button("Open ChatGPT", #selector(openChatGPT))
+    private lazy var chatAppButton = button("Open ChatGPT", #selector(openChatApp))
 
     private var watching: Task<Void, Never>?
     private var uploading: Task<Void, Never>?
@@ -60,7 +61,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     override init() {
         super.init()
         BranchSyncTheme.registerFonts()
-        window.title = "ChatGPT Sync"
+        window.title = "Conversation Sync"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.backgroundColor = .white
@@ -75,7 +76,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         intro.textColor = BranchSyncTheme.muted
         conversationLabel.font = BranchSyncTheme.font(13, strong: true)
         conversationLabel.textColor = BranchSyncTheme.ink
-        chatPicker.setAccessibilityLabel("ChatGPT conversation")
+        chatPicker.setAccessibilityLabel("Conversation")
         chatPicker.addItem(withTitle: "Choose a conversation")
         chatPicker.target = self
         chatPicker.action = #selector(updateControls)
@@ -84,7 +85,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         status.textColor = BranchSyncTheme.ink
         status.setAccessibilityLabel("Sync status")
         let actions = row([startButton, approvalButton, openButton, findButton, settingsButton, diagnosticButton, stopButton])
-        let helpActions = row([chatGPTButton])
+        let helpActions = row([chatAppButton])
         [brand, heading, intro, connectionStatus, conversationLabel, chatPicker, status, actions, helpActions].forEach(content.addArrangedSubview)
         content.orientation = .vertical
         content.alignment = .leading
@@ -149,13 +150,13 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         }
     }
 
-    @objc private func openChatGPT() {
-        let apps = ["com.openai.codex", "com.openai.chat"]
+    @objc private func openChatApp() {
+        let apps = ChatWindows.supportedBundleIDs
         let workspace = NSWorkspace.shared
         let bundleID = apps.first { !NSRunningApplication.runningApplications(withBundleIdentifier: $0).isEmpty }
         guard let url = (bundleID.flatMap { workspace.urlForApplication(withBundleIdentifier: $0) }
             ?? apps.lazy.compactMap { workspace.urlForApplication(withBundleIdentifier: $0) }.first) else {
-            status.stringValue = "Open the ChatGPT Mac app and leave your conversation visible. Branch will find it automatically."
+            status.stringValue = "Open a conversation in the ChatGPT desktop app. Branch will find it automatically."
             updateControls()
             return
         }
@@ -190,8 +191,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         let wordmark = NSTextField(labelWithString: "branch")
         wordmark.font = BranchSyncTheme.font(19, strong: true)
         wordmark.textColor = BranchSyncTheme.ink
-        guard let url = Bundle.main.url(forResource: "branch-mark", withExtension: "svg"),
-              let image = NSImage(contentsOf: url) else { return row([wordmark]) }
+        guard let image = BranchSyncTheme.logo() else { return row([wordmark]) }
         let mark = NSImageView(image: image)
         mark.imageScaling = .scaleProportionallyUpOrDown
         mark.widthAnchor.constraint(equalToConstant: 21).isActive = true
@@ -249,7 +249,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         guard watching == nil, !refreshing else { return }
         refreshing = true
         let previous = chatPicker.indexOfSelectedItem > 0 ? chatPicker.titleOfSelectedItem : nil
-        if chatPicker.numberOfItems <= 1 { status.stringValue = "Looking for ChatGPT conversations…" }
+        if chatPicker.numberOfItems <= 1 { status.stringValue = "Looking for conversations…" }
         updateControls()
         Task {
             let choices = await sampler.list()
@@ -262,9 +262,9 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
             let link = choices.isEmpty ? nil : pendingLink
             if link != nil { pendingLink = nil }
             if !AXIsProcessTrusted() {
-                status.stringValue = "Allow Accessibility to find ChatGPT windows."
+                status.stringValue = "Allow Accessibility to find open conversations."
             } else if choices.isEmpty {
-                status.stringValue = "Open ChatGPT and leave a chat visible. It will appear here automatically."
+                status.stringValue = "Open a conversation in the ChatGPT desktop app. It will appear here automatically."
             } else if let link, let index = link.matchingChat(in: choices.map(\.title)), window.isVisible {
                 chatPicker.selectItem(at: index + 1)
                 updateControls()
@@ -272,7 +272,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
                 return
             } else if link != nil {
                 chatPicker.selectItem(at: 0)
-                status.stringValue = "Branch couldn’t identify the requested chat. Open it in ChatGPT and choose it here."
+                status.stringValue = "Branch couldn’t identify the requested chat. Open it in the desktop app and choose it here."
             } else {
                 status.stringValue = "Choose the chat you want your team to see. Existing replies stay private; only new completed replies are shared."
             }
@@ -287,7 +287,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         pendingLink = nil
         cardURL = nil
         savedCount = 0
-        status.stringValue = "Keep the conversation open in ChatGPT while Branch checks it."
+        status.stringValue = "Keep the conversation open while Branch checks it."
         phase = .checking
         watching = Task {
             do { try await sync(windowIndex: index) }
@@ -297,6 +297,45 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
             catch { finish("Branch could not approve this chat. Start a new pairing and try again.") }
         }
         updateControls()
+    }
+
+    private func syncLocalThread(_ source: CodexSync, title: String, pairingID: String) async throws {
+        chatTitle = title
+        let client = DesktopSyncClient(conversationID: pairingID, preferredBoardID: preferredBoardID)
+        connection = client
+        guard let board = try await connectBoard(using: client) else { return }
+        try Task.checkCancellation()
+        boardTitle = board.boardTitle
+        phase = .preparing
+        setStatus("Getting the chat ready…")
+        updateControls()
+        do {
+            try await source.start()
+        } catch {
+            try Task.checkCancellation()
+            finish("Branch couldn’t start syncing this conversation. Try connecting it again.")
+            return
+        }
+        try Task.checkCancellation()
+        showSavedStatus()
+        while Date() < client.expiresAt {
+            try await Task.sleep(for: .seconds(2))
+            do {
+                let replies = try await source.readNewReplies(limit: 20 - pending.count)
+                try Task.checkCancellation()
+                if !replies.isEmpty {
+                    pending.append(contentsOf: replies.map { ($0, title) })
+                    showActiveStatus("Saving new replies…")
+                    upload(using: client, board: board)
+                } else if pending.isEmpty {
+                    showSavedStatus()
+                }
+            } catch {
+                try Task.checkCancellation()
+                showPausedStatus("Waiting for the conversation source. Branch will retry automatically.")
+            }
+        }
+        finish("The sync session expired. Pair the chat again to resume.")
     }
 
     private func sync(windowIndex: Int) async throws {
@@ -309,7 +348,33 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         let deadline = clock.now + .seconds(120)
         var sample = await sampler.syncSample(beginPairing: true)
         var retries = 3
+        var checkedLocalThreads = false
+        var ambiguousLocalThread = false
         while clock.now < deadline {
+            try Task.checkCancellation()
+            if sample.canTryLocalThread, !checkedLocalThreads {
+                checkedLocalThreads = true
+                if let executable = CodexSync.executable(), let title = await sampler.localThreadTitle() {
+                    let source = CodexSync(executable: executable)
+                    var pairingID: String?
+                    do {
+                        pairingID = try await source.select(title: title)
+                    } catch CodexSync.Failure.ambiguousThread {
+                        ambiguousLocalThread = true
+                    } catch {
+                        try Task.checkCancellation()
+                    }
+                    try Task.checkCancellation()
+                    // Recheck the window before using a title matched by another process.
+                    sample = await sampler.syncSample(beginPairing: true)
+                    if let pairingID, sample.canTryLocalThread,
+                       await sampler.localThreadTitle() == title {
+                        try Task.checkCancellation()
+                        try await syncLocalThread(source, title: title, pairingID: pairingID)
+                        return
+                    }
+                }
+            }
             switch sample {
             case .transcript(let chat, nil) where chat.isGenerating:
                 setStatus("Leave this chat open while the reply finishes. Branch will then continue setup.")
@@ -324,7 +389,10 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         }
         try Task.checkCancellation()
         guard case .transcript(let first, let pairingID?) = sample else {
-            finish(initialFailure(sample), offerDiagnostics: true)
+            let message = ambiguousLocalThread && sample.canTryLocalThread
+                ? "More than one local conversation has this title. Rename the chat you want, then refresh the list."
+                : initialFailure(sample)
+            finish(message, offerDiagnostics: true)
             return
         }
         chatTitle = first.title.isEmpty ? nil : first.title
@@ -335,47 +403,49 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         try Task.checkCancellation()
         boardTitle = board.boardTitle
         phase = .preparing
-        status.stringValue = "Keep the chat open. Send your next message when this window says Connected."
+        status.stringValue = "Keep the chat open. Send your next message when this window says Sync is on."
         updateControls()
         var capture = ReplyCapture()
-        var unreadableSamples = 0
+        var incompleteSamples = 0
         while !Task.isCancelled, Date() < client.expiresAt {
             let sample = await sampler.syncSample()
             try Task.checkCancellation()
             switch sample {
             case .transcript(let transcript, _):
-                unreadableSamples = 0
+                incompleteSamples = 0
                 switch capture.observe(transcript) {
                 case .waitingForHistory:
-                    setStatus("Keep this chat visible and let the current response finish. Branch will then start syncing.")
+                    if phase != .paused {
+                        setStatus("Keep this chat visible and let the current response finish. Branch will then start syncing.")
+                    }
                 case .ready:
                     if pending.isEmpty { showSavedStatus() }
+                    else { showActiveStatus("Saving a reply…") }
                 case .generating:
-                    if phase == .connected, pending.isEmpty { setStatus("Waiting for ChatGPT to finish its reply…") }
+                    if phase != .preparing, pending.isEmpty {
+                        showActiveStatus("Waiting for the reply to finish…")
+                    }
                 case .completed(let reply):
                     guard pending.count < 20 else {
                         finish("Sync stopped because too many replies are waiting to save.")
                         return
                     }
                     pending.append((reply, transcript.title))
-                    setStatus("Saving a reply…")
+                    showActiveStatus("Saving a reply…")
                     upload(using: client, board: board)
                 case .historyChanged:
-                    finish("The visible replies changed or a streaming cycle was missed. Pair this chat again to resume.")
-                    return
+                    capture.pause()
+                    showPausedStatus("Branch is checking the visible replies. Sync will resume automatically.")
                 }
-            case .incomplete:
+            case .incomplete where phase != .paused && incompleteSamples < 2:
+                incompleteSamples += 1
                 capture.interruptSample()
-                unreadableSamples += 1
-                if unreadableSamples >= 12 {
-                    finish("The selected chat is no longer readable. Reopen the chat and pair again.")
-                    return
-                }
+            case .incomplete, .windowChanged:
+                capture.pause()
+                let chat = chatTitle.map { "“\($0)”" } ?? "the connected conversation"
+                showPausedStatus("Return to \(chat) in the same window. Sync will resume automatically.")
             case .permissionLost:
                 finish("Accessibility access was turned off.")
-                return
-            default:
-                finish("The selected chat changed or closed. Pair again to resume.")
                 return
             }
             try await Task.sleep(for: .milliseconds(350))
@@ -387,12 +457,12 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     private func initialFailure(_ sample: ChatWindows.SyncRead) -> String {
         switch sample {
         case .permissionLost: "Enable Accessibility access and try again."
-        case .windowChanged: "The selected chat window changed or closed. Reopen it in ChatGPT, then select it again in Branch."
+        case .windowChanged: "The selected chat window changed or closed. Reopen the conversation, then select it again in Branch."
         case .transcript(let transcript, _):
             transcript.isGenerating
-                ? "Let ChatGPT finish its reply, then click Connect chat again."
-                : "Branch needs to see a completed reply in this chat. Open a chat with an existing reply, then click Connect chat."
-        case .incomplete: "Branch couldn’t read the selected chat. Keep it open and visible in ChatGPT, then try again."
+                ? "Let the reply finish, then try connecting again."
+                : "Branch couldn’t read a completed reply in this conversation. Keep the chat open with a completed reply, then try again."
+        case .incomplete: "Branch couldn’t read the selected chat. Keep the conversation open and visible, then try again."
         }
     }
 
@@ -406,7 +476,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
                 // The server may have redeemed the ticket before the response was interrupted.
                 return try await client.status()
             } catch DesktopSyncClient.Failure.disconnected {
-                finish("This board connection expired or was disconnected. Click Connect ChatGPT to this board again.")
+                finish("This board connection expired or was disconnected. Start a new connection from the board.")
                 return nil
             }
         }
@@ -463,7 +533,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
             }
             guard !Task.isCancelled else { return }
             uploading = nil
-            showSavedStatus()
+            if phase != .paused { showSavedStatus() }
         }
     }
 
@@ -479,17 +549,29 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     }
 
     private func showSavedStatus() {
+        if savedCount == 0 {
+            showActiveStatus("Send a new message in the connected conversation. Its completed reply will appear in the board’s Context view.")
+        } else if savedCount == 1 {
+            showActiveStatus("1 reply saved to Context.")
+        } else {
+            showActiveStatus("\(savedCount) replies saved to Context.")
+        }
+    }
+
+    private func showActiveStatus(_ message: String) {
         if phase != .connected {
             phase = .connected
             updateControls()
         }
-        if savedCount == 0 {
-            setStatus("Send a new message in ChatGPT. Its completed reply will appear in the board’s Context view.")
-        } else if savedCount == 1 {
-            setStatus("1 reply saved to Context.")
-        } else {
-            setStatus("\(savedCount) replies saved to Context.")
+        setStatus(message)
+    }
+
+    private func showPausedStatus(_ message: String) {
+        if phase != .paused {
+            phase = .paused
+            updateControls()
         }
+        setStatus(message)
     }
 
     private func clearSession() -> DesktopSyncClient? {
@@ -551,7 +633,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         let trusted = AXIsProcessTrusted()
         let inSession = watching != nil
         let hasChoices = trusted && chatPicker.numberOfItems > 1
-        findButton.title = !trusted ? "Allow Accessibility…" : hasChoices ? "Refresh list" : "Find ChatGPT windows"
+        findButton.title = !trusted ? "Allow Accessibility…" : hasChoices ? "Refresh list" : "Find conversations"
         findButton.isHidden = inSession
         findButton.isEnabled = !refreshing
         settingsButton.isHidden = inSession || trusted || !requestedAccess
@@ -560,28 +642,28 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         chatPicker.isEnabled = !chatPicker.isHidden && !refreshing
         startButton.isHidden = chatPicker.isHidden
         startButton.isEnabled = chatPicker.isEnabled && chatPicker.indexOfSelectedItem > 0
-        stopButton.title = phase == .connected ? "Stop syncing" : "Cancel setup"
+        stopButton.title = boardTitle != nil ? "Stop syncing" : "Cancel setup"
         stopButton.isHidden = !inSession
         openButton.isHidden = cardURL == nil
         approvalButton.isHidden = phase != .approval
         diagnosticButton.isHidden = inSession || !offersDiagnostics
-        chatGPTButton.isHidden = inSession || !trusted
+        chatAppButton.isHidden = inSession || !trusted
         status.isHidden = status.stringValue.isEmpty
 
         connectionStatus.show(phase.status, connected: phase == .connected, pending: inSession && phase != .connected)
         switch phase {
         case .idle:
-            heading.stringValue = "Connect ChatGPT"
-            intro.stringValue = trusted ? "Choose an open chat to send its new replies to a Branch board."
-                : "Allow Accessibility once so Branch can find your open ChatGPT windows."
+            heading.stringValue = "Connect a conversation"
+            intro.stringValue = trusted ? "Choose the open conversation you want to sync."
+                : "Allow Accessibility once so Branch can find open conversations."
         case .checking:
             heading.stringValue = "Checking your chat"
             intro.stringValue = "Branch is checking that it can read completed replies."
         case .approval:
             heading.stringValue = "Approve a Branch board"
             intro.stringValue = chatTitle.map { "Branch verified “\($0)”." } ?? "Branch verified your chat."
-        case .preparing, .connected:
-            heading.stringValue = phase == .connected ? "ChatGPT is connected" : "Connecting ChatGPT"
+        case .preparing, .connected, .paused:
+            heading.stringValue = phase == .preparing ? "Connecting your conversation" : "Conversation connected"
             intro.stringValue = "New replies from this chat go to Context on \(boardTitle ?? "your board")."
         }
         let primaryButtons = [startButton, approvalButton, openButton, findButton]

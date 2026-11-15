@@ -9,6 +9,11 @@ enum BranchSyncTheme {
     static let canvas = NSColor(srgbRed: 0.96, green: 0.97, blue: 0.98, alpha: 1)
     static let blue = NSColor(srgbRed: 0.19, green: 0.36, blue: 0.96, alpha: 1)
 
+    static func logo() -> NSImage? {
+        guard let url = Bundle.main.url(forResource: "branch-mark", withExtension: "svg") else { return nil }
+        return NSImage(contentsOf: url)
+    }
+
     static func registerFonts() {
         for weight in ["Regular", "DemiBold"] {
             if let url = Bundle.main.url(forResource: "BDOGrotesk-\(weight)", withExtension: "woff2") {

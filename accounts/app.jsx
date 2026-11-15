@@ -8,7 +8,7 @@ import {UsernameInput} from './username-input';
 import {validateSignup,fieldForAuthError} from './auth-validation.cjs';
 
 import {BoardViews} from './board-views';
-import {ChromeSyncSettings,ConnectChatGPTSync,chromeSyncAvailable,desktopSyncAvailable} from './chrome-sync';
+import {ChromeSyncSettings,ConnectChatGPTSync,OpenBranchForMac,chromeSyncAvailable,desktopSyncAvailable} from './chrome-sync';
 import {appURL} from '../app/desktop-setup';
 import desktopBaseline from '../desktop/Sources/BranchDesktopProbe/Resources/desktop-baseline.json';
 window.BranchAvatar=avatarURL;
@@ -356,31 +356,37 @@ function ActiveBoardUsers({boardId,token,userId}){
 
 function useDesktopSyncLaunch(boardId, canEdit) {
  const startDesktop = useMutation(api.chatgptBrowser.startDesktop);
- const launch = React.useCallback(async () => {
+ return async () => {
   if (!canEdit) throw Error('Board access denied');
-  const params = new URLSearchParams(location.hash.slice(1));
-  const chatTitle = params.get('mac-chat');
+  const chatTitle = new URLSearchParams(location.hash.slice(1)).get('mac-chat');
   const { ticket } = await startDesktop({ boardId });
-  if (params.has('mac-sync')) {
-   const boardURL = new URL(location.href);
-   boardURL.hash = '';
-   history.replaceState(history.state, '', boardURL);
-  }
   location.assign(appURL(boardId, {ticket, chatTitle}));
- }, [boardId, canEdit, startDesktop]);
- useEffect(() => {
-  const connect = event => event.detail?.respond?.(launch());
-  window.addEventListener('branch:connect-mac', connect);
-  return () => window.removeEventListener('branch:connect-mac', connect);
- }, [launch]);
- return launch;
+ };
 }
-function BoardScene({boardId,me,authenticated,config}){const client=useBackend(),[guest]=useState(()=>{try{return JSON.parse(localStorage.getItem('branch-guest-'+boardId));}catch{return null;}});const permission=useQuery(api.boards.open,{boardId,token:authenticated?'':guest?.token||''});const [sharing,setSharing]=useState(false),[people,setPeople]=useState(false),[chromeSync,setChromeSync]=useState(()=>new URLSearchParams(location.hash.slice(1)).has('mac-sync')),started=useRef(false),[connecting,setConnecting]=useState(true);const launchMac=useDesktopSyncLaunch(boardId,desktopSyncAvailable&&authenticated&&!!me&&!!permission&&permission.role!=='viewer');useEffect(()=>{
- const showMacSetup=()=>{if(new URLSearchParams(location.hash.slice(1)).has('mac-sync'))setChromeSync(true);};
+function desktopSyncDialog() {
+ const mode = new URLSearchParams(location.hash.slice(1)).get('mac-sync');
+ return mode === 'open' && desktopSyncAvailable ? 'launch' : mode === null ? null : 'setup';
+}
+function BoardScene({boardId,me,authenticated,config}){const client=useBackend(),[guest]=useState(()=>{try{return JSON.parse(localStorage.getItem('branch-guest-'+boardId));}catch{return null;}});const permission=useQuery(api.boards.open,{boardId,token:authenticated?'':guest?.token||''});const [sharing,setSharing]=useState(false),[people,setPeople]=useState(false),[syncDialog,setSyncDialog]=useState(desktopSyncDialog),started=useRef(false),[connecting,setConnecting]=useState(true);const launchMac=useDesktopSyncLaunch(boardId,desktopSyncAvailable&&authenticated&&!!me&&!!permission&&permission.role!=='viewer');useEffect(()=>{
+ const showMacSetup=()=>setSyncDialog(desktopSyncDialog());
  window.addEventListener('hashchange',showMacSetup);
  return ()=>window.removeEventListener('hashchange',showMacSetup);
-},[]);useEffect(()=>{if(permission===null){document.body.classList.add('account-mode');window.BoardShared.disconnect();}if(permission&&!started.current){started.current=true;document.body.classList.remove('account-mode');window.BoardShared.connect({url:config.url,boardId,token:authenticated?'':guest?.token||'',role:permission.role,snapshot:permission,userId:authenticated?me?.id:guest?.userId,client:transport(client)}).then(()=>setConnecting(false));}return()=>{};},[permission]);useEffect(()=>()=>{window.BoardShared.disconnect();document.body.classList.add('account-mode');},[]);useEffect(()=>{if(!connecting&&permission&&authenticated&&me?.id)window.BranchCanvasTour?.start({userId:me.id,role:permission.role});return()=>window.BranchCanvasTour?.dismiss();},[connecting,permission?.role,authenticated,me?.id]);if(permission===undefined)return <Loading/>;if(!permission)return <div className="a-auth-page"><header className="a-home-header"><Brand/>{me&&<AccountMenu me={me}/>}</header><main className="a-link-landing"><Icon name="key"/><h1>This board is private.</h1><p>Ask the owner for an invite link, or return to your boards.</p><a className="a-primary" href="/app">Your boards<Icon name="arrow-up-right"/></a></main></div>;return <>{createPortal(<div className="a-board-account-actions"><ActiveBoardUsers boardId={boardId} token={authenticated?'':guest?.token||''} userId={authenticated?me?.id:guest?.userId}/>{me&&<button className="a-share-trigger" onClick={()=>setPeople(true)}>Team roles</button>}{chromeSyncAvailable&&me&&permission.role!=='viewer'&&<button className="a-share-trigger a-context-connection" data-open-chrome-sync onClick={()=>setChromeSync(true)}>ChatGPT sync</button>}{permission.role==='owner'&&<button className="a-share-trigger" onClick={()=>setSharing(true)}>Share</button>}{permission.role==='viewer'&&<span className="a-viewer-label">View only</span>}{me?<AccountMenu me={me}/>:<span className="a-avatar" aria-label={guest?.name+' · Guest'}><Avatar name={guest?.name}/></span>}</div>,document.getElementById('board-account-slot'))}{!connecting&&<BoardViews key={boardId} boardId={boardId} token={authenticated?'':guest?.token||''}/>}
-{chromeSync&&chromeSyncAvailable&&authenticated&&permission.role!=='viewer'&&<ChromeSyncSettings boardId={boardId} Dialog={Dialog} onConnectMac={launchMac} onClose={()=>setChromeSync(false)}/>}
+},[]);
+ const closeSyncDialog=()=>{
+  const url=new URL(location.href),params=new URLSearchParams(url.hash.slice(1));
+  if(params.has('mac-sync')){
+   params.delete('mac-sync');
+   params.delete('mac-chat');
+   url.hash=params.toString();
+   history.replaceState(history.state,'',url);
+  }
+  setSyncDialog(null);
+ };
+ useEffect(()=>{if(permission===null){document.body.classList.add('account-mode');window.BoardShared.disconnect();}if(permission&&!started.current){started.current=true;document.body.classList.remove('account-mode');window.BoardShared.connect({url:config.url,boardId,token:authenticated?'':guest?.token||'',role:permission.role,snapshot:permission,userId:authenticated?me?.id:guest?.userId,client:transport(client)}).then(()=>setConnecting(false));}return()=>{};},[permission]);useEffect(()=>()=>{window.BoardShared.disconnect();document.body.classList.add('account-mode');},[]);useEffect(()=>{if(!syncDialog&&!connecting&&permission&&authenticated&&me?.id)window.BranchCanvasTour?.start({userId:me.id,role:permission.role});return()=>window.BranchCanvasTour?.dismiss();},[syncDialog,connecting,permission?.role,authenticated,me?.id]);if(permission===undefined)return <Loading/>;if(!permission)return <div className="a-auth-page"><header className="a-home-header"><Brand/>{me&&<AccountMenu me={me}/>}</header><main className="a-link-landing"><Icon name="key"/><h1>This board is private.</h1><p>Ask the owner for an invite link, or return to your boards.</p><a className="a-primary" href="/app">Your boards<Icon name="arrow-up-right"/></a></main></div>;return <>{createPortal(<div className="a-board-account-actions"><ActiveBoardUsers boardId={boardId} token={authenticated?'':guest?.token||''} userId={authenticated?me?.id:guest?.userId}/>{me&&<button className="a-share-trigger" onClick={()=>setPeople(true)}>Team roles</button>}{chromeSyncAvailable&&me&&permission.role!=='viewer'&&<button className="a-share-trigger a-context-connection" data-open-chrome-sync onClick={()=>setSyncDialog('setup')}>Conversation sync</button>}{permission.role==='owner'&&<button className="a-share-trigger" onClick={()=>setSharing(true)}>Share</button>}{permission.role==='viewer'&&<span className="a-viewer-label">View only</span>}{me?<AccountMenu me={me}/>:<span className="a-avatar" aria-label={guest?.name+' · Guest'}><Avatar name={guest?.name}/></span>}</div>,document.getElementById('board-account-slot'))}{!connecting&&<BoardViews key={boardId} boardId={boardId} token={authenticated?'':guest?.token||''}/>}
+{syncDialog&&chromeSyncAvailable&&authenticated&&permission.role!=='viewer'&&(
+ syncDialog==='launch'?<OpenBranchForMac boardId={boardId} Dialog={Dialog} onOpen={launchMac} onClose={closeSyncDialog}/>
+ :<ChromeSyncSettings boardId={boardId} Dialog={Dialog} onClose={closeSyncDialog}/>
+ )}
 {people&&<ProjectPeople boardId={boardId} onClose={()=>setPeople(false)}/>} {sharing&&<Share board={{id:boardId,title:permission.title}} onClose={()=>setSharing(false)}/>}<GitHubPanel boardId={boardId} token={authenticated?'':guest?.token||''} role={permission.role} me={me}/></>;}
 function Loading(){return <div className="a-loading"><Brand/><span>Opening your space…</span></div>;}
 class Boundary extends React.Component{state={error:null};static getDerivedStateFromError(error){return {error};}componentDidCatch(){document.body.classList.add('account-mode');window.BoardShared?.disconnect();}render(){if(this.state.error)return <div className="a-auth-page"><header className="a-home-header"><Brand/></header><main className="a-link-landing"><Icon name="link"/><h1>This link isn’t available.</h1><p>It may have expired or been turned off.</p><a className="a-primary" href="/app">Back to your boards</a></main></div>;return this.props.children;}}

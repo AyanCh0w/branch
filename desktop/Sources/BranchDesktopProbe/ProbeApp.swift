@@ -12,6 +12,7 @@ final class ProbeApp: NSObject, NSApplicationDelegate {
     private var isRefreshing = false
     private var report: String?
     private var statusItem: NSStatusItem?
+    private let statusMenu = NSMenu()
     private var stopSyncItem: NSMenuItem?
     private var syncActive = false
     private lazy var syncPanel = DesktopSyncPanel()
@@ -37,7 +38,7 @@ final class ProbeApp: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        setUpMenu()
+        setUpStatusItem()
         setUpWindow()
         syncPanel.onActivity = { [weak self] active in
             self?.syncActive = active
@@ -58,22 +59,32 @@ final class ProbeApp: NSObject, NSApplicationDelegate {
         syncPanel.show(link: link)
     }
 
-    private func setUpMenu() {
+    private func setUpStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.title = "Branch"
-        let menu = NSMenu()
-        let sync = NSMenuItem(title: "ChatGPT Sync…", action: #selector(showSync), keyEquivalent: "")
-        sync.target = self
+        if let button = item.button {
+            if let logo = BranchSyncTheme.logo() {
+                logo.size = NSSize(width: 19, height: 19)
+                logo.isTemplate = true
+                button.image = logo
+                button.imagePosition = .imageOnly
+            } else {
+                button.title = "Branch"
+            }
+            button.setAccessibilityLabel("Branch")
+            button.setAccessibilityHelp("Opens Conversation Sync.")
+            button.target = self
+            button.action = #selector(statusItemClicked(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        }
         let show = NSMenuItem(title: "Desktop Sync Probe…", action: #selector(showWindow), keyEquivalent: "")
         show.target = self
         let stop = NSMenuItem(title: "Stop syncing", action: #selector(stopSync), keyEquivalent: "")
         stop.target = self
         stopSyncItem = stop
-        menu.autoenablesItems = false
+        statusMenu.autoenablesItems = false
         let quit = NSMenuItem(title: "Quit Branch", action: #selector(quitApp), keyEquivalent: "q")
         quit.target = self
-        menu.items = [sync, show, stop, .separator(), quit]
-        item.menu = menu
+        statusMenu.items = [show, stop, .separator(), quit]
         statusItem = item
         updateMenu()
     }
@@ -148,7 +159,16 @@ final class ProbeApp: NSObject, NSApplicationDelegate {
         NSApp.activate()
     }
 
-    @objc private func showSync() { syncPanel.show() }
+    @objc private func statusItemClicked(_ button: NSStatusBarButton) {
+        if let event = NSApp.currentEvent,
+           event.type == .rightMouseUp || (event.type == .leftMouseUp && event.modifierFlags.contains(.control)) {
+            let bottom = button.isFlipped ? button.bounds.maxY : button.bounds.minY
+            statusMenu.popUp(positioning: nil, at: NSPoint(x: button.bounds.minX, y: bottom), in: button)
+        } else {
+            syncPanel.show()
+        }
+    }
+
     @objc private func stopSync() { syncPanel.stop() }
 
     @objc private func quitApp() {
@@ -259,7 +279,8 @@ final class ProbeApp: NSObject, NSApplicationDelegate {
 
     private func updateMenu() {
         stopSyncItem?.isEnabled = syncActive
-        statusItem?.button?.title = watch == nil && !syncActive ? "Branch" : "Branch •"
+        statusItem?.button?.toolTip = watch != nil ? "Branch Desktop Sync Probe is active"
+            : syncActive ? "Branch Conversation Sync is active" : "Open Branch Conversation Sync"
     }
 
     @objc private func stop() {
