@@ -4,10 +4,13 @@ import AppKit
 @MainActor
 final class AccessibilitySetupPanel: NSPanel {
     private let appURL: URL
+    private let dragDemo: AccessibilityDragDemo
 
     init(appURL: URL = Bundle.main.bundleURL) {
         self.appURL = appURL
-        let size = NSSize(width: 360, height: 288)
+        let icon = BranchSyncTheme.logo() ?? NSWorkspace.shared.icon(forFile: appURL.path)
+        dragDemo = AccessibilityDragDemo(icon: icon)
+        let size = NSSize(width: 360, height: 430)
         super.init(contentRect: NSRect(origin: .zero, size: size),
                    styleMask: [.titled, .closable, .nonactivatingPanel], backing: .buffered, defer: false)
         title = "Branch Accessibility Setup"
@@ -23,13 +26,28 @@ final class AccessibilitySetupPanel: NSPanel {
         heading.font = BranchSyncTheme.font(24, strong: true)
         heading.textColor = BranchSyncTheme.ink
         let instructions = label("Drag the app into the Accessibility list in System Settings, then turn it on.")
-        let tile = AppBundleDragTile(appURL: appURL, appName: appName)
+        let tile = AppBundleDragTile(appURL: appURL, appName: appName, icon: icon)
+        let demoLabel = NSTextField(labelWithString: "Drag demo")
+        demoLabel.font = BranchSyncTheme.font(12, strong: true)
+        demoLabel.textColor = BranchSyncTheme.muted
+        let replay = NSButton(title: "Replay demo", target: self, action: #selector(replayDemo))
+        replay.controlSize = .small
+        replay.bezelStyle = .inline
+        replay.isHidden = !dragDemo.canAnimate
+        dragDemo.onMotionPreferenceChange = { [weak dragDemo, weak replay] in
+            replay?.isHidden = dragDemo?.canAnimate != true
+        }
+        let demoHeader = NSStackView(views: [demoLabel, replay])
+        demoHeader.orientation = .horizontal
+        demoHeader.alignment = .centerY
+        demoHeader.distribution = .equalSpacing
         let fallback = label("If the app is already listed, just turn it on. You can also add it using the + button in System Settings.")
         let finder = BranchSyncButton(title: "Show in Finder", target: self, action: #selector(showInFinder))
-        let stack = NSStackView(views: [heading, instructions, tile, fallback, finder])
+        let stack = NSStackView(views: [heading, instructions, tile, demoHeader, dragDemo, fallback, finder])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 12
+        stack.setCustomSpacing(5, after: demoHeader)
         stack.translatesAutoresizingMaskIntoConstraints = false
         let container = NSView(frame: NSRect(origin: .zero, size: size))
         container.addSubview(stack)
@@ -40,6 +58,8 @@ final class AccessibilitySetupPanel: NSPanel {
             stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
             instructions.widthAnchor.constraint(equalTo: stack.widthAnchor),
             tile.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            demoHeader.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            dragDemo.widthAnchor.constraint(equalTo: stack.widthAnchor),
             fallback.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
     }
@@ -53,6 +73,16 @@ final class AccessibilitySetupPanel: NSPanel {
             NSWorkspace.shared.open(settings)
         }
         makeKeyAndOrderFront(nil)
+        dragDemo.play()
+    }
+
+    override func close() {
+        dragDemo.stop()
+        super.close()
+    }
+
+    @objc private func replayDemo() {
+        dragDemo.play()
     }
 
     /// Reveals the same running bundle for the System Settings Add button or a Finder drag.
@@ -75,10 +105,10 @@ private final class AppBundleDragTile: NSView, NSDraggingSource {
     private let appName: String
     private let icon: NSImage
 
-    init(appURL: URL, appName: String) {
+    init(appURL: URL, appName: String, icon: NSImage) {
         self.appURL = appURL
         self.appName = appName
-        icon = BranchSyncTheme.logo() ?? NSWorkspace.shared.icon(forFile: appURL.path)
+        self.icon = icon
         super.init(frame: .zero)
         setAccessibilityElement(true)
         setAccessibilityRole(.image)
