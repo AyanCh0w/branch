@@ -23,32 +23,39 @@ export function ChromeSyncSettings({ boardId, Dialog, onClose }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [copyState, setCopyState] = useState('ready');
+  const [needsInstaller, setNeedsInstaller] = useState(false);
   const installer = useMacInstaller();
-  const fallback = useRef(null);
+  const fallback = useRef(null), haveApp = useRef(null);
   useEffect(() => {
-    if (copyState === 'manual') {
+    if (copyState === 'choose') haveApp.current?.focus();
+    else if (copyState === 'manual') {
       fallback.current?.focus();
       fallback.current?.select();
     }
   }, [copyState]);
 
-  async function copySetup() {
+  async function copySetup(download) {
+    if(copyState === 'choose') setNeedsInstaller(download);
     setCopyState('copying');
-    setCopyState(await copyMacSetup(handoff(boardId), copyState === 'copied' || copyState === 'manual' ? null : installer) ? 'copied' : 'manual');
+    setCopyState(await copyMacSetup(handoff(boardId), download ? installer : null) ? 'copied' : 'manual');
   }
 
   return <Dialog title="Conversation sync" onClose={onClose}>
-    <p>{installer ? 'Download Branch for Mac and copy setup instructions in one click.' : 'Copy setup instructions, then paste them into the conversation you want to sync.'} New replies will appear in this board’s Context.</p>
-    <button type="button" className="a-primary" disabled={installer === undefined || copyState === 'copying'} onClick={copySetup}>
-      {copyState === 'copied' ? '✓ Copied to clipboard' : 'Set up with your agent'}
-    </button>
+    <p>Connect a conversation from Branch for Mac. New replies will appear in this board’s Context.</p>
+    {copyState === 'choose' ? <div role="group" aria-label="Do you already have Branch for Mac?">
+      <p><strong>Do you already have Branch for Mac?</strong></p>
+      <button type="button" className="a-primary" ref={haveApp} onClick={() => copySetup(false)}>Yes, I have it</button>
+      <button type="button" className="a-secondary" disabled={installer === undefined} onClick={() => copySetup(true)}>No, download it</button>
+    </div> : <button type="button" className="a-primary" disabled={copyState === 'copying'} onClick={() => copyState === 'ready' ? setCopyState('choose') : copySetup(false)}>
+      {copyState === 'copied' ? '✓ Copied to clipboard' : copyState === 'copying' ? 'Copying instructions…' : copyState === 'manual' ? 'Copy instructions' : 'Set up with your agent'}
+    </button>}
     <div role="status">{copyState === 'copied' && <p>Paste the instructions into the conversation you want to sync.</p>}
       {copyState === 'manual' && <p>Copy the selected instructions, then paste them into the conversation you want to sync.</p>}
-      {installer && (copyState === 'copied' || copyState === 'manual') && <p>Open the installer from Downloads. <a href={installer} download>Download again</a></p>}</div>
+      {needsInstaller && installer && <p>Open the installer from Downloads. <a href={installer} download>Download again</a></p>}
+      {needsInstaller && installer === null && <p>The Mac installer isn’t available here yet. See the <a href={setupGuide(boardId)}>installation guide</a>.</p>}</div>
     {copyState === 'manual' && <label className="a-field">Setup instructions
       <textarea ref={fallback} rows={5} readOnly value={handoff(boardId)} />
     </label>}
-    {installer === null && <p className="a-muted">The Mac installer isn’t available here yet. If you don’t have the app, see the <a href={setupGuide(boardId)}>installation guide</a>.</p>}
     {!!count && <button type="button" className="a-secondary" disabled={busy} onClick={async () => {
       setBusy(true);
       try {

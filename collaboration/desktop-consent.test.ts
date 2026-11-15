@@ -27,10 +27,14 @@ it.each(['chosen','viewer','missing'])('preselects only editable destination %s 
  }finally{await act(async()=>root.unmount());container.remove();}
 });
 
-it('copies the board setup and starts the published download in the same click',async()=>{
+it.each([
+ {hasApp:true,published:true},
+ {hasApp:false,published:true},
+ {hasApp:false,published:false},
+])('copies setup with the correct download behavior ($hasApp installed, $published published)',async({hasApp,published})=>{
  query.mockReturnValue(0);
  const installer='/downloads/branch-for-mac.dmg';
- vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({installer})}));
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:published,json:async()=>({installer})}));
  const download=vi.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(function(this:HTMLAnchorElement){
   expect(this.getAttribute('href')).toBe(installer);
   expect(this.download).toBe('branch-for-mac.dmg');
@@ -48,12 +52,19 @@ it('copies the board setup and starts the published download in the same click',
   expect(buttons[0].textContent).toBe('Set up with your agent');
   expect(container.querySelector('a')).toBeNull();
   await act(async()=>buttons[0].click());
-  expect(download).toHaveBeenCalledTimes(1);
+  expect(container.textContent).toContain('Do you already have Branch for Mac?');
+  expect(download).not.toHaveBeenCalled();
+  expect(writeText).not.toHaveBeenCalled();
+  const label=hasApp?'Yes, I have it':'No, download it';
+  const answer=[...container.querySelectorAll('button')].find(button=>button.textContent===label)!;
+  await act(async()=>answer.click());
+  expect(download).toHaveBeenCalledTimes(!hasApp&&published?1:0);
   expect(container.querySelector('[role="status"]')?.textContent).not.toContain('Paste the instructions');
   await act(async()=>clipboardComplete());
-  expect(buttons[0].textContent).toContain('Copied to clipboard');
+  expect(container.querySelector('button')?.textContent).toContain('Copied to clipboard');
   expect(container.querySelector('[role="status"]')?.textContent).toContain('Paste the instructions');
-  expect(container.querySelector('a[download]')?.textContent).toBe('Download again');
+  expect(container.querySelector('a[download]')?.textContent).toBe(!hasApp&&published?'Download again':undefined);
+  expect(container.textContent.includes('installer isn’t available')).toBe(!hasApp&&!published);
   const [[prompt]]=writeText.mock.calls;
   expect(prompt).toContain('https://joinbranch.dev/app?board=chosen#mac-sync=open');
   expect(prompt).not.toMatch(/github|swift|clone|build-probe/i);

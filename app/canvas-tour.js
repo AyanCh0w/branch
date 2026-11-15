@@ -24,7 +24,12 @@
     </div>
     <div class="tour-provider-panel" data-tour-panel="chatgpt">
      <p>Bring new replies from an open conversation into this board’s Context.</p>
-     <button type="button" class="tour-action" data-tour="copy-setup">Set up with your agent</button>
+     <button type="button" class="tour-action" data-tour="start-mac-setup">Set up with your agent</button>
+     <div data-mac-choice role="group" aria-label="Do you already have Branch for Mac?" hidden>
+      <p><strong>Do you already have Branch for Mac?</strong></p>
+      <button type="button" class="tour-action" data-tour="mac-installed">Yes, I have it</button>
+      <button type="button" data-tour="mac-download">No, download it</button>
+     </div>
      <a href="/mac-setup.html" data-mac-guide hidden>Installation guide ↗</a>
      <textarea readonly rows="5" aria-label="Mac sync setup instructions" data-setup-fallback hidden></textarea>
      <details class="tour-troubleshooting"><summary>Troubleshooting an installed app</summary><p>Only use this check after installation, if the app asks you to verify what it can read.</p>
@@ -54,7 +59,7 @@
   try{localStorage.setItem(seenKey(userId),'1');}catch{}
  }
  let provider='chatgpt', baselinePrompt='';
- let macInstaller, checkingInstaller=false;
+ let macInstaller, checkingInstaller=false, needsMacInstaller=false;
  const connections=dialog.querySelector('.tour-connections');
  const promptField=dialog.querySelector('[data-baseline]');
  const connectionStatus=dialog.querySelector('.tour-connection-status');
@@ -152,38 +157,55 @@
   dialog.querySelector('[data-tour="copy-baseline"]').disabled=!baselinePrompt;
   dialog.querySelector('[data-tour="chrome"]').hidden=viewer||!chromeControl();
   dialog.querySelector('[data-tour="claude"]').hidden=viewer;
-  const setupButton=dialog.querySelector('[data-tour="copy-setup"]');
+  const setupButton=dialog.querySelector('[data-tour="start-mac-setup"]');
+  const downloadButton=dialog.querySelector('[data-tour="mac-download"]');
   const guide=dialog.querySelector('[data-mac-guide]');
+  needsMacInstaller=false;
+  dialog.querySelector('[data-mac-choice]').hidden=true;
   setupButton.hidden=viewer;
-  setupButton.disabled=macInstaller===undefined;
+  setupButton.disabled=false;
+  delete setupButton.dataset.copyReady;
   setupButton.textContent='Set up with your agent';
-  guide.hidden=viewer||macInstaller!==null;
+  guide.hidden=true;
+  downloadButton.disabled=macInstaller===undefined;
   if(!viewer&&macInstaller===undefined&&!checkingInstaller){
    checkingInstaller=true;
    window.BranchMacSetup.loadMacInstaller().then(installer=>{
     macInstaller=installer;
-    setupButton.disabled=false;
-    guide.hidden=viewer||!!installer;
+    downloadButton.disabled=false;
    });
   }
   dialog.querySelector('[data-setup-fallback]').hidden=true;
   connectionStatus.textContent=viewer&&provider==='claude'?'Ask a board editor to connect Claude Code.':'';
  }
- async function copySetup(button){
+ function startMacSetup(button){
+  if(button.dataset.copyReady)return copySetup(false);
+  button.hidden=true;
+  dialog.querySelector('[data-mac-choice]').hidden=false;
+  dialog.querySelector('[data-tour="mac-installed"]').focus();
+ }
+ async function copySetup(download){
   const setup=window.BranchMacSetup;
   const boardId=new URLSearchParams(location.search).get('board');
   const value=setup.handoff(boardId);
+  const button=dialog.querySelector('[data-tour="start-mac-setup"]');
   const field=dialog.querySelector('[data-setup-fallback]');
-  const installer=button.textContent==='✓ Copied to clipboard'||!field.hidden?null:macInstaller;
+  if(!button.dataset.copyReady)needsMacInstaller=download;
+  const offerInstaller=needsMacInstaller;
+  dialog.querySelector('[data-mac-choice]').hidden=true;
+  button.hidden=false;
   button.disabled=true;
-  const copied=await setup.copyMacSetup(value,installer);
+  button.textContent='Copying instructions…';
+  const copied=await setup.copyMacSetup(value,download?macInstaller:null);
   button.disabled=false;
   if(!dialog.open||connections.hidden||provider!=='chatgpt')return;
-  const installHint=macInstaller?' Open the installer from Downloads.':' The Mac installer isn’t available here yet.';
+  button.dataset.copyReady='true';
+  const installHint=offerInstaller?(macInstaller?' Open the installer from Downloads.':' The Mac installer isn’t available here yet.'):'';
+  dialog.querySelector('[data-mac-guide]').hidden=!offerInstaller||!!macInstaller;
   if(copied){
    button.textContent='✓ Copied to clipboard';field.hidden=true;connectionStatus.textContent='Paste the instructions into the conversation you want to sync.'+installHint;
   }else{
-   button.textContent='Set up with your agent';field.value=value;field.hidden=false;field.focus();field.select();
+   button.textContent='Copy instructions';field.value=value;field.hidden=false;field.focus();field.select();
    connectionStatus.textContent='Copy the selected instructions, then paste them into the conversation you want to sync.'+installHint;
   }
  }
@@ -229,7 +251,9 @@
    case 'next':if(index===slides.length-1)finish();else{index++;render();}break;
    case 'connections':showConnections();break;
    case 'provider':provider=button.dataset.provider;renderConnections();guideStep();break;
-   case 'copy-setup':if(!viewer)void copySetup(button);break;
+   case 'start-mac-setup':if(!viewer)void startMacSetup(button);break;
+   case 'mac-installed':if(!viewer)void copySetup(false);break;
+   case 'mac-download':if(!viewer)void copySetup(true);break;
    case 'copy-baseline':void copyBaseline();break;
    case 'chrome':{
     const setup=chromeControl();

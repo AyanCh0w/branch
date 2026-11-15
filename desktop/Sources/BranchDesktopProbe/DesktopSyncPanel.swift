@@ -31,7 +31,6 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     private let chatPicker = BranchConversationPicker()
     private let status = NSTextField(wrappingLabelWithString: "")
     private lazy var findButton = button("Find conversations", #selector(findChats))
-    private lazy var settingsButton = button("Open Accessibility Settings", #selector(openAccessibilitySettings))
     private lazy var startButton = button("Connect conversation", #selector(start))
     private lazy var stopButton = button("Stop syncing", #selector(stop))
     private lazy var openButton = button("Open in Branch", #selector(openCard))
@@ -41,12 +40,11 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
 
     private var watching: Task<Void, Never>?
     private var uploading: Task<Void, Never>?
-    private var permissionCheck: Task<Void, Never>?
+    private var accessibilitySetup: AccessibilitySetupPanel?
     private var discovery: Task<Void, Never>?
     private var preferredBoardID: String?
     private var pendingLink: ConnectionLink?
     private var launchTicket: String?
-    private var requestedAccess = false
     private var refreshing = false
     private var connection: DesktopSyncClient?
     private var boardTitle: String?
@@ -84,7 +82,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         status.font = BranchSyncTheme.font(14)
         status.textColor = BranchSyncTheme.ink
         status.setAccessibilityLabel("Sync status")
-        let actions = row([startButton, approvalButton, openButton, findButton, settingsButton, diagnosticButton, stopButton])
+        let actions = row([startButton, approvalButton, openButton, findButton, diagnosticButton, stopButton])
         let helpActions = row([chatAppButton])
         [brand, heading, intro, connectionStatus, conversationLabel, chatPicker, status, actions, helpActions].forEach(content.addArrangedSubview)
         content.orientation = .vertical
@@ -133,8 +131,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         pendingLink = nil
         if watching == nil { launchTicket = nil }
-        permissionCheck?.cancel()
-        permissionCheck = nil
+        accessibilitySetup?.close()
         discovery?.cancel()
         discovery = nil
     }
@@ -143,11 +140,20 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         guard discovery == nil else { return }
         discovery = Task { [weak self] in
             while !Task.isCancelled {
-                guard let self, self.window.isVisible else { return }
-                if self.watching == nil && !self.refreshing && self.chatPicker.numberOfItems <= 1 && AXIsProcessTrusted() { self.refresh() }
-                do { try await Task.sleep(for: .seconds(3)) } catch { return }
+                guard let delay = self?.discoverConversations() else { return }
+                do { try await Task.sleep(for: delay) } catch { return }
             }
         }
+    }
+
+    /// Checks for a grant more often while the permission helper is open.
+    private func discoverConversations() -> Duration? {
+        guard window.isVisible else { return nil }
+        let showingSetup = accessibilitySetup?.isVisible == true
+        if !refreshing, watching == nil, showingSetup || chatPicker.numberOfItems <= 1, AXIsProcessTrusted() {
+            refresh()
+        }
+        return showingSetup ? .milliseconds(500) : .seconds(3)
     }
 
     @objc private func openChatApp() {
@@ -208,46 +214,22 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     @objc private func findChats() {
         guard watching == nil, !refreshing else { return }
         offersDiagnostics = false
-        permissionCheck?.cancel()
-        permissionCheck = nil
         if AXIsProcessTrusted() {
             refresh()
             return
         }
 
-        let prompt = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-        _ = AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary)
-        let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Branch"
-        requestedAccess = true
-        status.stringValue = "Turn on \(appName) in Accessibility. We’ll look for conversations once you approve."
+        let setup = accessibilitySetup ?? AccessibilitySetupPanel()
+        accessibilitySetup = setup
+        setup.show(on: window.screen ?? NSScreen.main)
+        status.stringValue = "Add Branch in System Settings and turn it on. We’ll look for conversations as soon as you approve."
         updateControls()
-        permissionCheck = Task {
-            let clock = ContinuousClock()
-            let deadline = clock.now + .seconds(120)
-            while !AXIsProcessTrusted(), clock.now < deadline {
-                do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
-            }
-            guard !Task.isCancelled else { return }
-            permissionCheck = nil
-            if AXIsProcessTrusted() {
-                refresh()
-            } else {
-                status.stringValue = "Accessibility approval is still needed. Select Allow Accessibility to continue."
-                updateControls()
-            }
-        }
-    }
-
-    @objc private func openAccessibilitySettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
-        }
-        if permissionCheck == nil { findChats() }
     }
 
     private func refresh() {
         guard watching == nil, !refreshing else { return }
         refreshing = true
+        if AXIsProcessTrusted(), accessibilitySetup?.isVisible == true { accessibilitySetup?.close() }
         let previous = chatPicker.indexOfSelectedItem > 0 ? chatPicker.titleOfSelectedItem : nil
         if chatPicker.numberOfItems <= 1 { status.stringValue = "Looking for conversations…" }
         updateControls()
@@ -636,7 +618,6 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         findButton.title = !trusted ? "Allow Accessibility…" : hasChoices ? "Refresh list" : "Find conversations"
         findButton.isHidden = inSession
         findButton.isEnabled = !refreshing
-        settingsButton.isHidden = inSession || trusted || !requestedAccess
         conversationLabel.isHidden = inSession || !hasChoices
         chatPicker.isHidden = conversationLabel.isHidden
         chatPicker.isEnabled = !chatPicker.isHidden && !refreshing

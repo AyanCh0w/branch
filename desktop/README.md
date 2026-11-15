@@ -14,8 +14,8 @@ open 'build/Branch for Mac.app'
 
 Keep using the same signing identity across builds so macOS can recognize updates. `BRANCH_CODESIGN_IDENTITY` overrides the checkout setting. Without an identity, the script builds the separate ad hoc **Branch Desktop Probe** for diagnostics. Use one consistent Developer ID Application identity and notarize the signed app before distributing it to users.
 
-1. Open a board at https://joinbranch.dev/app, then **Conversation sync → Set up with your agent**. This copies the setup instructions and starts the Branch for Mac download when the website ships the installer. If you need to install the app, open the disk image from Downloads and drag Branch for Mac into Applications. Paste the instructions into the conversation you want to sync. The included link carries your board choice into Branch for Mac.
-2. Open a Chat, Work, or Codex conversation, then click the Branch logo in the Mac menu bar to open **Conversation Sync**. On first use, allow Accessibility so Branch can list open windows. Choose the conversation and click **Connect conversation**.
+1. Open a board at https://joinbranch.dev/app, then **Conversation sync → Set up with your agent**. Choose **Yes, I have it** to copy the instructions, or **No, download it** to copy them and get the installer if it’s published. To install the app, open the disk image from Downloads and drag Branch for Mac into Applications. Paste the instructions into the conversation you want to sync. The included link carries your board choice into Branch for Mac.
+2. Open a Chat, Work, or Codex conversation, then click the Branch logo in the Mac menu bar to open **Conversation Sync**. On first use, click **Allow Accessibility**. Drag Branch from the setup window into the Accessibility list in System Settings and turn it on there. If Branch is already listed, just turn it on. You can also use **Show in Finder** and the **+** button in System Settings to add it. Branch resumes finding open conversations once macOS grants access. Choose the conversation and click **Connect conversation**.
 3. When started from a board, Branch connects as soon as it can read the selected chat. When started from the menu bar without a board authorization, choose the destination board in the browser.
 4. Wait for **Sync is on** in Branch for Mac before sending another message. After the first save, the app confirms the reply was saved and **Open in Branch** opens the saved replies. Use **Stop syncing** from the app or **Disconnect conversations** on the board to revoke access.
 
@@ -33,7 +33,7 @@ From the repository root, include the installer with the normal Cloudflare relea
 BRANCH_MAC_INSTALLER='/absolute/path/to/branch-for-mac.dmg' npm run deploy:cloudflare
 ```
 
-After deployment, verify **Set up with your agent** copies the board instructions and downloads the disk image from a browser on a Mac without the app installed.
+After deployment, verify both answers in **Set up with your agent** copy the board instructions and only **No, download it** downloads the disk image.
 
 ## Desktop Sync Probe
 

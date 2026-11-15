@@ -85,7 +85,9 @@ test('installation handoff contains setup and only the board destination, not UR
   const downloads=[];
   w.fetch=async()=>({ok:true,json:async()=>({installer:'/downloads/branch-for-mac.dmg'})});
   w.HTMLAnchorElement.prototype.click=function(){downloads.push(this.getAttribute('href'));};
-  tour.start({userId:'one',scene:'connections'});await new Promise(setImmediate);click('copy-setup');await new Promise(setImmediate);
+  tour.start({userId:'one',scene:'connections'});await new Promise(setImmediate);click('start-mac-setup');
+  assert.equal(copied,undefined);assert.deepEqual(downloads,[]);
+  click('mac-download');await new Promise(setImmediate);
   assert.deepEqual(downloads,['/downloads/branch-for-mac.dmg']);
   assert.match(copied,/https:\/\/joinbranch.dev\/mac-setup.html/);
   assert.match(copied,/software catalog or IT/);
@@ -94,7 +96,7 @@ test('installation handoff contains setup and only the board destination, not UR
   assert.match(copied,/this chat’s exact title/);assert.match(copied,/Open Branch for Mac/);assert.match(copied,/ChatGPT desktop app/);
   assert.doesNotMatch(copied,/github|swift|build-probe|checkout|pairing prompt|baseline prompt/i);
   assert.equal(d.querySelector('details').open,false);assert.equal(d.querySelector('[data-setup-fallback]').hidden,true);
-  assert.equal(d.querySelector('[data-tour="copy-setup"]').textContent,'✓ Copied to clipboard');
+  assert.equal(d.querySelector('[data-tour="start-mac-setup"]').textContent,'✓ Copied to clipboard');
   assert.match(d.querySelector('.tour-connection-status').textContent,/Paste the instructions/);
  }finally{dom.window.close();}
 });
@@ -111,7 +113,7 @@ test('clipboard failure exposes selectable installation instructions',async()=>{
   Object.defineProperty(w.navigator,'clipboard',{value:{async writeText(){throw Error('denied');}}});
   w.fetch=async()=>({ok:false});
   w.HTMLAnchorElement.prototype.click=function(){assert.fail('No installer is published');};
-  tour.start({userId:'one',scene:'connections'});await new Promise(setImmediate);click('copy-setup');await new Promise(setImmediate);
+  tour.start({userId:'one',scene:'connections'});await new Promise(setImmediate);click('start-mac-setup');click('mac-download');await new Promise(setImmediate);
   const field=d.querySelector('[data-setup-fallback]');assert.equal(field.hidden,false);assert.match(field.value,/Help me connect this conversation/);
   assert.equal(d.querySelector('[data-mac-guide]').hidden,false);
   const count=d.querySelector('.tour-count').textContent;field.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));assert.equal(d.querySelector('.tour-count').textContent,count);
