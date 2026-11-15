@@ -83,6 +83,7 @@ function undoDeletion(redo) {
 }
 
 function status(text) { const el = document.querySelector('#save-state'); if(el) { el.textContent = text; el.title = text; } }
+function syncStatus(){status(failure?'Sync paused · edits kept on this device':connected?'Shared · saved':'Reconnecting · Send paused');}
 function args(extra = {}) { return { token: credentials.token, boardId: credentials.boardId, ...extra }; }
 function enqueue(work) {
   const next = queue.then(work);
@@ -161,10 +162,29 @@ async function flush() {
   }
   const updates=[...pending.entries()];pending.clear();
   for(const [key,list]of updates){const item=docs.get(key);if(!item)continue;const update=Y.mergeUpdates(list);const epoch=item.epoch;
+    // Wait only for focus work already queued, not an ever-growing heartbeat chain.
+    const focused=focusTask;
     await enqueue(async()=>{
-      await focusTask;
+      await focused;
       if (docs.get(key) !== item) return;
-      const result = await client.mutation('collaboration:updateText',args({nodeKey:key,update:bytes(update),tabId,epoch}));
+      const write=()=>client.mutation('collaboration:updateText',args({nodeKey:key,update:bytes(update),tabId,epoch}));
+      let result;
+      try{result=await write();}catch(error){
+        if(!String(error.message).includes('Editing session expired'))throw error;
+        // An idle/suspended tab can lose its lease before a queued write arrives.
+        // Renew once, retaining the original draft epoch: never revive a sent prompt.
+        const lease=await client.mutation('collaboration:focus',args({nodeKey:key,field:'draft',tabId}));
+        if(lease.deleted){result={deleted:true};}
+        else{
+          try{
+            if(lease.epoch!==epoch)throw Error('This prompt was already sent. Your edits have been kept locally.');
+            if(active?.key===key&&active.field==='draft')active.expiresAt=lease.expiresAt;
+            result=await write();
+          }finally{
+            if(active?.key!==key||active.field!=='draft')await client.mutation('collaboration:release',args({nodeKey:key,field:'draft',tabId})).catch(()=>{});
+          }
+        }
+      }
       if (result?.deleted) {
         keepRecovery();
         forgetDeletedNode(key);
@@ -272,7 +292,7 @@ async function start(config){
       if (ready && writable) window.BranchCoding?.update({ ...value, endpoint: location.origin + '/api/backend?coding' });
     }, () => window.BranchCoding?.reset()));
     subscriptions.push(client.onUpdate('collaboration:editors',args(),value=>{rows=value;updateLocks();},()=>{}));
-    subscriptions.push(client.subscribeToConnectionState(state=>{connected=state.isWebSocketConnected;status(connected?'Shared · saved':'Reconnecting · Send paused');updateLocks();}));
+    subscriptions.push(client.subscribeToConnectionState(state=>{connected=state.isWebSocketConnected;syncStatus();updateLocks();}));
     subscriptions.push(startCursors({client,scope:args(),tabId,host}));
     document.body.classList.remove('shared-starting');status('Shared · saved');updateLocks();focusEditor(document.activeElement);
     // URL bookkeeping must never prevent live subscriptions or leave the canvas locked.
