@@ -3,8 +3,8 @@ const assert=require('node:assert/strict');
 const {JSDOM}=require('jsdom');
 const fs=require('node:fs');
 const path=require('node:path');
-function boot(reduced=false){
- const dom=new JSDOM('<footer class="site-footer"><div id="footer-playground"><canvas></canvas><button>Draw</button></div><button data-footer-tone-toggle>Dark footer</button></footer>',{runScripts:'outside-only',pretendToBeVisual:true,url:'https://branch.test'});
+function boot(reduced=false,savedDarkness=null){
+ const dom=new JSDOM('<footer class="site-footer"><div id="footer-playground"><canvas></canvas><button>Draw</button></div><input id="footer-darkness" type="range" min="0" max="100"><output id="footer-darkness-value"></output><button id="nav-appearance-reset">Reset</button></footer>',{runScripts:'outside-only',pretendToBeVisual:true,url:'https://branch.test'});
  const w=dom.window,frames=new Map(),draws=[];let id=0,visibility;
  const ctx=new Proxy({}, {get(_,key){return (...args)=>draws.push({key,args});},set(){return true;}});
  w.HTMLCanvasElement.prototype.getContext=()=>ctx;
@@ -12,6 +12,7 @@ function boot(reduced=false){
  w.requestAnimationFrame=fn=>{frames.set(++id,fn);return id;};w.cancelAnimationFrame=id=>frames.delete(id);
  w.ResizeObserver=class{observe(){}};w.IntersectionObserver=class{constructor(fn){visibility=fn;}observe(){}};
  const host=w.document.querySelector('#footer-playground');host.getBoundingClientRect=()=>({left:0,top:0,width:390,height:336});
+ if(savedDarkness!==null)w.localStorage.setItem('branch.footer-darkness.v1',savedDarkness);
  w.eval(fs.readFileSync(path.resolve(__dirname,'../landing-footer.js'),'utf8'));
  function pointer(type,x,y,pointerType='mouse'){const event=new w.Event(type,{bubbles:true,cancelable:true});Object.assign(event,{clientX:x,clientY:y,pointerType,isPrimary:true});host.dispatchEvent(event);return event;}
  function tick(time){const pending=[...frames.values()];frames.clear();pending.forEach(fn=>fn(time));}
@@ -21,7 +22,7 @@ test('hover draws connected grid points and the animation sleeps after retractio
  const b=boot();try{
  assert.equal(b.frames.size,0);
  b.pointer('pointermove',36,60);b.pointer('pointermove',180,84);b.tick(b.w.performance.now());
- assert.ok(b.draws.some(d=>d.key==='bezierCurveTo'));assert.ok(b.draws.some(d=>d.key==='arc'));assert.equal(b.frames.size,1);
+ assert.ok(b.draws.some(d=>d.key==='bezierCurveTo'));assert.ok(b.draws.some(d=>d.key==='roundRect'));assert.equal(b.frames.size,1);
  b.tick(b.w.performance.now()+2200);assert.equal(b.frames.size,0);assert.equal(b.host.dataset.engaged,'false');
  }finally{b.dom.window.close();}
 });
@@ -36,7 +37,7 @@ test('touch taps create a branch while scrolling and cancellation do not draw',(
 });
 test('keyboard button works with reduced motion and schedules no animation',()=>{
  const b=boot(true);try{
- b.host.querySelector('button').click();assert.ok(b.draws.some(d=>d.key==='arc'));assert.equal(b.frames.size,0);
+ b.host.querySelector('button').click();assert.ok(b.draws.some(d=>d.key==='roundRect'));assert.equal(b.frames.size,0);
  b.visibility([{isIntersecting:false}]);assert.equal(b.frames.size,0);
  }finally{b.dom.window.close();}
 });
@@ -45,29 +46,42 @@ test('trail holds briefly and retracts oldest points in sequence',()=>{
  const b=boot();try{
  b.pointer('pointermove',48,80);b.pointer('pointermove',176,80);
  const start=b.w.performance.now();
- function points(time){b.draws.length=0;b.tick(time);return b.draws.filter(d=>d.key==='arc').map(d=>d.args[0]);}
+ function points(time){b.draws.length=0;b.tick(time);return b.draws.filter(d=>d.key==='roundRect').map(d=>d.args[0]+d.args[2]/2);}
  assert.deepEqual(points(start),[64,96,128,160,192]);
  assert.deepEqual(points(start+400),[64,96,128,160,192]);
  assert.deepEqual(points(start+650),[96,128,160,192]);
  assert.deepEqual(points(start+700),[128,160,192]);
  }finally{b.dom.window.close();}
 });
-test('footer tone defaults dark and toggles independently with a saved preference',()=>{
+test('footer darkness previews, saves and resets independently of page theme',()=>{
  const b=boot();try{
- const footer=b.host.closest('footer'),toggle=b.w.document.querySelector('[data-footer-tone-toggle]');
- assert.equal(footer.dataset.footerTone,'dark');assert.equal(toggle.getAttribute('aria-pressed'),'true');
- toggle.click();assert.equal(footer.dataset.footerTone,'light');assert.equal(b.w.localStorage.getItem('branch-footer-tone'),'light');
- toggle.click();assert.equal(footer.dataset.footerTone,'dark');assert.equal(b.w.document.documentElement.dataset.theme,undefined);
+ const footer=b.host.closest('footer'),slider=b.w.document.getElementById('footer-darkness');
+ assert.equal(slider.value,'85');
+ const initial=footer.style.getPropertyValue('--footer-bg');
+ slider.value='30';slider.dispatchEvent(new b.w.Event('input'));
+ assert.notEqual(footer.style.getPropertyValue('--footer-bg'),initial);
+ assert.equal(b.w.document.getElementById('footer-darkness-value').value,'30%');
+ slider.dispatchEvent(new b.w.Event('change'));
+ assert.equal(b.w.localStorage.getItem('branch.footer-darkness.v1'),'30');
+ assert.equal(b.w.document.documentElement.dataset.theme,undefined);
+ b.w.document.getElementById('nav-appearance-reset').click();
+ assert.equal(slider.value,'85');assert.equal(footer.style.getPropertyValue('--footer-bg'),initial);
+ assert.equal(b.w.localStorage.getItem('branch.footer-darkness.v1'),'85');
  }finally{b.dom.window.close();}
+});
+test('saved darkness survives reload and is clamped to the slider range',()=>{
+ for(const [saved,expected] of [['30','30'],['200','100'],['bad','85']]){
+ const b=boot(false,saved);try{assert.equal(b.w.document.getElementById('footer-darkness').value,expected);}finally{b.dom.window.close();}
+ }
 });
 
 test('points sit between background dots and smoothly grow before retracting',()=>{
  const b=boot();try{
  b.pointer('pointermove',61,63); const start=b.w.performance.now();
- function radius(time){b.draws.length=0;b.tick(time);return b.draws.find(d=>d.key==='arc').args;}
+ function radius(time){b.draws.length=0;b.tick(time);return b.draws.find(d=>d.key==='roundRect').args;}
  const first=radius(start),settled=radius(start+180),retiring=radius(start+540);
- assert.equal(first[0]%32,0);assert.equal(first[1]%32,0);
- assert.ok(first[2]<settled[2]);assert.equal(settled[2],10);
- assert.ok(retiring[2]>0 && retiring[2]<10);
+ assert.equal((first[0]+first[2]/2)%32,0);assert.equal((first[1]+first[3]/2)%32,0);
+ assert.ok(first[2]<settled[2]);assert.equal(settled[2],20);
+ assert.ok(retiring[2]>0 && retiring[2]<20);
  }finally{b.dom.window.close();}
 });

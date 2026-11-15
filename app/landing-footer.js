@@ -9,17 +9,44 @@
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const step = 32, hold = 500, removalInterval = 50, transition = 140;
   const footer = host.closest('.site-footer');
-  const toneToggle = document.querySelector('[data-footer-tone-toggle]');
-  function setTone(tone) {
-    if (footer) footer.dataset.footerTone = tone;
-    toneToggle?.setAttribute('aria-pressed', String(tone === 'dark'));
+  const darknessInput = document.getElementById('footer-darkness');
+  const darknessOutput = document.getElementById('footer-darkness-value');
+  const darknessKey = 'branch.footer-darkness.v1';
+  let darkness = 85;
+  try {
+    const saved = localStorage.getItem(darknessKey);
+    if (saved !== null && Number.isFinite(Number(saved))) darkness = Math.max(0,Math.min(100,Number(saved)));
+    else if (localStorage.getItem('branch-footer-tone') === 'light') darkness = 0;
+  } catch {}
+  function setDarkness(value) {
+    darkness = value;
+    const rgb = [237,240,243].map((c,i)=>Math.round(c+([20,24,30][i]-c)*value/100));
+    const luminance = rgb.map(c=>{c/=255;return c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4);})
+      .reduce((sum,c,i)=>sum+c*[.2126,.7152,.0722][i],0);
+    const dark = luminance < .179;
+    const ink = dark ? [240,242,245] : [32,38,46];
+    const color = values => `rgb(${values.join(',')})`;
+    const shifted = amount => rgb.map(c=>Math.max(0,Math.min(255,c+amount)));
+    footer.dataset.footerTone = dark ? 'dark' : 'light';
+    footer.style.setProperty('--footer-bg',color(rgb));
+    footer.style.setProperty('--footer-ink',color(ink));
+    footer.style.setProperty('--footer-muted',color(ink));
+    footer.style.setProperty('--footer-border',color(shifted(dark ? 23 : -21)));
+    footer.style.setProperty('--footer-dot',color(shifted(dark ? 40 : -50)));
+    footer.style.setProperty('--footer-control',color(shifted(dark ? 7 : 9)));
+    footer.style.setProperty('--footer-hover',dark ? '#fff' : '#16263e');
+    if (darknessInput) darknessInput.value = String(value);
+    if (darknessOutput) darknessOutput.value = `${value}%`;
   }
-  try { setTone(localStorage.getItem('branch-footer-tone') === 'light' ? 'light' : 'dark'); } catch { setTone('dark'); }
-  toneToggle?.addEventListener('click', () => {
-    const tone = footer.dataset.footerTone === 'dark' ? 'light' : 'dark';
-    setTone(tone);
-    try { localStorage.setItem('branch-footer-tone', tone); } catch {}
+  function saveDarkness() { try { localStorage.setItem(darknessKey,String(darkness)); } catch {} }
+  setDarkness(darkness);
+  darknessInput?.addEventListener('input',()=>{
+    setDarkness(Number(darknessInput.value));
     if (nodes.size) wake();
+  });
+  darknessInput?.addEventListener('change',saveDarkness);
+  document.getElementById('nav-appearance-reset')?.addEventListener('click',()=>{
+    setDarkness(85);saveDarkness();if (nodes.size) wake();
   });
   let lastRemoval = 0;
   let width = 1, height = 1, frame = 0, visible = true, previous = null, touchStart = null;
@@ -84,7 +111,7 @@
     for (const p of nodes.values()) {
       const size=scale(p);
       ctx.fillStyle=`rgba(${color},${.95*size})`;
-      ctx.beginPath();ctx.arc(p.x,p.y,10*size,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.roundRect(p.x-10*size,p.y-10*size,20*size,20*size,4*size);ctx.fill();
     }
     if(nodes.size && !reduced.matches) frame=requestAnimationFrame(paint);
     else if(!nodes.size) host.dataset.engaged='false';

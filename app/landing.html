@@ -57,11 +57,11 @@ return &lt;IssueList issues={issues} /&gt;;</code></pre><div class="inherited"><
 <footer class="site-footer" aria-label="Branch footer" data-footer-tone="dark">
   <div class="footer-top"><a class="brand" href="/" aria-label="Branch home"><img src="/icons/branch-mark.svg" width="24" height="24" alt="">branch</a><nav aria-label="Footer navigation"><a href="#branches">How it works</a><a href="/app">Open workspace ↗</a></nav></div>
   <div class="footer-playground" id="footer-playground" aria-label="Interactive connection canvas">
-    <svg class="footer-mobile-preview" viewBox="0 0 320 160" aria-hidden="true" fill="none"><g stroke="currentColor" stroke-width="1.1"><path d="M48 80Q76 76 104 80C132 80 132 32 160 32Q212 28 264 32M104 80Q184 86 264 80M104 80C132 80 132 128 160 128Q212 132 264 128"/></g><g fill="currentColor"><circle cx="48" cy="80" r="11"/><circle cx="104" cy="80" r="11"/><circle cx="264" cy="32" r="11"/><circle cx="264" cy="80" r="11"/><circle cx="264" cy="128" r="11"/></g></svg>
+    <svg class="footer-mobile-preview" viewBox="0 0 320 160" aria-hidden="true" fill="none"><g stroke="currentColor" stroke-width="1.1"><path d="M48 80Q76 76 104 80C132 80 132 32 160 32Q212 28 264 32M104 80Q184 86 264 80M104 80C132 80 132 128 160 128Q212 132 264 128"/></g><g fill="currentColor"><rect x="37" y="69" width="22" height="22" rx="4"/><rect x="93" y="69" width="22" height="22" rx="4"/><rect x="253" y="21" width="22" height="22" rx="4"/><rect x="253" y="69" width="22" height="22" rx="4"/><rect x="253" y="117" width="22" height="22" rx="4"/></g></svg>
     <canvas aria-hidden="true"></canvas>
     <button class="footer-play" type="button" aria-label="Draw a connection pattern"><span class="footer-pointer-hint">Move to connect</span><span class="footer-touch-hint">Tap to connect</span><span aria-hidden="true">↗</span></button>
   </div>
-  <div class="footer-bottom"><small>© 2026 Branch</small><a class="footer-cta" href="/app?auth=signup">Start building together <span aria-hidden="true">↗</span></a><button type="button" class="footer-tone" data-footer-tone-toggle aria-label="Dark footer" aria-pressed="true"><span>Dark footer</span><span class="footer-tone-track" aria-hidden="true"></span></button></div>
+  <div class="footer-bottom"><small>© 2026 Branch</small><a class="footer-cta" href="/app?auth=signup">Start building together <span aria-hidden="true">↗</span></a></div>
 </footer>
 <details class="appearance-controls">
 <summary aria-label="Appearance"><svg class="appearance-compact-icon" aria-hidden="true" width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -81,6 +81,10 @@ Appearance <span aria-hidden="true">⌃</span></summary>
 <label class="appearance-range-label" for="paper-background-strength">Intensity <output id="paper-background-value" for="paper-background-strength">45%</output></label>
 <input id="paper-background-strength" type="range" min="0" max="100" value="45">
 <p id="paper-background-status">Monochrome · Connected vortex</p>
+</div>
+<div class="appearance-background">
+<label class="appearance-range-label" for="footer-darkness">Footer darkness <output id="footer-darkness-value" for="footer-darkness">85%</output></label>
+<input id="footer-darkness" type="range" min="0" max="100" step="1" value="85">
 </div>
 <div class="appearance-footer"><span>Saved on this browser</span><button type="button" id="nav-appearance-reset">Reset</button></div>
 </div>
