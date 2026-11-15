@@ -7,7 +7,7 @@ import {Store} from './store';
 import config from './config.cjs';
 import {guardConnection} from './connection';
 // Socket pools must never cross Cloudflare request/event lifetimes.
-const runtime=new AsyncLocalStorage<{pool:Pool,notify?:()=>Promise<void>,barrier?:(boards:string[],xid:string)=>Promise<void>}>();
+const runtime=new AsyncLocalStorage<{pool:Pool,notify?:()=>Promise<void>,barrier?:(boards:string[],xid:string)=>Promise<void>,changed?:(change:any)=>Promise<void>}>();
 let localPool:Pool|undefined;
 const currentPool=()=>{
  const scoped=runtime.getStore()?.pool;if(scoped)return scoped;
@@ -21,13 +21,13 @@ const currentPool=()=>{
 };
 export const pool=new Proxy({} as Pool,{get(_target,key){const active=currentPool(),value=Reflect.get(active,key);return typeof value==='function'?value.bind(active):value;}});
 export const configured=()=>!!(config.url&&config.key&&config.secret&&(runtime.getStore()||config.database));
-export async function withDatabase<T>(connectionString:string,fn:()=>Promise<T>,notify?:()=>Promise<void>,barrier?:(boards:string[],xid:string)=>Promise<void>):Promise<T>{
+export async function withDatabase<T>(connectionString:string,fn:()=>Promise<T>,notify?:()=>Promise<void>,barrier?:(boards:string[],xid:string)=>Promise<void>,changed?:(change:any)=>Promise<void>):Promise<T>{
  const scoped=new Pool({connectionString,max:5,connectionTimeoutMillis:10000,idleTimeoutMillis:1000});
  scoped.on('error',()=>console.error('Database connection interrupted'));
- return runtime.run({pool:scoped,notify,barrier},async()=>{try{return await fn();}finally{await scoped.end();}});
+ return runtime.run({pool:scoped,notify,barrier,changed},async()=>{try{return await fn();}finally{await scoped.end();}});
 }
 export const admin=config.url&&config.secret?createClient(config.url,config.secret,{auth:{persistSession:false,autoRefreshToken:false}}):null;
-export const engine=new Engine(pool,admin?.storage,undefined,async()=>{await runtime.getStore()?.notify?.();},async(boards,xid)=>{await runtime.getStore()?.barrier?.(boards,xid);});
+export const engine=new Engine(pool,admin?.storage,undefined,async()=>{await runtime.getStore()?.notify?.();},async(boards,xid)=>{await runtime.getStore()?.barrier?.(boards,xid);},async change=>{await runtime.getStore()?.changed?.(change);});
 export const publicConfig=()=>({provider:'supabase',url:config.url,publishableKey:config.key,legacy:[]});
 export async function identity(token=''){
  if(!token)return {};

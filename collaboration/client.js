@@ -1,3 +1,4 @@
+import {geometryPreviews,geometryPublisher} from './geometry';
 import {startCursors} from './cursors';
 import {createSaveScheduler} from './save-scheduler';
 import {openLiveBoard,liveTextPreviews} from './live';
@@ -14,7 +15,7 @@ const tabId = crypto.randomUUID();
 const host = window.BranchHost;
 let client, credentials, ready = false, applying = false, connected = false;
 let rows = [], active = null, focusTask = Promise.resolve(), queue = Promise.resolve();
-let lastState, failure = null, live, previews;
+let lastState, failure = null, live, previews, geometry, geometrySender, presence=[];
 let writable=true;const subscriptions=[];
 const uploadedFiles = new Map();
 const docs = new Map(), pending = new Map(), overlays = new Map(), sending = new Set();
@@ -218,7 +219,7 @@ function receive(snapshot){
     for(const [key,overlay]of overlays)if(!seen.has(key)&&overlay.create)nodes.push(copy(overlay.create));
     // Retire deleted documents before undo can restore their canonical text.
     for (const key of docs.keys()) if (!seen.has(key) && !overlays.get(key)?.create && !hidden.has(key)) forgetDeletedNode(key);
-    host.receive({title:snapshot.title,nodes});lastState=copy(host.getState());restoreCaret(caret);previews?.render();updateLocks();
+    host.receive({title:snapshot.title,nodes});lastState=copy(host.getState());restoreCaret(caret);previews?.render();geometry?.render();updateLocks();
   }finally{applying=false;}
 }
 function currentUserId(){return credentials?.userId||window.BranchAccount?.userId||rows.find(r=>r.tabId===tabId)?.userId;}
@@ -246,10 +247,10 @@ async function send(key){
 // Explicit geometry writes survive subscriptions received during a group drag.
 async function moveNodes(nodes){
  if(!ready||!writable)return;
- const changes=nodes.map(node=>({id:node.id,patch:{x:node.x,y:node.y}}));
+ const changes=nodes.map(node=>({id:node.id,patch:{x:node.x,y:node.y,...(Number.isFinite(node.width)?{width:node.width}:{}),...(Number.isFinite(node.minHeight)?{minHeight:node.minHeight}:{})}}));
  for(const change of changes)overlays.set(change.id,{...(overlays.get(change.id)||{}),patch:{...overlays.get(change.id)?.patch,...change.patch}});
  try{await enqueue(()=>client.mutation('boards:patchNodes',args({changes})));
-  for(const change of changes){const overlay=overlays.get(change.id);if(!overlay?.patch)continue;for(const field of ['x','y'])if(overlay.patch[field]===change.patch[field])delete overlay.patch[field];if(!Object.keys(overlay.patch).length){delete overlay.patch;if(!Object.keys(overlay).length)overlays.delete(change.id);}}
+  for(const change of changes){const overlay=overlays.get(change.id);if(!overlay?.patch)continue;for(const field of ['x','y','width','minHeight'])if(overlay.patch[field]===change.patch[field])delete overlay.patch[field];if(!Object.keys(overlay.patch).length){delete overlay.patch;if(!Object.keys(overlay).length)overlays.delete(change.id);}}
  }catch(error){host.notify(error.message);}
 }
 const coding = {
@@ -271,7 +272,7 @@ const coding = {
     nodeKey, handoffId, publish, ...(expectedPublishedId ? { expectedPublishedId } : {}),
   })),
 };
-window.BoardShared={coding,get liveConnected(){return !!live?.ready;},connect:start,async disconnect(){window.BranchCoding?.reset();await deletionQueue;if(ready&&writable&&!failure){try{await flush();await focusTask;await client.mutation('collaboration:release',args({tabId}));}catch{keepRecovery();}}ready=false;active=null;live?.close();live=null;previews?.clear();previews=null;saves.cancel();for(const off of subscriptions.splice(0))off();docs.clear();uploadedFiles.clear();pending.clear();overlays.clear();},get writable(){return writable;},headers(){return {'X-Board-Id':credentials?.boardId||'','X-Board-Token':credentials?.token||'',...(window.BranchAccount?.token?{Authorization:'Bearer '+window.BranchAccount.token}:{})};},get enabled(){return ready;},get applying(){return applying;},saveState,edit,send,deleteNode,moveNodes,async stop(key){try{await client.mutation('chat:stop',args({nodeKey:key}));}catch(error){host.notify(error.message);}},async uploadFile(file){
+window.BoardShared={coding,get liveConnected(){return !!live?.ready;},get presence(){return presence;},previewNodes(nodes){if(ready&&writable)geometrySender?.publish(nodes);},finishPreview(){geometrySender?.finish();},connect:start,async disconnect(){window.BranchCoding?.reset();await deletionQueue;if(ready&&writable&&!failure){try{await flush();await focusTask;await client.mutation('collaboration:release',args({tabId}));}catch{keepRecovery();}}ready=false;active=null;geometrySender?.close();geometrySender=null;geometry?.clear();geometry=null;live?.close();live=null;presence=[];window.dispatchEvent(new window.Event('branch-live-presence'));previews?.clear();previews=null;saves.cancel();for(const off of subscriptions.splice(0))off();docs.clear();uploadedFiles.clear();pending.clear();overlays.clear();},get writable(){return writable;},headers(){return {'X-Board-Id':credentials?.boardId||'','X-Board-Token':credentials?.token||'',...(window.BranchAccount?.token?{Authorization:'Bearer '+window.BranchAccount.token}:{})};},get enabled(){return ready;},get applying(){return applying;},saveState,edit,send,deleteNode,moveNodes,async stop(key){try{await client.mutation('chat:stop',args({nodeKey:key}));}catch(error){host.notify(error.message);}},async uploadFile(file){
  const scope=args();const {ticket,url}=await client.mutation('files:uploadUrl',scope);
  const response=await fetch(url,{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream'},body:file});
  if(!response.ok)throw Error('File upload failed');
@@ -293,8 +294,20 @@ async function start(config){
     credentials=config;client=config.client;if(!client)throw Error('Missing shared transport');writable=config.role!=='viewer';
     live=openLiveBoard({client,scope:args(),tabId});
     previews=liveTextPreviews({host,docs,tabId,isEditing:(key,field)=>active?.key===key&&active.field===field});
-    subscriptions.push(live.subscribe(message=>previews?.receive(message)));
-    const previewExpiry=setInterval(()=>previews?.render(),500);subscriptions.push(()=>clearInterval(previewExpiry));
+    geometry=geometryPreviews({host,tabId});geometrySender=geometryPublisher({send:message=>live?.send(message),getNodes:()=>host.getState().nodes});
+    subscriptions.push(live.onStatus(value=>{
+      client.setBoardLive?.(config.boardId,value);if(!value)presence=[];
+      window.dispatchEvent(new window.Event('branch-live-presence'));
+      if(value&&config.token)client.invalidate?.(false,{collections:['boards'],boards:[config.boardId]});
+    }));
+    subscriptions.push(live.subscribe(message=>{
+      previews?.receive(message);geometry?.receive(message);
+      if(message.type==='presence'){presence=message.users;window.dispatchEvent(new window.Event('branch-live-presence'));}
+      // Account subscriptions already receive Supabase Postgres Changes.
+      // Capability-based guests get the same committed-change signal here.
+      if(message.type==='revision'&&config.token)client.invalidate?.(false,message.change);
+    }));
+    const previewExpiry=setInterval(()=>{previews?.render();geometry?.render();},500);subscriptions.push(()=>clearInterval(previewExpiry));
     const snapshot=config.snapshot||await client.query('boards:read',args());receive(snapshot);ready=true;connected=client.connectionState().isWebSocketConnected;
     subscriptions.push(client.onUpdate(config.snapshot?'boards:open':'boards:read',args(),receive,error=>{failure=error;window.BranchCoding?.reset();document.body.classList.add('shared-starting');status('Access changed · return to your boards');host.notify('Access to this board changed. Return to your boards.');updateLocks();}));
     if (!config.token && config.userId && config.role !== 'viewer') subscriptions.push(coding.watch(value => {

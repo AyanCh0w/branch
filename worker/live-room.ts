@@ -17,7 +17,9 @@ export class BoardLiveRoom {
  async fetch(request:Request){
   // Only the Worker can address this object. The public route never forwards POST.
   if(request.method==='POST'){
-   const {xid}=await request.json() as any;await this.core.pause(xid);return new Response('Paused');
+   const data=await request.json() as any;
+   if(new URL(request.url).pathname==='/changed'){this.core.changed(data.change);return new Response('Notified');}
+   await this.core.pause(data.xid);return new Response('Paused');
   }
   if(request.headers.get('Upgrade')?.toLowerCase()!=='websocket')return new Response('WebSocket required',{status:426});
   if(this.state.getWebSockets().length>=128)return new Response('Room is full',{status:429});

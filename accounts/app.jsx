@@ -341,39 +341,13 @@ function LinkLanding({token,authenticated,me}){const preview=useQuery(api.sharin
 
 function transport(client){return client;}
 function ActiveBoardUsers({boardId,token,userId}){
- const client=useBackend(),[users,setUsers]=useState([]),[online,setOnline]=useState(false),[now,setNow]=useState(Date.now);
+ const [users,setUsers]=useState([]),[online,setOnline]=useState(false);
  useEffect(()=>{
-  const tabId=crypto.randomUUID(),scope={boardId,token};
-  let disposed=false,connected=client.connectionState().isWebSocketConnected,writing=false,pending;
-  setUsers([]);setOnline(connected);
-  async function publish(active){
-   pending=active;
-   if(writing||!connected)return;
-   writing=true;
-   while(pending!==undefined){
-    const active=pending;pending=undefined;
-    try{await client.mutation(api.collaboration.attend,{...scope,tabId,active});}catch{/* Attendance must not interrupt the board. */}
-   }
-   writing=false;
-  }
-  const update=()=>{setNow(Date.now());publish(!document.hidden);};
-  const offRows=transport(client).onUpdate('collaboration:activeUsers',scope,setUsers,()=>setUsers([]));
-  const offConnection=client.subscribeToConnectionState(state=>{
-   connected=state.isWebSocketConnected;setOnline(connected);
-   if(connected&&!disposed)update();
-  });
-  const hide=()=>publish(false);
-  document.addEventListener('visibilitychange',update);window.addEventListener('pagehide',hide);
-  window.addEventListener('pageshow',update);
-  const heartbeat=setInterval(()=>{if(!document.hidden)update();},5000),expiry=setInterval(()=>setNow(Date.now()),1000);
-  update();
-  return()=>{
-   disposed=true;clearInterval(heartbeat);clearInterval(expiry);offRows();offConnection();
-   document.removeEventListener('visibilitychange',update);window.removeEventListener('pagehide',hide);window.removeEventListener('pageshow',update);
-   publish(false);
-  };
- },[client,boardId,token]);
- const active=online?users.filter(person=>person.expiresAt>now):[];
+  const update=()=>{setUsers(window.BoardShared?.presence||[]);setOnline(!!window.BoardShared?.liveConnected);};
+  window.addEventListener('branch-live-presence',update);update();
+  return()=>window.removeEventListener('branch-live-presence',update);
+ },[boardId,token]);
+ const active=online?users:[];
  return <section className="a-board-presence" aria-label="Active users on this board">
   <div className="a-board-presence-heading">{online?'On this board':'Reconnecting…'}{online&&<span>{active.length}</span>}</div>
   <ul>{active.map(person=><li key={person.userId}><Avatar name={person.name} color={person.color}/><span>{person.name}</span>{person.userId===userId&&<small>You</small>}</li>)}</ul>

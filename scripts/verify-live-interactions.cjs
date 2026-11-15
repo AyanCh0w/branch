@@ -5,7 +5,7 @@ const WebSocket=require('ws'),{Client}=require('pg'),{createClient}=require('@su
 const cfg=require('../backend/config.cjs');
 if(!process.argv.includes('--run'))throw Error('Pass --run to create and clean isolated QA fixtures.');
 const base='https://joinbranch.dev',file='backups/live-interaction-qa.json';
-const fixture={project:cfg.url,accounts:[],boardIds:[]},sockets=[];const report={checkedAt:new Date().toISOString()};
+const fixture={project:cfg.url,accounts:[],boardIds:[],guestIds:[]},sockets=[];const report={checkedAt:new Date().toISOString()};
 const save=()=>fs.writeFileSync(file,JSON.stringify(fixture,null,2),{mode:0o600});
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function request(body,account){const r=await fetch(base+'/api/backend',{method:'POST',headers:{'Content-Type':'application/json',...(account?{Authorization:'Bearer '+account.session.access_token}:{})},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw Error(d.error||'Request failed');return d;}
@@ -13,14 +13,14 @@ const call=async(a,name,args={},kind='mutation')=>(await request({kind,name,args
 async function socket(account,board){
  const ws=new WebSocket(base.replace('https:','wss:')+'/api/live?board='+board,{headers:{Origin:base}});sockets.push(ws);ws.messages=[];ws.closed=false;
  ws.on('message',raw=>{const m=JSON.parse(raw.toString());ws.messages.push({...m,received:Date.now()});});ws.on('close',()=>ws.closed=true);ws.on('error',()=>{});
- await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(Error('Live handshake timed out')),10000);ws.once('open',()=>ws.send(JSON.stringify({type:'auth',accessToken:account.session.access_token,token:'',tabId:crypto.randomUUID()})));ws.on('message',raw=>{if(JSON.parse(raw.toString()).type==='ready'){clearTimeout(timeout);resolve();}});ws.once('close',()=>{clearTimeout(timeout);reject(Error('Live access rejected'));});});return ws;
+ await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(Error('Live handshake timed out')),10000);ws.once('open',()=>ws.send(JSON.stringify({type:'auth',accessToken:account.session.access_token,token:account.guestToken||'',tabId:crypto.randomUUID()})));ws.on('message',raw=>{if(JSON.parse(raw.toString()).type==='ready'){clearTimeout(timeout);resolve();}});ws.once('close',()=>{clearTimeout(timeout);reject(Error('Live access rejected'));});});return ws;
 }
 async function cleanup(){
  for(const s of sockets)s.close();
  if(fixture.boardIds.length&&fixture.accounts[0])await call(fixture.accounts[0],'library:archive',{boardId:fixture.boardIds[0]});
  const db=new Client({connectionString:cfg.database});await db.connect();
  try{
-  const authIds=fixture.accounts.map(a=>a.session.user.id),userIds=fixture.accounts.map(a=>a.profile.id),boardIds=fixture.boardIds;
+  const authIds=fixture.accounts.map(a=>a.session.user.id),userIds=[...fixture.accounts.map(a=>a.profile.id),...fixture.guestIds],boardIds=fixture.boardIds;
   assert(fixture.accounts.every(a=>/^qa_live_[a-f0-9]+_(owner|editor)$/.test(a.username)));
   const owned=await db.query('select id,data from branch_private.records where id=any($1::text[])',[boardIds]);assert(owned.rows.every(b=>userIds.includes(b.data.ownerId)&&b.data.title==='Live interaction QA'));
   await db.query('begin');await db.query('select id from branch_private.runtime_lock where id=1 for update');
@@ -38,7 +38,23 @@ async function cleanup(){
   for(const role of ['owner','editor']){const username=prefix+'_'+role,result=await request({auth:'signup',args:{username,password:crypto.randomBytes(24).toString('hex')}});const a={username,session:result.session};a.profile=await call(a,'accounts:me',{},'query');fixture.accounts.push(a);save();}
   const [owner,editor]=fixture.accounts,board=await call(owner,'library:create',{title:'Live interaction QA'});fixture.boardIds.push(board);save();
   await call(owner,'sharing:addMember',{boardId:board,username:editor.username,role:'editor'});
-  const a=await socket(owner,board),b=await socket(editor,board),times=new Map();
+  const linkToken=crypto.randomBytes(32).toString('hex'),guestToken=crypto.randomBytes(32).toString('hex');
+  await call(owner,'sharing:createLink',{boardId:board,role:'viewer',label:'QA guest',linkToken});
+  const guest=await call(null,'sharing:joinGuest',{linkToken,name:'QA live guest',sessionToken:guestToken});fixture.guestIds.push(guest.userId);save();
+  const a=await socket(owner,board),b=await socket(editor,board),g=await socket({session:{access_token:''},guestToken},board),times=new Map();
+  await wait(150);assert(a.messages.some(m=>m.type==='presence'&&m.users.length===3));
+  b.send(JSON.stringify({type:'visibility',visible:false}));await wait(150);assert.equal(a.messages.filter(m=>m.type==='presence').at(-1).users.length,2);
+  b.send(JSON.stringify({type:'visibility',visible:true}));await wait(150);report.presence=true;
+  for(let x=0;x<10;x++)a.send(JSON.stringify({type:'geometry',nodes:[{id:'qa_note',x,y:50,width:400}]}));await wait(250);
+  assert.equal(b.messages.filter(m=>m.type==='geometry').length,10);report.geometry=true;
+  const marker=g.messages.length;
+  await call(owner,'boards:patchNodes',{boardId:board,token:'',changes:[{id:'qa_note',create:{id:'qa_note',type:'plan',title:'Live note',body:'Shared source',x:20,y:30,width:400}}]});
+  await wait(200);assert(g.messages.slice(marker).some(m=>m.type==='revision'&&m.change.collections.includes('nodes')));
+  const readGuest=()=>call(null,'boards:read',{boardId:board,token:guestToken},'query');
+  assert((await readGuest()).nodes.some(n=>n.id==='qa_note'));report.guestPush=true;
+  await call(owner,'boards:patchNodes',{boardId:board,token:'',changes:[{id:'qa_note',patch:{x:250,width:550}}]});assert((await readGuest()).nodes.some(n=>n.id==='qa_note'&&n.x===250&&n.width===550));
+  const operationId=crypto.randomUUID();await call(owner,'boards:deleteNode',{boardId:board,token:'',nodeKey:'qa_note',operationId});assert(!(await readGuest()).nodes.some(n=>n.id==='qa_note'));
+  await call(owner,'boards:restoreNode',{boardId:board,token:'',nodeKey:'qa_note',operationId});assert((await readGuest()).nodes.some(n=>n.id==='qa_note'));report.createMoveResizeDeleteRestore=true;
   for(let i=0;i<30;i++){times.set(i,Date.now());a.send(JSON.stringify({type:'cursor',position:{x:i,y:50}}));await wait(34);}
   await wait(250);const cursors=b.messages.filter(m=>m.type==='cursor');assert.equal(cursors.length,30);const latency=cursors.map(m=>m.received-times.get(m.position.x)).sort((x,y)=>x-y);report.cursors={count:30,medianMs:latency[15],p95Ms:latency[28],maxMs:latency[29]};
   for(const text of ['h','he','hel','hell','hello'])a.send(JSON.stringify({type:'text',nodeKey:'qa_note',field:'body',text,epoch:0}));await wait(300);assert.deepEqual(b.messages.filter(m=>m.type==='text').map(m=>m.text),['h','he','hel','hell','hello']);report.characters=true;

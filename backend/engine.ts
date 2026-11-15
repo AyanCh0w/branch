@@ -6,7 +6,7 @@ import {encode,decode} from './codec';
 import type {Definition} from './definitions';
 import {guardConnection} from './connection';
 export class Engine {
- constructor(public pool:any,public storage?:any,public functions:any=registry,public notifyJobs?:()=>Promise<void>,public accessBarrier?:(boards:string[],xid:string)=>Promise<void>){}
+ constructor(public pool:any,public storage?:any,public functions:any=registry,public notifyJobs?:()=>Promise<void>,public accessBarrier?:(boards:string[],xid:string)=>Promise<void>,public notifyChanges?:(change:any)=>Promise<void>){}
  resolve(name:string,kind?:string,internal=false):Definition {
   const [module,key,...rest]=name.split(':');
   const fn=Object.hasOwn(this.functions,module)&&Object.hasOwn(this.functions[module],key)?this.functions[module][key]:null;
@@ -35,6 +35,12 @@ export class Engine {
     if(fn.kind==='mutation'){await this.invalidate(ctx.db);await this.barrier(ctx.db);}
     connection.assertHealthy();
     await sql.query('commit');
+    // Notifications carry no board content and are emitted only after commit.
+    // A delivery failure must not retry an already committed mutation.
+    if(fn.kind==='mutation'&&ctx.db.affectedBoards.size&&this.notifyChanges){
+     try{await this.notifyChanges({collections:[...ctx.db.changedCollections],boards:[...ctx.db.affectedBoards]});}
+     catch{console.error('Live notification deferred to reconciliation');}
+    }
     if(fn.kind==='query')onRead?.([...ctx.db.readCollections]);
     if(ctx.scheduledJobs.length&&this.notifyJobs){try{await this.notifyJobs();}catch{console.error('Job wake-up deferred to recovery scan');}}
     return value;

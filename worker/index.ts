@@ -8,10 +8,15 @@ import {tick} from '../backend/runner';
 import {expireJobs} from '../backend/jobs';
 
 const barrier=async(boards:string[],xid:string)=>{await Promise.all(boards.map(async board=>{const room=env.BOARD_LIVE.get(env.BOARD_LIVE.idFromName(board));const response=await room.fetch('https://room/pause',{method:'POST',body:JSON.stringify({xid})});if(!response.ok)throw Error('Live access barrier unavailable');}));};
+const changed=async(change:any)=>{await Promise.all(change.boards.map(async(board:string)=>{
+ const room=env.BOARD_LIVE.get(env.BOARD_LIVE.idFromName(board));
+ const response=await room.fetch('https://room/changed',{method:'POST',body:JSON.stringify({change:{...change,boards:[board]}})});
+ if(!response.ok)throw Error('Live notification unavailable');
+}));};
 const wake=()=>env.JOBS.send({type:'wake'});
 const handler=createHandler(process.env.OPENAI_API_KEY,{hosted:true});
 createServer((req,res)=>{
- withDatabase(env.HYPERDRIVE.connectionString,()=>handler(req,res),wake,barrier).catch(()=>{
+ withDatabase(env.HYPERDRIVE.connectionString,()=>handler(req,res),wake,barrier,changed).catch(()=>{
   console.error('Branch API request failed');
   if(!res.headersSent)res.writeHead(503,{'Content-Type':'application/json','Cache-Control':'no-store'});
   if(!res.writableEnded)res.end(JSON.stringify({error:'Service temporarily unavailable. Please retry.'}));
@@ -38,13 +43,13 @@ export default {
    for(const message of batch.messages){
     try{await tick();message.ack();}catch{message.retry({delaySeconds:30});}
    }
-  },wake,barrier);
+  },wake,barrier,changed);
  },
  async scheduled(){
   await withDatabase(env.HYPERDRIVE.connectionString,async()=>{
    await expireJobs(engine);
    const {rows}=await pool.query("select id from branch_private.jobs where status='pending' and due_at<=now() order by due_at limit 100");
    if(rows.length)await env.JOBS.sendBatch(rows.map(()=>({body:{type:'wake'}})));
-  },wake,barrier);
+  },wake,barrier,changed);
  }
 };

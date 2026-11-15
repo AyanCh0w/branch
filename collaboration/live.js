@@ -3,7 +3,7 @@ export function openLiveBoard({client,scope,tabId,WebSocketClass=WebSocket}){
  const listeners=new Set(),states=new Set();let socket,closed=false,ready=false,retry,renew,handshake,attempt=0;
  const emit=message=>{for(const listener of listeners)listener(message);};
  const status=value=>{if(ready===value)return;ready=value;for(const listener of states)listener(value);};
- const auth=()=>{if(socket?.readyState===1)socket.send(JSON.stringify({type:'auth',accessToken:client.session?.access_token||'',token:scope.token||'',tabId}));};
+ const auth=()=>{if(socket?.readyState===1)socket.send(JSON.stringify({type:'auth',accessToken:client.session?.access_token||'',token:scope.token||'',tabId,visible:!document.hidden}));};
  function connect(){
   clearTimeout(retry);if(closed||document.hidden)return;
   const url=new URL('/api/live',location.href);url.protocol=url.protocol==='https:'?'wss:':'ws:';url.searchParams.set('board',scope.boardId);
@@ -19,6 +19,7 @@ export function openLiveBoard({client,scope,tabId,WebSocketClass=WebSocket}){
  }
  function resume(){
   if(closed)return;
+  api.send({type:'visibility',visible:!document.hidden});
   if(document.hidden){api.send({type:'cursor',position:null});api.send({type:'clear'});return;}
   if(!socket||socket.readyState>1)connect();else if(socket.readyState===1)auth();
  }

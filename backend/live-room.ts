@@ -35,6 +35,16 @@ export class LiveRoomCore {
    try{socket.send(encoded);}catch{}
   }
  }
+ presence(exclude?:any){
+  const users=new Map();
+  for(const socket of this.state.getWebSockets()){
+   const p=socket.deserializeAttachment();
+   if(socket===exclude||!p?.authenticated||p.expiresAt<=Date.now()||p.visible===false)continue;
+   users.set(p.userId,{userId:p.userId,name:p.name,color:p.color});
+  }
+  this.peers({type:'presence',users:[...users.values()]});
+ }
+ changed(change:any){this.peers({type:'revision',change});}
  async message(socket:any,raw:string|ArrayBuffer){
   if(typeof raw!=='string'||raw.length>70000){socket.close(1009,'Message too large');return;}
   let message;try{message=JSON.parse(raw);}catch{socket.close(1003,'Invalid message');return;}
@@ -46,9 +56,10 @@ export class LiveRoomCore {
     if(typeof message.tabId!=='string'||!message.tabId||message.tabId.length>100)throw Error('Invalid tab');
     const permission=await this.authorize(peer.boardId,message);
     if(this.paused||generation!==this.generation||!permission||permission.expiresAt<=Date.now())throw Error('Access changed');
-    peer={...permission,boardId:peer.boardId,tabId:message.tabId,authenticated:true,count:0,window:Date.now()};
+    peer={...permission,boardId:peer.boardId,tabId:message.tabId,authenticated:true,count:0,window:Date.now(),visible:message.visible!==false};
     socket.serializeAttachment(peer);
     socket.send(JSON.stringify({type:'ready',userId:peer.userId,role:peer.role}));
+    this.presence();
    }catch{socket.close(4003,'Reconnect to verify board access');}
    return;
   }
@@ -63,10 +74,24 @@ export class LiveRoomCore {
   }else if(message.type==='text'){
    if(peer.role==='viewer'||typeof message.nodeKey!=='string'||!/^[\w-]{1,160}$/.test(message.nodeKey)||!['body','title','draft'].includes(message.field)||typeof message.text!=='string'||message.text.length>50000||!Number.isSafeInteger(message.epoch)||message.epoch<0)return;
    this.peers({type:'text',...sender,nodeKey:message.nodeKey,field:message.field,text:message.text,epoch:message.epoch,expiresAt:now+4000},socket);
+  }else if(message.type==='geometry'){
+   if(peer.role==='viewer'||!Array.isArray(message.nodes)||!message.nodes.length||message.nodes.length>64)return;
+   const nodes:any[]=[];
+   for(const node of message.nodes){
+    if(!node||typeof node.id!=='string'||!/^[\w-]{1,160}$/.test(node.id))return;
+    const clean:any={id:node.id};
+    for(const key of ['x','y','width','minHeight'])if(Object.hasOwn(node,key)){
+     const value=node[key];if(!Number.isFinite(value)||Math.abs(value)>1e7||(['width','minHeight'].includes(key)&&(value<0||value>10000)))return;clean[key]=value;
+    }
+    nodes.push(clean);
+   }
+   this.peers({type:'geometry',...sender,nodes,expiresAt:now+4000},socket);
+  }else if(message.type==='visibility'){
+   peer.visible=message.visible===true;socket.serializeAttachment(peer);this.presence();
   }else if(message.type==='clear'){
    this.peers({type:'clear',...sender},socket);
   }
  }
- closed(socket:any){const peer=socket.deserializeAttachment();if(peer?.authenticated)this.peers({type:'leave',userId:peer.userId,tabId:peer.tabId},socket);}
- prune(){for(const socket of this.state.getWebSockets()){if(socket.deserializeAttachment()?.expiresAt<=Date.now())socket.close(4003,'Session expired');}}
+ closed(socket:any){const peer=socket.deserializeAttachment();if(peer?.authenticated){this.peers({type:'leave',userId:peer.userId,tabId:peer.tabId},socket);this.presence(socket);}}
+ prune(){let changed=false;for(const socket of this.state.getWebSockets()){if(socket.deserializeAttachment()?.expiresAt<=Date.now()){socket.close(4003,'Session expired');changed=true;}}if(changed)this.presence();}
 }
