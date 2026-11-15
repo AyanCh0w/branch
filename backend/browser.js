@@ -54,7 +54,9 @@ export class BranchClient {
  async call(kind,name,args,signal,onDependencies){
   const token=this.session?.access_token;let r;
   try{r=await fetch('/api/backend',{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(encode({kind,name:String(name),args})),signal:signal||AbortSignal.timeout(kind==='action'?180000:30000)});}catch(e){if(!signal?.aborted)this.state(false);e.retryable=true;throw e;}
-  this.state(true);const data=decode(await r.json());if(!r.ok){const error=Error(data.error||'Request failed');error.retryable=r.status>=500||r.status===429||data.error==='Could not complete this request.';if(error.retryable)this.state(false);throw error;}if(kind==='query')onDependencies?.(data.dependencies);if(kind!=='query'){const collection={'collaboration:point':'cursors','collaboration:attend':'boardPresence','collaboration:focus':'editors','collaboration:release':'editors','collaboration:updateText':'nodes'}[name];this.invalidate(false,collection?{collections:[collection],boards:[args.boardId]}:null);}return data.value;
+  const data=decode(await r.json());if(!r.ok){const error=Error(data.error||'Request failed');error.retryable=r.status>=500||r.status===429||data.error==='Could not complete this request.';if(error.retryable)this.state(false);throw error;}this.state(true);if(kind==='query')onDependencies?.(data.dependencies);if(kind!=='query'){const collection={'collaboration:point':'cursors','collaboration:attend':'boardPresence','collaboration:focus':'editors','collaboration:release':'editors','collaboration:updateText':'nodes'}[name];// The committed Supabase revision already refreshes these subscriptions.
+   // Avoid a second read for the same keystroke/lease/presence write.
+   if(!this.realtimeReady||!collection)this.invalidate(false,collection?{collections:[collection],boards:[args.boardId]}:null);}return data.value;
  }
  query(name,args={}){return this.call('query',name,args);}
  mutation(name,args={}){return this.call('mutation',name,args);}
@@ -79,7 +81,7 @@ export class BranchClient {
   // Use the collections actually read by this query, including authorization reads.
   // Unknown/older servers remain conservative. Membership changes are always broad.
   const permissions=['boards','boardMembers','linkMembers','teamMembers','teams','inviteLinks','sessions','users'];
-  if(!change.collections.some(c=>permissions.includes(c))&&Array.isArray(refresh.dependencies)&&refresh.dependencies.length&&!refresh.dependencies.includes('*')){
+  if(!change.collections.some(c=>permissions.includes(c))&&Array.isArray(refresh.dependencies)&&!refresh.dependencies.includes('*')){
    return change.collections.some(c=>refresh.dependencies.includes(c));
   }
   return true;

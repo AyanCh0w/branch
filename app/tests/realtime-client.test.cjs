@@ -68,3 +68,27 @@ test('bootstrap subscribers share the same read regardless of argument property 
  h.client.onUpdate('boards:open',{boardId:'board',token:''},()=>{});h.client.onUpdate('boards:open',{token:'',boardId:'board'},()=>{});await wait();assert.equal(h.stats().queries-initial,1);
  }finally{h.client.close();}
 });
+
+test('healthy realtime drives saved typing without a duplicate mutation-response read',async()=>{
+ const h=setup();try{await wait();h.emit();await wait();let reads=0;
+ h.client.onUpdate('boards:read',{boardId:'board'},()=>reads++);await wait();
+ await h.client.mutation('collaboration:updateText',{boardId:'board'});await wait();assert.equal(reads,1);
+ h.channelList.at(-1).change({collections:['nodes'],boards:['board']});await wait();assert.equal(reads,2);
+ h.client.realtimeReady=false;await h.client.mutation('collaboration:updateText',{boardId:'board'});await wait();assert.equal(reads,3);
+ }finally{h.client.close();}
+});
+test('repeated service errors cannot alternate offline/online and trigger presence feedback',async()=>{
+ const h=setup();try{await wait();h.emit();await wait();let states=[];h.client.subscribeToConnectionState(s=>states.push(s.isWebSocketConnected));
+ h.setFetch(async()=>({ok:false,status:503,json:async()=>({error:'Temporarily unavailable'})}));
+ for(let i=0;i<10;i++)await h.client.query('boards:read',{}).catch(()=>{});
+ assert.deepEqual(states,[false]);
+ }finally{h.client.close();}
+});
+test('static configuration with no database dependencies is not fetched on each text change',async()=>{
+ const h=setup();try{await wait();h.emit();await wait();let reads=0;
+ h.setFetch(async()=>({ok:true,json:async()=>({value:{configured:true},dependencies:[]})}));
+ h.client.onUpdate('github:config',{},()=>reads++);await wait();const initial=h.stats().queries;
+ for(let i=0;i<10;i++){h.channelList.at(-1).change({collections:['nodes'],boards:['board']});await wait();}
+ assert.equal(h.stats().queries,initial);assert.equal(reads,1);
+ }finally{h.client.close();}
+});
