@@ -25,12 +25,13 @@ test('hover draws connected grid points and the animation sleeps after retractio
  b.tick(b.w.performance.now()+2200);assert.equal(b.frames.size,0);assert.equal(b.host.dataset.engaged,'false');
  }finally{b.dom.window.close();}
 });
-test('touch creates a branch without consuming scrolling and cancellation breaks the trail',()=>{
+test('touch taps create a branch while scrolling and cancellation do not draw',()=>{
  const b=boot();try{
- const down=b.pointer('pointerdown',180,130,'touch');assert.equal(down.defaultPrevented,false);b.tick(b.w.performance.now());
+ const down=b.pointer('pointerdown',180,130,'touch');assert.equal(down.defaultPrevented,false);assert.equal(b.frames.size,0);b.pointer('pointerup',180,130,'touch');b.tick(b.w.performance.now());
  assert.ok(b.draws.filter(d=>d.key==='lineTo').length>=6);
  b.pointer('pointercancel',180,130,'touch');b.tick(b.w.performance.now()+2200);
  b.pointer('pointermove',260,200,'touch');assert.equal(b.frames.size,0);
+ b.pointer('pointerdown',180,130,'touch');b.pointer('pointermove',180,190,'touch');b.pointer('pointerup',180,190,'touch');assert.equal(b.frames.size,0);
  }finally{b.dom.window.close();}
 });
 test('keyboard button works with reduced motion and schedules no animation',()=>{

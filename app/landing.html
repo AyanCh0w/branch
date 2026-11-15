@@ -57,13 +57,18 @@ return &lt;IssueList issues={issues} /&gt;;</code></pre><div class="inherited"><
 <footer class="site-footer" aria-label="Branch footer" data-footer-tone="dark">
   <div class="footer-top"><a class="brand" href="/" aria-label="Branch home"><img src="/icons/branch-mark.svg" width="24" height="24" alt="">branch</a><nav aria-label="Footer navigation"><a href="#branches">How it works</a><a href="/app">Open workspace ↗</a></nav></div>
   <div class="footer-playground" id="footer-playground" aria-label="Interactive connection canvas">
+    <svg class="footer-mobile-preview" viewBox="0 0 320 160" aria-hidden="true" fill="none"><g stroke="currentColor" stroke-width="1.1"><path d="M48 80H104C132 80 132 32 160 32H264M104 80H264M104 80C132 80 132 128 160 128H264"/></g><g fill="currentColor"><circle cx="48" cy="80" r="3"/><circle cx="104" cy="80" r="3"/><circle cx="264" cy="32" r="3"/><circle cx="264" cy="80" r="3"/><circle cx="264" cy="128" r="3"/></g></svg>
     <canvas aria-hidden="true"></canvas>
-    <button class="footer-play" type="button" aria-label="Draw a connection pattern"><span class="footer-pointer-hint">Move to connect</span><span class="footer-touch-hint">Tap or swipe to connect</span><span aria-hidden="true">↗</span></button>
+    <button class="footer-play" type="button" aria-label="Draw a connection pattern"><span class="footer-pointer-hint">Move to connect</span><span class="footer-touch-hint">Tap to connect</span><span aria-hidden="true">↗</span></button>
   </div>
   <div class="footer-bottom"><small>© 2026 Branch</small><a class="footer-cta" href="/app?auth=signup">Start building together <span aria-hidden="true">↗</span></a><button type="button" class="footer-tone" data-footer-tone-toggle aria-label="Dark footer" aria-pressed="true"><span>Dark footer</span><span class="footer-tone-track" aria-hidden="true"></span></button></div>
 </footer>
 <details class="appearance-controls">
-<summary>Appearance <span aria-hidden="true">⌃</span></summary>
+<summary aria-label="Appearance"><svg class="appearance-compact-icon" aria-hidden="true" width="24" height="24" stroke-width="1.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M19.6224 10.3954L18.5247 7.7448L20 6L18 4L16.2647 5.48295L13.5578 4.36974L12.9353 2H10.981L10.3491 4.40113L7.70441 5.51596L6 4L4 6L5.45337 7.78885L4.3725 10.4463L2 11V13L4.40111 13.6555L5.51575 16.2997L4 18L6 20L7.79116 18.5403L10.397 19.6123L11 22H13L13.6045 19.6132L16.2551 18.5155C16.6969 18.8313 18 20 18 20L20 18L18.5159 16.2494L19.6139 13.598L21.9999 12.9772L22 11L19.6224 10.3954Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+Appearance <span aria-hidden="true">⌃</span></summary>
 <div class="appearance-body">
 <div class="appearance-row"><label for="nav-tint-on">Gray tint</label><input id="nav-tint-on" type="checkbox" role="switch" checked></div>
 <label class="appearance-range-label" for="nav-tint">Darkness <output id="nav-tint-value" for="nav-tint">25%</output></label>

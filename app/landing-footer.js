@@ -22,13 +22,13 @@
     if (nodes.size) wake();
   });
   let lastRemoval = 0;
-  let width = 1, height = 1, frame = 0, visible = true, previous = null;
+  let width = 1, height = 1, frame = 0, visible = true, previous = null, touchStart = null;
   let nodes = new Map(), edges = [];
   const snap = n => Math.round((n - 16) / step) * step + 16;
   const key = p => `${p.x}:${p.y}`;
   const point = (x, y) => ({x: snap(x), y: snap(y)});
   function stop() { cancelAnimationFrame(frame); frame = 0; }
-  function clear() { stop(); nodes.clear(); edges = []; previous = null; lastRemoval = 0; ctx.clearRect(0,0,width,height); }
+  function clear() { stop(); nodes.clear(); edges = []; previous = null; touchStart = null; host.dataset.engaged='false'; lastRemoval = 0; ctx.clearRect(0,0,width,height); }
   function add(p, time) {
     if (p.x < 0 || p.y < 0 || p.x > width || p.y > height - 68) return false;
     nodes.delete(key(p)); nodes.set(key(p), {...p, time});
@@ -94,7 +94,11 @@
   }
   function local(event) {const r=host.getBoundingClientRect();return point(event.clientX-r.left,event.clientY-r.top);}
   function trace(event) {
-    if(event.target.closest('button') || (event.pointerType==='touch' && !previous)) return;
+    if(event.target.closest('button')) return;
+    if(event.pointerType==='touch') {
+      if(touchStart && Math.hypot(event.clientX-touchStart.x,event.clientY-touchStart.y)>10) touchStart=null;
+      return;
+    }
     const p=local(event),now=performance.now();
     if(previous && key(previous)===key(p)) return;
     if(reduced.matches) {nodes.clear();edges=[];}
@@ -114,12 +118,16 @@
   }
   host.addEventListener('pointerdown',event=>{
     if(event.target.closest('button') || !event.isPrimary) return;
-    const p=local(event);previous=p;
-    if(event.pointerType==='touch') pattern(p.x,p.y);else trace(event);
+    if(event.pointerType==='touch') {touchStart={x:event.clientX,y:event.clientY};return;}
+    trace(event);
   },{passive:true});
   host.addEventListener('pointermove',trace,{passive:true});
   // Vertical touch scrolling is browser-owned; never preventDefault or capture it.
-  for(const name of ['pointerleave','pointercancel','pointerup']) host.addEventListener(name,()=>{previous=null;},{passive:true});
+  host.addEventListener('pointerup',event=>{
+    if(event.pointerType==='touch' && touchStart) {const p=local(event);pattern(p.x,p.y);}
+    previous=null;touchStart=null;
+  },{passive:true});
+  for(const name of ['pointerleave','pointercancel']) host.addEventListener(name,()=>{previous=null;touchStart=null;},{passive:true});
   button.addEventListener('click',()=>pattern(width*.5,height*.4));
   const observer=new IntersectionObserver(([entry])=>{visible=entry.isIntersecting;if(!visible) clear();});
   observer.observe(host);
