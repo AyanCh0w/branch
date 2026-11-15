@@ -307,3 +307,9 @@ html[data-theme] .site-footer[data-footer-tone="dark"] .brand img{filter:invert(
 @media(max-width:700px){.footer-meta{grid-column:1/-1;gap:4px 18px}.footer-meta small{width:auto}.footer-legal{gap:18px}}
 
 html:not([data-theme=dark]) :is(.section-heading>p,.feature-grid p,.faq details p){color:#606873}
+
+/* A soft backdrop quiets the shader around demos without restyling their cards. */
+.demo-scroll-stage,.comparison-grid{position:relative}
+html:not([data-theme=dark]) .landing-page :is(.demo-scroll-stage,.comparison-grid){isolation:isolate}
+html:not([data-theme=dark]) .landing-page :is(.demo-scroll-stage,.comparison-grid)::before{content:"";position:absolute;inset:-24px -12px;z-index:-1;pointer-events:none;border-radius:36px;background:#ffffffb3;filter:blur(22px)}
+@media(max-width:600px){html:not([data-theme=dark]) .landing-page :is(.demo-scroll-stage,.comparison-grid)::before{inset:-14px 0;filter:blur(16px)}}
