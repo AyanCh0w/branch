@@ -25,7 +25,7 @@ test('WebGL-unavailable browsers retain the static material and working saved co
     const toggle=w.document.querySelector('#paper-background-on');toggle.checked=true;toggle.dispatchEvent(new w.Event('change'));
     assert.equal(host.style.opacity,'0.7');assert.equal(frames.size,0);
     w.document.querySelector('#nav-appearance-reset').click();assert.equal(host.style.opacity,'0.45');
-    assert.deepEqual(JSON.parse(w.localStorage.getItem('branch.paper-background.v1')),{enabled:true,amount:45});
+    assert.deepEqual(JSON.parse(w.localStorage.getItem('branch.paper-background.v2')),{enabled:true,amounts:{mobile:22,desktop:45}});
   }finally{dom.window.close();}
 });
 test('reduced motion renders once without scheduling a continuous animation',()=>{
@@ -44,12 +44,12 @@ test('offscreen and disabled effects suspend rendering; returning resumes one lo
 test('mobile scroll fades to a visible floor and restores full intensity at the top',()=>{
   const {dom,w,host}=boot({mobile:true,reduced:true});
   try{
-    assert.equal(Number(host.style.opacity),.45);
+    assert.equal(Number(host.style.opacity),.22);
     w.scrollY=200;w.dispatchEvent(new w.Event('scroll'));
-    assert.ok(Number(host.style.opacity)<.45 && Number(host.style.opacity)>.26);
+    assert.ok(Number(host.style.opacity)<.22 && Number(host.style.opacity)>.127);
     w.scrollY=5000;w.dispatchEvent(new w.Event('scroll'));
-    assert.ok(Math.abs(Number(host.style.opacity)-.261)<.00001);
-    w.scrollY=0;w.dispatchEvent(new w.Event('scroll'));assert.equal(Number(host.style.opacity),.45);
+    assert.ok(Math.abs(Number(host.style.opacity)-.1276)<.00001);
+    w.scrollY=0;w.dispatchEvent(new w.Event('scroll'));assert.equal(Number(host.style.opacity),.22);
     const toggle=w.document.querySelector('#paper-background-on');toggle.checked=false;toggle.dispatchEvent(new w.Event('change'));
     w.scrollY=5000;w.dispatchEvent(new w.Event('scroll'));assert.equal(host.style.opacity,'0');
   }finally{dom.window.close();}
