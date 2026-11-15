@@ -62,3 +62,9 @@ test('content notifications refresh actual read dependencies while permission ch
  h.channelList.at(-1).change({collections:['boardMembers'],boards:['board']});await wait();assert.equal(calls['boards:read'],3);assert.equal(calls['chatgpt:status'],2);
  }finally{h.client.close();}
 });
+
+test('bootstrap subscribers share the same read regardless of argument property order',async()=>{
+ const h=setup();try{await wait();h.emit();await wait();const initial=h.stats().queries;
+ h.client.onUpdate('boards:open',{boardId:'board',token:''},()=>{});h.client.onUpdate('boards:open',{token:'',boardId:'board'},()=>{});await wait();assert.equal(h.stats().queries-initial,1);
+ }finally{h.client.close();}
+});

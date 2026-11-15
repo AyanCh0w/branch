@@ -69,6 +69,15 @@ export const read = query({
   },
 });
 
+// Bootstrap and ongoing access use the same shared subscription, avoiding a
+// permission request followed by two identical full-board reads on every open.
+export const open=query({args:{token:v.string(),boardId:v.id('boards')},handler:async(ctx,args)=>{
+ try{return await read.handler(ctx,args);}catch(error){
+  if(['Board not found','Board access denied','Sign in to continue','Session expired'].includes((error as Error).message))return null;
+  throw error;
+ }
+}});
+
 const editableFields = new Set(['x','y','width','minHeight','collapsed','contexts','revision','author','titleEdited','titleGenerated','mediaType','source','videoId','image','credit','license','licenseURL','url','asset','storageId','mime','size','text','transcript','transcriptLanguage','contextFor','bottomPorts','modelStage','modelBalance','query','searchMode','mediaResults','resultMode','nextPage','creditOpen','agent','agentName','autoGroup','layoutHeight']);
 // Deletion and restoration operate on current rows, never a client board snapshot.
 export const deleteNode = mutation({

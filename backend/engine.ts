@@ -6,7 +6,7 @@ import {encode,decode} from './codec';
 import type {Definition} from './definitions';
 import {guardConnection} from './connection';
 export class Engine {
- constructor(public pool:any,public storage?:any,public functions:any=registry,public notifyJobs?:()=>Promise<void>){}
+ constructor(public pool:any,public storage?:any,public functions:any=registry,public notifyJobs?:()=>Promise<void>,public accessBarrier?:(boards:string[],xid:string)=>Promise<void>){}
  resolve(name:string,kind?:string,internal=false):Definition {
   const [module,key,...rest]=name.split(':');
   const fn=Object.hasOwn(this.functions,module)&&Object.hasOwn(this.functions[module],key)?this.functions[module][key]:null;
@@ -32,7 +32,7 @@ export class Engine {
     const ctx=this.context(new Store(sql,fn.kind==='mutation'),identity);
     await validateReferences(sql,fn.args,args);
     const value=await fn.handler(ctx,args);
-    if(fn.kind==='mutation')await this.invalidate(ctx.db);
+    if(fn.kind==='mutation'){await this.invalidate(ctx.db);await this.barrier(ctx.db);}
     connection.assertHealthy();
     await sql.query('commit');
     if(fn.kind==='query')onRead?.([...ctx.db.readCollections]);
@@ -63,6 +63,18 @@ export class Engine {
   if(method==='getUsername'){const r=await sql.query('select username from branch_private.accounts where user_id=$1',[args.userId]);return r.rows[0]?.username||null;}
   if(method==='getUserIdByUsername'){const r=await sql.query('select user_id from branch_private.accounts where username=$1',[args.username.normalize('NFKC').toLowerCase()]);return r.rows[0]?.user_id||null;}
   throw Error('Unknown directory operation');
+ }
+ async barrier(db:any){
+  if(!db.accessChanged||!this.accessBarrier)return;
+  // Membership/session changes can affect inherited access, including old grants.
+  // They are rare; invalidate all rooms for user/session changes rather than miss one.
+  const broad=['users','sessions'].some(c=>db.changedCollections.has(c));
+  const {rows}=await db.sql.query(`select id from branch_private.records where collection='boards' and ($1::boolean or id=any($2::text[]) or data->>'teamId'=any($3::text[]))`,[broad,[...db.affectedBoards],[...db.affectedTeams]]);
+  const boards=[...new Set<string>([...db.affectedBoards,...rows.map((r:any)=>r.id)])];
+  if(!boards.length)return;
+  const result=await db.sql.query('select pg_current_xact_id()::text as xid');
+  // Must succeed BEFORE commit. An unavailable relay rolls back the access change.
+  await this.accessBarrier(boards,result.rows[0].xid);
  }
  async invalidate(db:any){
   if(!db.affectedUsers.size&&!db.affectedBoards.size&&!db.affectedTeams.size)return;

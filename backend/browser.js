@@ -3,6 +3,7 @@ export const api=new Proxy({}, {get:(_,module)=>new Proxy({}, {get:(_,fn)=>Strin
 export const makeFunctionReference=name=>String(name);
 function encode(v){if(v===undefined)return {$branch:'undefined'};if(v instanceof ArrayBuffer){const bytes=new Uint8Array(v);let s='';for(const b of bytes)s+=String.fromCharCode(b);return {$branch:'bytes',value:btoa(s)};}if(Array.isArray(v))return v.map(encode);if(v&&typeof v==='object')return Object.fromEntries(Object.entries(v).filter(([,x])=>x!==undefined).map(([k,x])=>[k,encode(x)]));return v;}
 function decode(v){if(v&&typeof v==='object'&&!Array.isArray(v)){if(v.$branch==='bytes'&&Object.keys(v).length===2)return Uint8Array.from(atob(v.value),c=>c.charCodeAt(0)).buffer;if(v.$branch==='undefined'&&Object.keys(v).length===1)return undefined;return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,decode(x)]));}return Array.isArray(v)?v.map(decode):v;}
+function canonical(value){if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])]));return value;}
 export class BranchClient {
  constructor(config){
   this.session=null;this.loading=true;this.online=false;this.epoch=0;this.closed=false;
@@ -84,7 +85,7 @@ export class BranchClient {
   return true;
  }
  onUpdate(name,args,callback,onError){
-  const key=this.epoch+':'+String(name)+':'+JSON.stringify(encode(args));
+  const key=this.epoch+':'+String(name)+':'+JSON.stringify(canonical(encode(args)));
   let entry=this.subscriptions.get(key);
   if(!entry){
    entry={listeners:new Set(),hasValue:false,value:undefined};this.subscriptions.set(key,entry);

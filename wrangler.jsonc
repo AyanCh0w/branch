@@ -7,10 +7,18 @@
     "nodejs_compat"
   ],
   "workers_dev": true,
-  "placement": { "region": "aws:us-east-1" },
+  "placement": {
+    "region": "aws:us-east-1"
+  },
   "routes": [
-    { "pattern": "joinbranch.dev", "custom_domain": true },
-    { "pattern": "www.joinbranch.dev", "custom_domain": true }
+    {
+      "pattern": "joinbranch.dev",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.joinbranch.dev",
+      "custom_domain": true
+    }
   ],
   "no_bundle": true,
   "find_additional_modules": true,
@@ -67,5 +75,21 @@
       "* * * * *"
     ]
   },
-  "preview_urls": false
+  "preview_urls": false,
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "BOARD_LIVE",
+        "class_name": "BoardLiveRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "board-live-v1",
+      "new_sqlite_classes": [
+        "BoardLiveRoom"
+      ]
+    }
+  ]
 }
