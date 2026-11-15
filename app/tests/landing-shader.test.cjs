@@ -58,3 +58,16 @@ test('high contrast overrides persistent mobile background',()=>{
   const {dom,w,host}=boot({mobile:true,contrast:true});
   try{w.scrollY=5000;w.dispatchEvent(new w.Event('scroll'));assert.equal(host.style.opacity,'0');}finally{dom.window.close();}
 });
+
+test('desktop background remains visible while scroll selects distinct scenes',()=>{
+ const {dom,w,host,frames}=boot({reduced:true});
+ try{
+ assert.equal(host.dataset.scene,'hero');
+ w.scrollY=900;w.dispatchEvent(new w.Event('scroll'));
+ assert.equal(host.dataset.scene,'shared-work');assert.ok(Number(host.style.opacity)>.25);
+ w.scrollY=2700;w.dispatchEvent(new w.Event('scroll'));
+ assert.equal(host.dataset.scene,'quiet');assert.ok(Number(host.style.opacity)>.25);
+ w.scrollY=0;w.dispatchEvent(new w.Event('scroll'));
+ assert.equal(host.dataset.scene,'hero');assert.equal(frames.size,0);
+ }finally{dom.window.close();}
+});

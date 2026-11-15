@@ -146,8 +146,8 @@ html[data-theme=dark] .appearance-footer button{color:#eee}
 html[data-theme=dark] .site-header .nav{color:#f4f4f4;text-shadow:0 1px 5px #000}
 html[data-theme=dark] .site-header .nav-links{color:#e2e5ea}
 
-/* Art Vortex-inspired graphite material, confined to the landing hero. */
-#paper-background{position:absolute;top:0;left:0;width:100%;height:760px;z-index:-1;pointer-events:none;opacity:0;color:#303237;overflow:hidden;mask-image:linear-gradient(#000 65%,transparent 100%)}
+/* Viewport-sized monochrome scenes persist through the full landing page. */
+#paper-background{position:fixed;top:0;left:0;width:100%;height:100svh;min-height:600px;z-index:-1;pointer-events:none;opacity:0;color:#303237;overflow:hidden;mask-image:linear-gradient(#000 70%,#0009 100%)}
 #paper-background canvas,#paper-background svg{position:absolute;inset:0;display:block;width:100%;height:100%}
 .vortex-network{opacity:.38;mask-image:radial-gradient(ellipse 41% 29% at 50% 29%,transparent 56%,#000 100%)}
 .vortex-network path{fill:none;stroke:currentColor;stroke-width:.7;stroke-dasharray:1 5;stroke-linecap:round;vector-effect:non-scaling-stroke}
@@ -298,3 +298,12 @@ html[data-theme] .site-footer .theme-toggle{background:transparent;color:var(--f
 html[data-theme] .site-footer[data-footer-tone="dark"],.site-footer[data-footer-tone="dark"]{--footer-bg:#34383e;--footer-ink:#f0f2f5;--footer-muted:#bcc3cd;--footer-border:#4b515b;--footer-dot:#5c626d;--footer-control:#3b4048;--footer-hover:#ffffff}
 html[data-theme] .site-footer[data-footer-tone="dark"] .brand img{filter:invert(1)}
 @media(prefers-reduced-motion:reduce){.footer-mobile-preview{transition:none}}
+
+/* Legal links sit directly beside the copyright and wrap cleanly on phones. */
+.footer-meta{display:flex;align-items:center;flex-wrap:wrap;gap:12px 24px}
+.footer-legal{display:flex;align-items:center;gap:20px;font-size:inherit}
+.footer-legal a{display:inline-flex;align-items:center;min-height:44px;color:var(--footer-muted)}
+.footer-legal a:hover{color:var(--footer-hover);text-decoration:underline;text-underline-offset:4px}
+@media(max-width:700px){.footer-meta{grid-column:1/-1;gap:4px 18px}.footer-meta small{width:auto}.footer-legal{gap:18px}}
+
+html:not([data-theme=dark]) :is(.section-heading>p,.feature-grid p,.faq details p){color:#606873}
