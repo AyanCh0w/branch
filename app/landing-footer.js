@@ -59,7 +59,7 @@
       ctx.beginPath();ctx.moveTo(edge.a.x,edge.a.y);ctx.lineTo(edge.b.x,edge.b.y);ctx.stroke();
     }
     for (const [id,p] of nodes) {
-      const radius=3.5;
+      const radius=5;
       ctx.fillStyle=`rgba(${color},${.95})`;
       ctx.beginPath();ctx.arc(p.x,p.y,radius,0,Math.PI*2);ctx.fill();
     }
