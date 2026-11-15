@@ -307,3 +307,15 @@ html[data-theme] .site-footer[data-footer-tone="dark"] .brand img{filter:invert(
 @media(max-width:700px){.footer-meta{grid-column:1/-1;gap:4px 18px}.footer-meta small{width:auto}.footer-legal{gap:18px}}
 
 html:not([data-theme=dark]) :is(.section-heading>p,.feature-grid p,.faq details p){color:#606873}
+
+/* Opaque, distinct demo surfaces keep the scroll material behind the work. */
+html:not([data-theme=dark]) .landing-page :is(.flow-demo,.comparison-card,.branch-demo){background:#eef1f5;border-color:#c7cfd9;box-shadow:0 2px 4px #24304408,0 10px 28px #2430440a}
+html:not([data-theme=dark]) .landing-page .flow-canvas{background-color:#eef1f5;background-image:radial-gradient(#bbc4d0 .7px,transparent .7px)}
+html:not([data-theme=dark]) .landing-page :is(.flow-card,.reference-node){background:#fff;border-color:#c3ccd7;box-shadow:0 2px 4px #2430440b,0 7px 16px #2430440c}
+html:not([data-theme=dark]) .landing-page :is(.flow-card p,.person-line,.inherited,.reference-node small,.flow-rail>span:first-child,.flow-composer>p,.flow-foot,.flow-foot>span,.flow-steps button,.flow-play,.comparison-card p,.branch-explanation){color:#566170}
+html:not([data-theme=dark]) .landing-page .flow-question{background:#e9edf2;color:#343e4c}
+html:not([data-theme=dark]) .landing-page :is(.card,.pill){fill:#fff;stroke:#bec8d5}
+html:not([data-theme=dark]) .landing-page :is(.tiny,.label,.body-text,.chat-text){fill:#505b6b}
+.landing-page .branch-card{opacity:.88}.landing-page .branch-card.selected{opacity:1}
+/* Entrance motion should not wash out text while it is already on screen. */
+.landing-page .scroll-arrival{opacity:1}
