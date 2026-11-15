@@ -15,6 +15,9 @@ struct ReplyCaptureTests {
             ChatElement(role: "AXTextArea", text: "Unsent draft", parent: 0),
         ]
         #expect(ChatTranscript.completedReplies(in: elements) == ["New reply"])
+        var feedbackAction = elements
+        feedbackAction[6].labels = ["good-response-turn-action-button"]
+        #expect(ChatTranscript.completedReplies(in: feedbackAction) == ["New reply"])
     }
 
     @Test func rejectsMixedAndInterruptedTurns() {
@@ -75,6 +78,14 @@ struct ReplyCaptureTests {
         #expect(DesktopChatIdentity.marker(marker).matches(sample([marker, "Reply"])))
         #expect(DesktopChatIdentity.marker(marker).matches(sample(["BRANCH DESKTOP\ntest-code"])))
         #expect(DesktopChatIdentity.marker(marker).matches(sample(["A reply quoting \(marker)"])) == false)
+    }
+
+    @Test func directPairingRequiresAnIdleRecognizedReplyAndChatURL() {
+        #expect(DesktopChatIdentity.verifiedURL(in: sample(["Reply"]))?.pairingID == "chat-id")
+        #expect(DesktopChatIdentity.verifiedURL(in: sample([])) == nil)
+        #expect(DesktopChatIdentity.verifiedURL(in: sample(["Reply"], generating: true)) == nil)
+        let noURL = ChatTranscript(conversationID: nil, title: "Test Chat", isGenerating: false, replies: ["Reply"])
+        #expect(DesktopChatIdentity.verifiedURL(in: noURL) == nil)
     }
 
     private func sample(_ replies: [String], generating: Bool = false) -> ChatTranscript {

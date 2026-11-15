@@ -22,7 +22,8 @@ struct ChatElement: Sendable {
     }
 
     var isResponseAction: Bool {
-        role == "AXButton" && hasLabel(["copy response", "copy-turn-action-button", "good response", "bad response"])
+        role == "AXButton" && hasLabel(["copy response", "copy-turn-action-button", "good response", "bad response",
+                                        "good-response-turn-action-button"])
     }
 
     var isInterrupted: Bool {
@@ -82,6 +83,11 @@ struct ChatTranscript: Sendable {
 /// Binds writes to a stable ChatGPT URL or a random marker in the selected window's reply history.
 enum DesktopChatIdentity {
     case url(String), marker(String)
+
+    static func verifiedURL(in transcript: ChatTranscript) -> Self? {
+        guard !transcript.isGenerating, !transcript.replies.isEmpty, let id = transcript.conversationID else { return nil }
+        return .url(id)
+    }
 
     var pairingID: String {
         switch self {

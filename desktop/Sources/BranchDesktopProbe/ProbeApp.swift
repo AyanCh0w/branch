@@ -43,6 +43,7 @@ final class ProbeApp: NSObject, NSApplicationDelegate {
             self?.syncActive = active
             self?.updateMenu()
         }
+        syncPanel.onOpenProbe = { [weak self] in self?.showWindow() }
         syncPanel.show()
     }
 

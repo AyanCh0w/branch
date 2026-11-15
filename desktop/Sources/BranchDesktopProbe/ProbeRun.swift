@@ -38,6 +38,7 @@ struct ProbePrompts: Sendable {
 /// Records only synthetic marker and control visibility from one complete window sample.
 struct WindowSample: Sendable {
     var baseline = false
+    var recognizedBaseline = false
     var firstLine = false
     var lastLine = false
     var stopControl = false
@@ -52,6 +53,7 @@ struct ProbeRun {
 
     private(set) var stage: Stage = .waitingForBaseline
     private(set) var sawBaseline = false
+    private var recognizedBaseline = false
     private(set) var sawFirstLine = false
     private(set) var sawLastLine = false
     private(set) var sawStreaming = false
@@ -63,6 +65,7 @@ struct ProbeRun {
     mutating func record(_ sample: WindowSample) {
         exposedChatURL = exposedChatURL || sample.chatURL
         sawBaseline = sawBaseline || sample.baseline
+        recognizedBaseline = recognizedBaseline || sample.recognizedBaseline
         if stage == .waitingForBaseline {
             guard sample.baseline, !sample.firstLine, !sample.lastLine, !sample.stopControl else { return }
             stage = .ready
@@ -96,6 +99,7 @@ struct ProbeRun {
     func report(outcome: String) -> String {
         let checks = [
             ("Baseline reply readable", sawBaseline),
+            ("Baseline recognized as a completed assistant reply", recognizedBaseline),
             ("New reply start readable", sawFirstLine),
             ("New reply end readable", sawLastLine),
             ("Stop control appeared", sawStreaming),

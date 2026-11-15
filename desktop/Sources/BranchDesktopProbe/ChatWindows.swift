@@ -71,6 +71,7 @@ actor ChatWindows {
         case .permissionLost: return .permissionLost
         case .frame(let frame):
             var signals = WindowSample(stopControl: frame.isGenerating, chatURL: frame.chatID != nil)
+            signals.recognizedBaseline = ChatTranscript.completedReplies(in: frame.elements).contains(prompts.baseline)
             for element in frame.elements {
                 for value in [element.text] + element.labels {
                     signals.baseline = signals.baseline || value.contains(prompts.baseline)
