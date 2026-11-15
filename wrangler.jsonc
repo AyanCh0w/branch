@@ -7,6 +7,10 @@
     "nodejs_compat"
   ],
   "workers_dev": true,
+  "routes": [
+    { "pattern": "joinbranch.dev", "custom_domain": true },
+    { "pattern": "www.joinbranch.dev", "custom_domain": true }
+  ],
   "no_bundle": true,
   "find_additional_modules": true,
   "rules": [
