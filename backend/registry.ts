@@ -12,4 +12,6 @@ import * as library from './functions/library';
 import * as workspaceKeys from './functions/workspaceKeys';
 import * as files from './functions/files';
 import * as sharing from './functions/sharing';
-export const registry = {boards,chatgptActions,invitations,workspaceKeyActions,collaboration,chatgpt,people,chat,teams,accounts,library,workspaceKeys,files,sharing};
+import * as github from './functions/github';
+import * as githubActions from './functions/githubActions';
+export const registry = {boards,chatgptActions,invitations,workspaceKeyActions,collaboration,chatgpt,people,chat,teams,accounts,library,workspaceKeys,files,sharing,github,githubActions};

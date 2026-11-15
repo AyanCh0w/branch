@@ -34,7 +34,7 @@ implemented features; this migration does not enable them.
 
 ## Configure and run
 
-1. Apply both numbered SQL files in `migrations/` in order. For an existing deployment using the first migration, run `node scripts/apply-relational-migration.cjs` to preview, then append `--apply`. It saves a private backup and atomically copies data into typed tables; field equality and foreign-key failures roll the migration back.
+1. Apply the numbered SQL files in `migrations/` in order. For an existing deployment using the first migration, run `node scripts/apply-relational-migration.cjs` to preview, then append `--apply`. `202611140003_github.sql` adds the GitHub tables ([docs/github.md](../docs/github.md)); apply it to an existing deployment before deploying code that includes it. It saves a private backup and atomically copies data into typed tables; field equality and foreign-key failures roll the migration back.
 2. In the ignored root `.env.local`, configure `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, and `SUPABASE_DB_URL`. Legacy anon/service-role key variable names are also accepted. Use the session pooler connection URL for IPv4-only environments. Keep TLS verification enabled with `sslmode=verify-full` and `sslrootcert` pointing to the official Supabase certificate in `backend/certs/supabase-ca.crt` (downloaded from the database settings link). Use the correct deployment-local certificate path.
 3. Preserve `OPENAI_API_KEY` and any existing `CHATGPT_*` server settings. Preserve the exact encryption key for imported personal ChatGPT connections; a new key cannot decrypt existing tokens.
 4. Run `npm ci`, `npm run build`, then `npm run dev` and `npm run worker` in separate terminals. The app defaults to `http://127.0.0.1:4387`.
@@ -77,7 +77,7 @@ Those 22 entity tables have typed columns, foreign keys, role/status checks, and
 
 Supporting tables are `accounts` (Supabase Auth to app-user mapping), `jobs`, `rate_limits`, `record_ids`, and `runtime_lock`. `public.branch_revisions` holds only account-scoped invalidation counters. `records` is now a compatibility **view** with guarded write triggers, while indexed collection reads use entity tables directly. `records_legacy_backup` preserves the pre-upgrade snapshot privately; it is not kept in sync and is not the live data source. The database also has Supabase-managed Auth and Storage tables, which this migration does not replace.
 
-The second migration preserves every existing ID and compares every reconstructed record against the original JSON before committing. It does not erase old records or reset credentials. Never regenerate an already-deployed migration to add future fields: create a new numbered migration and update the entity mapping instead.
+The second migration preserves every existing ID and compares every reconstructed record against the original JSON before committing. It does not erase old records or reset credentials. Never regenerate an already-deployed migration to add future fields: create a new numbered migration and update the entity mapping instead. `node scripts/build-entity-migration.cjs <name> <collection>...` generates one for new collections (after `npm run build:backend`) and updates `backend/entities.json`.
 
 ## Transactions and realtime
 

@@ -37,6 +37,7 @@ The tests include local HTTP server checks, which require permission to listen o
 - `accounts/`: React accounts, board library, sharing, and workspace UI.
 - `backend/`: Supabase-backed accounts, permissions, shared documents, and durable AI jobs.
 - `supabase/`: database migration and deployment/import guide.
+- `docs/github.md`: connecting a board to GitHub repositories (GitHub App setup).
 - `convex/`: original backend retained for rollback and parity tests.
 - `collaboration/`: Yjs client integration, context processing, research helpers, and backend tests.
 
