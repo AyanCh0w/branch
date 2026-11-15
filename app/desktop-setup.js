@@ -12,7 +12,7 @@
  }
  function handoff(boardId){
   const board=boardSetupURL(boardId);
-  return `Help me connect this conversation to my team’s Branch board from ChatGPT or Codex.
+  return `Help me connect this conversation in the ChatGPT desktop app to my team’s Branch board.
 
 Branch for Mac setup: https://joinbranch.dev/mac-setup.html
 My board: ${board}

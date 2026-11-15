@@ -87,7 +87,7 @@ test('installation handoff contains setup and only the board destination, not UR
   assert.match(copied,/software catalog or IT/);
   assert.match(copied,/https:\/\/joinbranch.dev\/app\?board=boards_test/);assert.doesNotMatch(copied,/private-test-token|#secret|branch_desktop_launch_/);
   assert.match(copied,/#mac-sync=1/);
-  assert.match(copied,/this chat’s exact title/);assert.match(copied,/Connect a conversation/);assert.match(copied,/ChatGPT or Codex/);
+  assert.match(copied,/this chat’s exact title/);assert.match(copied,/Connect a conversation/);assert.match(copied,/ChatGPT desktop app/);
   assert.doesNotMatch(copied,/github|swift|build-probe|checkout|pairing prompt|baseline prompt/i);
   assert.equal(d.querySelector('details').open,false);assert.equal(d.querySelector('[data-setup-fallback]').hidden,true);
   assert.match(d.querySelector('.tour-setup-link').href,/mac-setup.html\?board=boards_test/);

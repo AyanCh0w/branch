@@ -106,6 +106,16 @@ struct ReplyCaptureTests {
         #expect(identity.matches(chatID: "chat-id", replies: [], elements: []))
     }
 
+    @Test func onlyAnUnboundReadableWindowCanFallBackToLocalLookup() {
+        let transcript = sample([])
+        #expect(ChatWindows.SyncRead.transcript(transcript, pairingID: nil).canTryLocalThread)
+        for read: ChatWindows.SyncRead in [
+            .transcript(transcript, pairingID: "selected"), .windowChanged, .permissionLost, .incomplete,
+        ] {
+            #expect(read.canTryLocalThread == false)
+        }
+    }
+
     @Test func windowPairingRequiresTheSameReplyAndAccessibilityElement() {
         let handle = AXUIElementCreateApplication(101)
         let otherHandle = AXUIElementCreateApplication(102)

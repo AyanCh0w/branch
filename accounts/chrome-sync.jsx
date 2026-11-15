@@ -23,8 +23,8 @@ export function ChromeSyncSettings({ boardId, Dialog, onClose, onConnectMac }) {
         setStatus('Could not open Branch for Mac. Check your connection and try again.');
       } finally { setLaunching(false); }
     }}>{launching ? 'Opening Branch for Mac…' : 'Connect a conversation'}</button></p>}
-    {desktopSyncAvailable && <p className="a-muted">In Branch for Mac, choose an open ChatGPT or Codex conversation.</p>}
-    <button type="button" className="a-primary" onClick={async()=>{try{await navigator.clipboard.writeText(handoff(boardId));setStatus('Setup instructions copied. Paste them into the ChatGPT or Codex conversation you want to connect.');}catch{setStatus('Clipboard unavailable. Open the installation guide for setup steps.');}}}>Copy setup instructions</button>
+    {desktopSyncAvailable && <p className="a-muted">In Branch for Mac, choose the open conversation you want to sync.</p>}
+    <button type="button" className="a-primary" onClick={async()=>{try{await navigator.clipboard.writeText(handoff(boardId));setStatus('Setup instructions copied. Paste them into the conversation you want to connect.');}catch{setStatus('Clipboard unavailable. Open the installation guide for setup steps.');}}}>Copy setup instructions</button>
     <p><a href={'/mac-setup.html?board='+encodeURIComponent(boardId)} target="_blank" rel="noopener noreferrer">Installation guide ↗</a></p>
     <p className="a-muted">First-time setup requires macOS Accessibility approval. Only the chat you choose is shared.</p>
     {!!count && <button type="button" className="a-secondary" disabled={busy} onClick={async () => {

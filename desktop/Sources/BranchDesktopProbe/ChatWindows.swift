@@ -37,6 +37,11 @@ actor ChatWindows {
     enum SyncRead: Sendable {
         case transcript(ChatTranscript, pairingID: String?)
         case incomplete, windowChanged, permissionLost
+
+        var canTryLocalThread: Bool {
+            if case .transcript(_, nil) = self { return true }
+            return false
+        }
     }
 
     private struct Frame {
@@ -60,6 +65,7 @@ actor ChatWindows {
         let app: AXUIElement
         let element: AXUIElement
         let title: String
+        let bundleID: String
     }
 
     private var choices: [Window] = []
@@ -72,7 +78,8 @@ actor ChatWindows {
         let label: String
     }
 
-    static let supportedBundleIDs = ["com.openai.codex", "com.openai.chat"]
+    static let localThreadBundleID = "com.openai.codex"
+    static let supportedBundleIDs = [localThreadBundleID, "com.openai.chat"]
 
     /// Lists conversation windows from ChatGPT and Codex.
     func list() -> [Choice] {
@@ -85,7 +92,7 @@ actor ChatWindows {
                 for element in windows(of: app) {
                     let name = title(of: element)
                     guard Self.isConversationWindow(name) else { continue }
-                    choices.append(Window(app: app, element: element, title: name))
+                    choices.append(Window(app: app, element: element, title: name, bundleID: bundleID))
                 }
             }
         }
@@ -105,6 +112,15 @@ actor ChatWindows {
         chatPath = nil
         connectionIdentity = nil
         return true
+    }
+
+    /// Allows local thread lookup only while the selected window is still identifiable.
+    func localThreadTitle() -> String? {
+        guard AXIsProcessTrusted(), let selected, connectionIdentity == nil, chatPath == nil,
+              selected.bundleID == Self.localThreadBundleID, !selected.title.isEmpty,
+              choices.filter({ $0.title == selected.title }).count == 1,
+              checkWindow(selected) == .current else { return nil }
+        return selected.title
     }
 
     /// Searches one window for synthetic markers and returns no raw Accessibility text.
