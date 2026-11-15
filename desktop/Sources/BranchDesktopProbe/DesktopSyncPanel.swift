@@ -5,7 +5,7 @@ import AppKit
 @MainActor
 final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     private enum Phase {
-        case idle, checking, approval, preparing, connected
+        case idle, checking, approval, preparing, connected, paused
 
         var status: String {
             switch self {
@@ -14,6 +14,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
             case .approval: "Waiting for board approval"
             case .preparing: "Getting the chat ready"
             case .connected: "Connected · Sync is on"
+            case .paused: "Connected · Waiting for your chat"
             }
         }
     }
@@ -338,44 +339,46 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         status.stringValue = "Keep the chat open. Send your next message when this window says Connected."
         updateControls()
         var capture = ReplyCapture()
-        var unreadableSamples = 0
+        var incompleteSamples = 0
         while !Task.isCancelled, Date() < client.expiresAt {
             let sample = await sampler.syncSample()
             try Task.checkCancellation()
             switch sample {
             case .transcript(let transcript, _):
-                unreadableSamples = 0
+                incompleteSamples = 0
                 switch capture.observe(transcript) {
                 case .waitingForHistory:
-                    setStatus("Keep this chat visible and let the current response finish. Branch will then start syncing.")
+                    if phase != .paused {
+                        setStatus("Keep this chat visible and let the current response finish. Branch will then start syncing.")
+                    }
                 case .ready:
                     if pending.isEmpty { showSavedStatus() }
+                    else { showActiveStatus("Saving a reply…") }
                 case .generating:
-                    if phase == .connected, pending.isEmpty { setStatus("Waiting for ChatGPT to finish its reply…") }
+                    if phase != .preparing, pending.isEmpty {
+                        showActiveStatus("Waiting for ChatGPT to finish its reply…")
+                    }
                 case .completed(let reply):
                     guard pending.count < 20 else {
                         finish("Sync stopped because too many replies are waiting to save.")
                         return
                     }
                     pending.append((reply, transcript.title))
-                    setStatus("Saving a reply…")
+                    showActiveStatus("Saving a reply…")
                     upload(using: client, board: board)
                 case .historyChanged:
-                    finish("The visible replies changed or a streaming cycle was missed. Pair this chat again to resume.")
-                    return
+                    capture.pause()
+                    showPausedStatus("Branch is checking the visible replies. Sync will resume automatically.")
                 }
-            case .incomplete:
+            case .incomplete where phase != .paused && incompleteSamples < 2:
+                incompleteSamples += 1
                 capture.interruptSample()
-                unreadableSamples += 1
-                if unreadableSamples >= 12 {
-                    finish("The selected chat is no longer readable. Reopen the chat and pair again.")
-                    return
-                }
+            case .incomplete, .windowChanged:
+                capture.pause()
+                let chat = chatTitle.map { "“\($0)”" } ?? "the connected conversation"
+                showPausedStatus("Return to \(chat) in its ChatGPT window. Sync will resume automatically.")
             case .permissionLost:
                 finish("Accessibility access was turned off.")
-                return
-            default:
-                finish("The selected chat changed or closed. Pair again to resume.")
                 return
             }
             try await Task.sleep(for: .milliseconds(350))
@@ -463,7 +466,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
             }
             guard !Task.isCancelled else { return }
             uploading = nil
-            showSavedStatus()
+            if phase != .paused { showSavedStatus() }
         }
     }
 
@@ -479,17 +482,29 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     }
 
     private func showSavedStatus() {
+        if savedCount == 0 {
+            showActiveStatus("Send a new message in ChatGPT. Its completed reply will appear in the board’s Context view.")
+        } else if savedCount == 1 {
+            showActiveStatus("1 reply saved to Context.")
+        } else {
+            showActiveStatus("\(savedCount) replies saved to Context.")
+        }
+    }
+
+    private func showActiveStatus(_ message: String) {
         if phase != .connected {
             phase = .connected
             updateControls()
         }
-        if savedCount == 0 {
-            setStatus("Send a new message in ChatGPT. Its completed reply will appear in the board’s Context view.")
-        } else if savedCount == 1 {
-            setStatus("1 reply saved to Context.")
-        } else {
-            setStatus("\(savedCount) replies saved to Context.")
+        setStatus(message)
+    }
+
+    private func showPausedStatus(_ message: String) {
+        if phase != .paused {
+            phase = .paused
+            updateControls()
         }
+        setStatus(message)
     }
 
     private func clearSession() -> DesktopSyncClient? {
@@ -560,7 +575,7 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         chatPicker.isEnabled = !chatPicker.isHidden && !refreshing
         startButton.isHidden = chatPicker.isHidden
         startButton.isEnabled = chatPicker.isEnabled && chatPicker.indexOfSelectedItem > 0
-        stopButton.title = phase == .connected ? "Stop syncing" : "Cancel setup"
+        stopButton.title = boardTitle != nil ? "Stop syncing" : "Cancel setup"
         stopButton.isHidden = !inSession
         openButton.isHidden = cardURL == nil
         approvalButton.isHidden = phase != .approval
@@ -580,8 +595,8 @@ final class DesktopSyncPanel: NSObject, NSWindowDelegate {
         case .approval:
             heading.stringValue = "Approve a Branch board"
             intro.stringValue = chatTitle.map { "Branch verified “\($0)”." } ?? "Branch verified your chat."
-        case .preparing, .connected:
-            heading.stringValue = phase == .connected ? "ChatGPT is connected" : "Connecting ChatGPT"
+        case .preparing, .connected, .paused:
+            heading.stringValue = phase == .preparing ? "Connecting ChatGPT" : "ChatGPT is connected"
             intro.stringValue = "New replies from this chat go to Context on \(boardTitle ?? "your board")."
         }
         let primaryButtons = [startButton, approvalButton, openButton, findButton]

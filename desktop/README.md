@@ -19,7 +19,7 @@ Keep using the same signing identity across builds so macOS can recognize update
 3. Branch uses the existing completed replies in the selected chat to check that it can read the conversation. When started from a board, Branch connects as soon as it can read the selected chat. When started from the menu bar without a board authorization, choose the destination board in the browser.
 4. Wait for **Connected** in Branch for Mac before sending another message. After the first save, the app confirms the reply was saved and **Open in Branch** opens the saved replies. Use **Stop syncing** from the app or **Disconnect ChatGPT chats** on the board to revoke access.
 
-Each pairing starts with the existing chat history as a baseline. The app stops if the window changes, the chat becomes unreadable, or it cannot confirm a streaming cycle. Keep the chat window open while syncing. Pending replies and the scoped write key live in memory. The pairing expires within eight hours and needs to be renewed after quitting. Chrome and Mac connections each have their own conversation card.
+Each pairing starts with the existing chat history as a baseline. You can switch conversations in the selected window. When the paired chat is unavailable, Branch shows **Connected · Waiting for your chat** and resumes automatically once it can verify the same conversation in that window. Replies that finished while the chat was unavailable stay in ChatGPT. Pending replies and the scoped write key live in memory. The pairing expires within eight hours and needs to be renewed after quitting. Chrome and Mac connections each have their own conversation card.
 
 ## Release the employee installer
 

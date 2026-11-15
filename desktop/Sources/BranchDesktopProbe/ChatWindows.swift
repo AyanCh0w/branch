@@ -163,6 +163,7 @@ actor ChatWindows {
         var handles: [AXUIElement] = []
         var isGenerating = false
         var observedPath: String?
+        var pathSource: (element: AXUIElement, key: String)?
 
         while let (element, parent) = pending.popLast() {
             guard !Task.isCancelled, clock.now < deadline, visited.count < 2400 else { return .incomplete }
@@ -189,6 +190,7 @@ actor ChatWindows {
                     guard let path = conversationPath(from: attribute(key, of: element)) else { continue }
                     if let observedPath, observedPath != path { return .incomplete }
                     observedPath = path
+                    pathSource = (element, key)
                 }
             }
             if let children = attributes[7] as? [AXUIElement] {
@@ -200,6 +202,9 @@ actor ChatWindows {
         case .current: break
         case .unavailable: return .incomplete
         case .changed: return .windowChanged
+        }
+        if let pathSource, conversationPath(from: attribute(pathSource.key, of: pathSource.element)) != observedPath {
+            return .incomplete
         }
         if let chatPath {
             guard let observedPath else { return .incomplete }

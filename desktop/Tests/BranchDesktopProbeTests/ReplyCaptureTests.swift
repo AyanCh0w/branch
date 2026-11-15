@@ -73,12 +73,37 @@ struct ReplyCaptureTests {
         #expect(capture.observe(sample(["Initial reply", "An unseen turn"])) == .historyChanged)
     }
 
+    @Test func repeatedPausesKeepTheCaptureReadyWithoutImportingRepliesThatFinishedWhileAway() {
+        var capture = ReplyCapture()
+        #expect(capture.observe(sample(["Existing reply"])) == .ready)
+        #expect(capture.observe(sample(["Existing reply"], generating: true)) == .generating)
+        capture.pause()
+        let afterFirstSwitch = ["Existing reply", "Finished while away"]
+        #expect(capture.observe(sample(afterFirstSwitch)) == .ready)
+        capture.pause()
+        #expect(capture.observe(sample([])) == .waitingForHistory)
+        #expect(capture.observe(sample(afterFirstSwitch)) == .ready)
+        capture.pause()
+        #expect(capture.observe(sample(afterFirstSwitch, generating: true)) == .generating)
+        let newReply = sample(afterFirstSwitch + ["Finished after returning"])
+        #expect(capture.observe(newReply) == .generating)
+        #expect(capture.observe(newReply) == .generating)
+        guard case .completed(let result) = capture.observe(newReply) else {
+            Issue.record("The reply after returning was not delivered")
+            return
+        }
+        #expect(result.body == "Finished after returning")
+        #expect(capture.observe(newReply) == .ready)
+    }
+
     @Test func stableConversationIDCannotFollowAnotherChat() {
         let handle = AXUIElementCreateApplication(101)
         let identity = ChatConnectionIdentity(chatID: "chat-id", element: handle, reply: "Existing reply")
         #expect(identity.pairingID == "chat-id")
         #expect(identity.matches(chatID: "chat-id", replies: [], elements: [handle]))
         #expect(identity.matches(chatID: "different-chat", replies: [], elements: [handle]) == false)
+        #expect(identity.matches(chatID: nil, replies: [], elements: [handle]) == false)
+        #expect(identity.matches(chatID: "chat-id", replies: [], elements: []))
     }
 
     @Test func windowPairingRequiresTheSameReplyAndAccessibilityElement() {
