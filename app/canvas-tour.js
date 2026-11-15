@@ -23,10 +23,17 @@
      <button type="button" data-tour="provider" data-provider="claude" aria-pressed="false">Claude Code</button>
     </div>
     <div class="tour-provider-panel" data-tour-panel="chatgpt">
-     <p>Open Branch for Mac, approve Accessibility once, then choose your ChatGPT conversation. Use the baseline prompt with Desktop Sync Probe if you need to check what Branch can read.</p>
-     <textarea readonly rows="3" aria-label="Baseline prompt"></textarea>
-     <button type="button" class="tour-action" data-tour="copy-baseline">Copy baseline prompt</button>
-     <button type="button" data-tour="chrome" hidden>Set up Chrome sync</button>
+     <p>Install the Mac companion to bring new ChatGPT replies into your team’s Context.</p>
+     <ol class="tour-setup-steps"><li>Install Branch for Mac.</li><li>Allow Accessibility, then choose a chat.</li><li>Connect this board and verify a new reply.</li></ol>
+     <button type="button" class="tour-action" data-tour="copy-setup">Set up with your agent</button>
+     <a class="tour-setup-link" href="/mac-setup.html" target="_blank" rel="noopener noreferrer">Installation guide ↗</a>
+     <p class="tour-setup-note">Copies the install and connection steps for your coding agent.</p>
+     <textarea readonly rows="5" aria-label="Agent setup instructions" data-setup-fallback hidden></textarea>
+     <details class="tour-troubleshooting"><summary>Troubleshooting an installed app</summary><p>Only use this check after installation, if the app asks you to verify what it can read.</p>
+      <textarea readonly rows="3" aria-label="Baseline prompt" data-baseline></textarea>
+      <button type="button" data-tour="copy-baseline">Copy compatibility prompt</button>
+      <button type="button" data-tour="chrome" hidden>Chrome sync settings</button>
+     </details>
     </div>
     <div class="tour-provider-panel" data-tour-panel="claude" hidden>
      <p>Connect Claude Code to send card context and return drafts for review.</p>
@@ -50,7 +57,7 @@
  }
  let provider='chatgpt', baselinePrompt='';
  const connections=dialog.querySelector('.tour-connections');
- const promptField=dialog.querySelector('textarea');
+ const promptField=dialog.querySelector('[data-baseline]');
  const connectionStatus=dialog.querySelector('.tour-connection-status');
  const chromeControl=()=>document.querySelector('[data-open-chrome-sync]');
  const motion=window.matchMedia?.("(prefers-reduced-motion: reduce)");
@@ -142,11 +149,20 @@
    button.setAttribute('aria-pressed',String(button.dataset.provider===provider));
   }
   for(const panel of connections.querySelectorAll('[data-tour-panel]'))panel.hidden=panel.dataset.tourPanel!==provider;
+  const boardId=new URLSearchParams(location.search).get('board');
+  dialog.querySelector('.tour-setup-link').href='/mac-setup.html'+(/^[A-Za-z0-9_-]{1,160}$/.test(boardId||'')?'?board='+encodeURIComponent(boardId):'');
   promptField.value=baselinePrompt;
   dialog.querySelector('[data-tour="copy-baseline"]').disabled=!baselinePrompt;
   dialog.querySelector('[data-tour="chrome"]').hidden=viewer||!chromeControl();
   dialog.querySelector('[data-tour="claude"]').hidden=viewer;
+  dialog.querySelector('[data-tour="copy-setup"]').hidden=viewer;
   connectionStatus.textContent=viewer&&provider==='claude'?'Ask a board editor to connect Claude Code.':'';
+ }
+ async function copySetup(){
+  const value=window.BranchMacSetup.handoff(new URLSearchParams(location.search).get('board'));
+  const field=dialog.querySelector('[data-setup-fallback]');
+  try{await navigator.clipboard.writeText(value);field.hidden=true;connectionStatus.textContent='Setup instructions copied. Paste them into your coding agent on your Mac.';}
+  catch{field.value=value;field.hidden=false;field.focus();field.select();connectionStatus.textContent='Copy the selected instructions and paste them into your coding agent.';}
  }
  async function copyBaseline(){
   try{
@@ -190,6 +206,7 @@
    case 'next':if(index===slides.length-1)finish();else{index++;render();}break;
    case 'connections':showConnections();break;
    case 'provider':provider=button.dataset.provider;renderConnections();guideStep();break;
+   case 'copy-setup':void copySetup();break;
    case 'copy-baseline':void copyBaseline();break;
    case 'chrome':{
     const setup=chromeControl();
@@ -205,6 +222,6 @@
  });
  dialog.addEventListener('cancel',e=>{e.preventDefault();finish();});
  // Keep canvas shortcuts from creating or moving cards while reading the tour.
- dialog.addEventListener('keydown',e=>{e.stopPropagation();if(e.target===promptField)return;if(e.key==='ArrowRight'){e.preventDefault();dialog.querySelector('[data-tour="next"]').click();}if(e.key==='ArrowLeft'){e.preventDefault();dialog.querySelector('[data-tour="back"]').click();}});
+ dialog.addEventListener('keydown',e=>{e.stopPropagation();if(e.target.tagName==='TEXTAREA')return;if(e.key==='ArrowRight'){e.preventDefault();dialog.querySelector('[data-tour="next"]').click();}if(e.key==='ArrowLeft'){e.preventDefault();dialog.querySelector('[data-tour="back"]').click();}});
  window.BranchCanvasTour={start,dismiss:()=>finish(),setBaselinePrompt:prompt=>{baselinePrompt=prompt;}};
 })();

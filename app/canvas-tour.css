@@ -90,3 +90,15 @@ body.canvas-tour-open #empty-note{visibility:hidden}
 #canvas-tour [data-tour=chrome]{font-size:13px;min-height:36px;margin-top:6px}
 #canvas-tour .tour-connection-status:not(:empty){margin-top:6px;font-size:13px}
 .tour-samples[data-scene=connections]{visibility:hidden}
+
+.tour-setup-steps{padding-left:1.25em;margin:10px 0 18px;line-height:1.6;color:var(--text,#292c30)}
+.tour-setup-link{display:inline-block;margin:10px 0 6px;font-size:inherit;color:inherit;text-underline-offset:3px}
+#canvas-tour .tour-provider-panel .tour-setup-note{font-size:13px;line-height:1.5;color:#737a85;margin:8px 0 0}
+.tour-troubleshooting{margin-top:16px;border-top:1px solid #dce0e7;padding-top:12px;font-size:13px;color:#737a85}
+.tour-troubleshooting summary{cursor:pointer}
+.tour-troubleshooting p{font-size:13px}
+
+#canvas-tour .tour-provider-panel textarea[hidden]{display:none}
+
+#canvas-tour .tour-setup-link{margin-left:8px}
+@media(max-width:520px){#canvas-tour .tour-setup-link{display:block;margin-left:0}}

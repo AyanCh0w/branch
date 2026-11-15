@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),{JSDOM}=require('jsdom');
 const script=fs.readFileSync(require('node:path').join(__dirname,'../canvas-tour.js'),'utf8');
-function boot(){const dom=new JSDOM('<button id="origin">Account</button><span class="dock-agent-avatar"><img src="/agent.svg"></span>',{url:'http://localhost',runScripts:'outside-only'}),w=dom.window;w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};w.eval(script);return {dom,w,d:w.document,tour:w.BranchCanvasTour,click:a=>w.document.querySelector(`[data-tour="${a}"]`).click()};}
+function boot(){const dom=new JSDOM('<button id="origin">Account</button><span class="dock-agent-avatar"><img src="/agent.svg"></span>',{url:'http://localhost',runScripts:'outside-only'}),w=dom.window;w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};w.eval(fs.readFileSync(require('node:path').join(__dirname,'../desktop-setup.js'),'utf8'));w.eval(script);return {dom,w,d:w.document,tour:w.BranchCanvasTour,click:a=>w.document.querySelector(`[data-tour="${a}"]`).click()};}
 test('all slides complete once per user and explicit replay remains available',()=>{const {dom,w,d,tour,click}=boot();try{assert.equal(tour.start({}),false);assert.equal(tour.start({userId:'one'}),true);assert.equal(d.querySelector('.tour-guide img').getAttribute('src'),'/agent.svg');assert.equal(d.querySelector('[data-tour=back]').disabled,true);for(let i=0;i<6;i++)click('next');assert.equal(d.querySelector('[data-tour=next]').textContent,'Let’s build');click('back');assert.equal(d.querySelector('.tour-count').textContent,'6 of 7');click('next');click('next');assert.equal(d.querySelector('dialog').open,false);assert.equal(tour.start({userId:'one'}),false);assert.equal(tour.start({userId:'one',force:true}),true);click('skip');assert.equal(tour.start({userId:'two'}),true);}finally{dom.window.close();}});
 test('navigation cleanup and Escape do not replay on the next visit',()=>{const {dom,w,d,tour}=boot();try{d.querySelector('#origin').focus();tour.start({userId:'one'});tour.dismiss();assert.equal(d.activeElement.id,'origin');assert.equal(tour.start({userId:'one'}),false);assert.equal(tour.start({userId:'one',force:true}),true);d.querySelector('dialog').dispatchEvent(new w.Event('cancel',{cancelable:true}));assert.equal(tour.start({userId:'one'}),false);}finally{dom.window.close();}});
 test('no tour on account screens; view-only and blocked storage are supported',()=>{const {dom,w,d,tour,click}=boot();try{d.body.classList.add('account-mode');assert.equal(tour.start({userId:'one'}),false);d.body.classList.remove('account-mode');Object.defineProperty(w,'localStorage',{get(){throw Error('blocked');}});assert.equal(tour.start({userId:'one',role:'viewer'}),true);assert.match(d.querySelector('#canvas-tour-copy').textContent,/view-only/);click('skip');assert.equal(tour.start({userId:'one'}),false);}finally{dom.window.close();}});
@@ -16,7 +16,7 @@ test('tour cleans up examples, highlights and restores the exact starting camera
  }finally{dom.window.close();}
 });
 
-test('the agent shortcut copies the desktop probe prompt and opens the existing Chrome setup', async () => {
+test('compatibility diagnostics remain separate from installation and Chrome settings', async () => {
  const {dom,w,d,tour,click}=boot();
  try {
   const {prompt}=require('../../desktop/Sources/BranchDesktopProbe/Resources/desktop-baseline.json');
@@ -28,7 +28,7 @@ test('the agent shortcut copies the desktop probe prompt and opens the existing 
   tour.setBaselinePrompt(prompt);
   tour.start({userId:'one'});
   click('connections');
-  assert.equal(d.querySelector('textarea').value,prompt);
+  assert.equal(d.querySelector('[data-baseline]').value,prompt);
   click('copy-baseline');
   await new Promise(setImmediate);
   assert.equal(copied,prompt);
@@ -77,3 +77,24 @@ test('the story starts on a brief and reveals team threads without modifying exi
 });
 
 test('seen state survives a fresh page load',()=>{const first=boot(),second=boot();try{first.tour.start({userId:'one'});first.click('skip');for(let i=0;i<first.w.localStorage.length;i++){const key=first.w.localStorage.key(i);second.w.localStorage.setItem(key,first.w.localStorage.getItem(key));}assert.equal(second.tour.start({userId:'one'}),false);assert.equal(second.tour.start({userId:'two'}),true);}finally{first.dom.window.close();second.dom.window.close();}});
+
+test('installation handoff contains setup and only the board destination, not URL credentials',async()=>{
+ const {dom,w,d,tour,click}=boot();try{
+  w.history.replaceState({},'', '/?board=boards_test&token=private-test-token#secret');
+  let copied;Object.defineProperty(w.navigator,'clipboard',{value:{async writeText(value){copied=value;}}});
+  tour.start({userId:'one',scene:'connections'});click('copy-setup');await new Promise(setImmediate);
+  assert.match(copied,/swift test --package-path desktop/);assert.match(copied,/sh desktop\/build-probe.sh/);
+  assert.match(copied,/https:\/\/joinbranch.dev\/app\?board=boards_test/);assert.doesNotMatch(copied,/private-test-token|#secret/);
+  assert.match(copied,/Do not call it connected until the new reply arrives/);
+  assert.equal(d.querySelector('details').open,false);assert.equal(d.querySelector('[data-setup-fallback]').hidden,true);
+  assert.match(d.querySelector('.tour-setup-link').href,/mac-setup.html\?board=boards_test/);
+ }finally{dom.window.close();}
+});
+test('clipboard failure exposes selectable installation instructions',async()=>{
+ const {dom,w,d,tour,click}=boot();try{
+  Object.defineProperty(w.navigator,'clipboard',{value:{async writeText(){throw Error('denied');}}});
+  tour.start({userId:'one',scene:'connections'});click('copy-setup');await new Promise(setImmediate);
+  const field=d.querySelector('[data-setup-fallback]');assert.equal(field.hidden,false);assert.match(field.value,/install and set up Branch for Mac/);
+  const count=d.querySelector('.tour-count').textContent;field.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));assert.equal(d.querySelector('.tour-count').textContent,count);
+ }finally{dom.window.close();}
+});

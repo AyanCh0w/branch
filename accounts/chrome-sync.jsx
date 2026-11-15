@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import {handoff} from '../app/desktop-setup';
 import { api, useMutation, useQuery } from '../backend/react';
 import { isChromeSyncOrigin } from '../collaboration/chrome-sync.cjs';
 
@@ -10,8 +11,10 @@ export function ChromeSyncSettings({ boardId, Dialog, onClose }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   return <Dialog title="ChatGPT sync" onClose={onClose}>
-    <p>On Mac, open the Branch menu bar app and choose <strong>Sync selected chat</strong>.</p>
-    <p>In Chrome, open a ChatGPT conversation and use <strong>Branch sync</strong> to select this board.</p>
+    <p>Install the Mac companion, choose a ChatGPT conversation, then connect it to this board. New completed replies appear in Context.</p>
+    <button type="button" className="a-primary" onClick={async()=>{try{await navigator.clipboard.writeText(handoff(boardId));setStatus('Setup instructions copied. Paste them into your coding agent on your Mac.');}catch{setStatus('Clipboard unavailable. Open the installation guide to copy the setup instructions.');}}}>Set up with your agent</button>
+    <p><a href={'/mac-setup.html?board='+encodeURIComponent(boardId)} target="_blank" rel="noopener noreferrer">Installation guide ↗</a></p>
+    <p className="a-muted">Already installed? Open the Mac menu-bar app, choose your conversation, and click Connect chat.</p>
     {!!count && <button type="button" className="a-secondary" disabled={busy} onClick={async () => {
       setBusy(true);
       try {
