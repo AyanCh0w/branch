@@ -17,3 +17,12 @@ test('dark palette text exceeds WCAG AA contrast on opaque UI surfaces',()=>{
  for(const fg of ['ink','muted','accent','danger','success','on-dark'])for(const bg of ['canvas','surface','raised','control','accent-surface'])assert.ok((lum(tokens[fg])+.05)/(lum(tokens[bg])+.05)>=4.5,`${fg} on ${bg}`);
  assert.ok((lum(tokens['on-dark'])+.05)/(lum(tokens['accent-solid'])+.05)>=4.5);
 });
+test('landing defaults light independently of app appearance and stores its own choice',()=>{
+ const dom=new JSDOM('<html data-default-theme="light"><meta name="theme-color"></html>',{url:'http://localhost',runScripts:'outside-only'}),w=dom.window;
+ w.matchMedia=()=>({matches:true,addEventListener(){}});w.localStorage.setItem('branch-appearance','dark');w.eval(script);
+ assert.equal(w.document.documentElement.dataset.theme,'light');
+ w.BranchTheme.set('dark');assert.equal(w.localStorage.getItem('branch-landing-appearance'),'dark');
+ w.BranchTheme.set('light');assert.equal(w.localStorage.getItem('branch-appearance'),'dark');
+ w.dispatchEvent(new w.StorageEvent('storage',{key:'branch-appearance',newValue:'dark'}));assert.equal(w.document.documentElement.dataset.theme,'light');
+ dom.window.close();
+});

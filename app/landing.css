@@ -160,3 +160,54 @@ html[data-theme=dark] #paper-background{color:#c5c5c5}
 .appearance-background p{color:#69717d;font-size:var(--type-body);margin:-6px 0 14px}
 html[data-theme=dark] .appearance-background{border-color:#444}
 html[data-theme=dark] .appearance-background p{color:#b7bec8}
+
+/* A native-scroll sequence: introduce the idea, enter the canvas, then the details. */
+.demo-scroll-track{margin-top:42px;position:relative;display:flow-root}
+.demo-scroll-stage>.flow-demo{margin-top:0}
+html[data-scroll-design=enhanced]{scroll-behavior:smooth}
+html[data-scroll-design=enhanced] .hero-copy{transform:translate3d(0,var(--hero-drift,0px),0);opacity:var(--hero-opacity,1)}
+html[data-scroll-design=enhanced] .demo-scroll-stage{transform:scale(var(--demo-scale,.96));transform-origin:50% 0}
+html[data-scroll-design=enhanced] .demo-scroll-track.can-pin{min-height:calc(var(--demo-height,0px) + var(--demo-hold,0px))}
+html[data-scroll-design=enhanced] .can-pin .demo-scroll-stage{position:sticky;top:96px}
+.scroll-arrival{opacity:.25;transform:translate3d(0,28px,0);transition:opacity 650ms cubic-bezier(.2,.65,.3,1),transform 650ms cubic-bezier(.2,.65,.3,1);transition-delay:var(--arrival-delay,0ms)}
+.scroll-arrival.is-arrived,.scroll-arrival:focus-within{opacity:1;transform:none}
+html[data-scroll-design=enhanced] :is(.comparison,.branching,.feature-list){padding-block:88px}
+@media(max-width:800px){.demo-scroll-track{margin-top:42px}}
+@media(max-width:540px){.demo-scroll-track{margin-top:32px}.demo-scroll-stage>.flow-demo{margin-top:0}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}.scroll-arrival{opacity:1;transform:none;transition:none}.demo-scroll-stage,.hero-copy{transform:none!important;opacity:1!important}.demo-scroll-track{min-height:0!important}.demo-scroll-stage{position:static!important}}
+
+/* The phone version tells the same story with much less supporting copy. */
+@media(max-width:540px){
+  .mobile-secondary,.small-notes,.comparison-card>p,.feature-grid article>p{display:none}
+  .hero .lede{max-width:29ch;margin-inline:auto}
+  .flow-sources{align-items:stretch}
+  .source-node .person-line,.source-node .flow-card>p,.reference-node small{display:none}
+  .source-node h3{margin:4px 0;font-size:var(--type-body)}
+  .reference-node{align-self:end;display:flex;align-items:center;gap:8px;min-height:64px}
+  .reference-node img{margin:0;flex-shrink:0}
+  .flow-canvas{padding:18px 16px;gap:20px}
+  .shared-node .flow-question p{margin-top:4px;line-height:1.45}
+  .shared-node .flow-answer{padding:14px 8px}
+  .shared-node .flow-answer>p,.teammate-reply,.flow-composer>div{display:none!important}
+  .shared-node .flow-answer h3{margin:8px 0 0}
+  .flow-composer{padding:8px 10px}
+  .flow-composer>p{margin-top:0}
+  .flow-branches{grid-template-columns:1fr 1fr;gap:10px}
+  .plan-node{grid-column:1/-1}
+  .design-node,.qa-node{margin-top:0}
+  .flow-branches :is(.inherited,.design-node h3,.qa-node h3,.design-node pre,.qa-node pre){display:none}
+  .flow-branches .person-line{white-space:normal}
+  .plan-node .flow-card{padding:12px}
+  .plan-node h3{margin:8px 0}
+  .flow-branches .demo-code{min-height:0;margin:0}
+  .flow-steps{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+  .flow-steps button{padding:10px 0;text-align:left}
+  .flow-foot p{display:none}
+  .flow-foot>span{display:block}
+  .feature-grid{grid-template-columns:1fr;gap:18px}
+  .feature-grid article{display:flex;align-items:center;gap:12px}
+  .feature-grid article>img{margin:0;width:20px;height:20px}
+  .feature-grid h3{margin:0}
+  .closing{padding-block:40px}
+}
+@media(max-width:540px){.flow-demo .flow-controls,.flow-demo .flow-composer{display:none!important}}

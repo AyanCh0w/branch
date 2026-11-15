@@ -1,8 +1,10 @@
 /* Run before styles paint. Appearance is device-local, never shared board state. */
 (()=>{
- const key='branch-appearance',root=document.documentElement,system=window.matchMedia('(prefers-color-scheme: dark)');
- const valid=value=>['light','dark','system'].includes(value)?value:'system';
- let preference='system';
+ const root=document.documentElement,landing=root.dataset.defaultTheme==='light';
+ const key=landing?'branch-landing-appearance':'branch-appearance',system=window.matchMedia('(prefers-color-scheme: dark)');
+ const fallback=landing?'light':'system';
+ const valid=value=>['light','dark','system'].includes(value)?value:fallback;
+ let preference=fallback;
  try{preference=valid(localStorage.getItem(key));}catch{}
  function apply(){
   const dark=preference==='dark'||(preference==='system'&&system.matches);

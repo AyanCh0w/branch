@@ -1,10 +1,10 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {JSDOM}=require('jsdom');
-function boot(reduced=false){
+function boot(reduced=false,compact=false){
  const root=path.resolve(__dirname,'..');
  const dom=new JSDOM(fs.readFileSync(path.join(root,'landing.html'),'utf8'),{url:'http://127.0.0.1:4387',runScripts:'outside-only',pretendToBeVisual:true});
  const w=dom.window,observers=[],frames=new Map();let now=0,id=0;
- w.matchMedia=query=>({matches:query.includes('reduced-motion')&&reduced,addEventListener(){}});
+ w.matchMedia=query=>({matches:(query.includes('reduced-motion')&&reduced)||(query.includes('max-width: 540px')&&compact),addEventListener(){}});
  w.IntersectionObserver=class{constructor(cb){this.cb=cb;observers.push(this);}observe(el){this.el=el;}unobserve(){}};
  w.ResizeObserver=class{observe(){}};
  w.requestAnimationFrame=cb=>{frames.set(++id,cb);return id;};w.cancelAnimationFrame=id=>frames.delete(id);
@@ -45,5 +45,13 @@ test('reduced motion starts completed and does not autoplay',()=>{
   assert.equal(d.querySelector('.flow-demo').dataset.phase,'holding');assert.equal(d.querySelector('.flow-play').hidden,true);
   advance(18000);assert.equal(d.querySelector('.flow-demo').dataset.phase,'holding');
   d.querySelector('[data-flow-step="1"]').click();assert.equal(d.querySelector('.flow-question').getAttribute('aria-hidden'),'false');
+ }finally{dom.window.close();}
+});
+
+test('mobile presents the completed compact demo without autoplay',()=>{
+ const {dom,d,advance}=boot(false,true);try{
+  assert.equal(d.querySelector('.flow-demo').dataset.phase,'holding');
+  advance(20000);assert.equal(d.querySelector('.flow-demo').dataset.phase,'holding');
+  assert.equal(d.querySelector('.plan-node').getAttribute('aria-hidden'),'false');
  }finally{dom.window.close();}
 });

@@ -77,10 +77,12 @@ function curve(a,b) {
   return `M${a.x} ${a.y} C${a.x+bend} ${a.y},${b.x-bend} ${b.y},${b.x} ${b.y}`;
 }
 function drawFlowWires() {
-  const rect = flow.querySelector('.flow-canvas').getBoundingClientRect();
+  const canvas = flow.querySelector('.flow-canvas');
+  const rect = canvas.getBoundingClientRect();
+  const sx = rect.width / canvas.offsetWidth || 1, sy = rect.height / canvas.offsetHeight || 1;
   flow.querySelectorAll('[data-port]').forEach(port => {
     const r=port.getBoundingClientRect();
-    points[port.dataset.port]={x:r.left+r.width/2-rect.left,y:r.top+r.height/2-rect.top};
+    points[port.dataset.port]={x:(r.left+r.width/2-rect.left)/sx,y:(r.top+r.height/2-rect.top)/sy};
   });
   for (const [name,from,to] of [['source','source','input'],['interviews','interviews','input'],['branch','answer','branch'],['second','answer','second'],['third','answer','third']])
     flow.querySelector(`[data-wire="${name}"]`).setAttribute('d',curve(points[from],points[to]));
@@ -150,7 +152,7 @@ function syncPlayback() {
   updatePlayback();
 }
 flow.classList.add('is-ready','app-like-flow');
-playhead=reducedMotion.matches?13000:0;
+playhead=(reducedMotion.matches||compactDiagram.matches)?13000:0;
 renderFlow(playhead);
 flowButtons.forEach((button,index)=>button.addEventListener('click',()=>{
   flowStarted=true;flowPlaying=false;playhead=checkpoints[index];
@@ -163,7 +165,7 @@ playButton.addEventListener('click',()=>{
 });
 const flowObserver=new IntersectionObserver(entries=>{
   flowVisible=entries[0].isIntersecting;
-  if(flowVisible&&!flowStarted){flowStarted=true;flowPlaying=!reducedMotion.matches;}
+  if(flowVisible&&!flowStarted){flowStarted=true;flowPlaying=!reducedMotion.matches&&!compactDiagram.matches;}
   syncPlayback();
 },{threshold:.2});
 flowObserver.observe(flow);
@@ -171,6 +173,9 @@ new ResizeObserver(drawFlowWires).observe(flow.querySelector('.flow-canvas'));
 document.fonts.ready.then(drawFlowWires);
 document.addEventListener('visibilitychange',syncPlayback);
 reducedMotion.addEventListener('change',event=>{
+  if(event.matches){flowPlaying=false;playhead=13000;renderFlow(playhead);syncPlayback();}
+});
+compactDiagram.addEventListener('change',event=>{
   if(event.matches){flowPlaying=false;playhead=13000;renderFlow(playhead);syncPlayback();}
 });
 updatePlayback();
