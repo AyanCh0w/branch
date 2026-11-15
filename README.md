@@ -51,3 +51,10 @@ The Vercel project should connect to `AyanCh0w/branch` with `main` as its produc
 ## ChatGPT plan connections
 
 AI settings replaces custom workspace API keys with personal ChatGPT connections and account-specific model choices. Hosted plan usage requires an approved OpenAI client; the feature stays unavailable until configured. The existing default model remains available. See [setup, security, and rollout requirements](collaboration/README.md#chatgpt-connections-and-model-choice).
+
+## Shared agent Context
+
+Open a board and use the **Context** tab beside its title. This shows synced ChatGPT conversations and coding results grouped under their source cards.
+
+- On a card, choose **Use in coding agent**. Review the card and select its sources, then copy the handoff instructions into Codex or Claude Code. Paste the approval code back into Branch to grant access. When the draft arrives, review it and choose **Publish as note** to share it with the board.
+- For automatic ChatGPT reply sync, apply the agent Context migration and run Branch with `PORT=4390 npm run dev`. Open `http://localhost:4390/app` and sign in. In Chrome, use **Load unpacked** to load `extensions/branch-sync` from this checkout. Reload an existing ChatGPT conversation, click **Branch sync**, choose an editable board, and click **Start syncing**. Later completed replies appear on the same Context card. Use **Stop syncing** from the chat or **Disconnect Chrome chats** from the board’s Context view. Sync captures rendered replies while the chat is open, so changes to ChatGPT’s page can affect capture.

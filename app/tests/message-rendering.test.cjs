@@ -3,7 +3,7 @@ const source=fs.readFileSync(require.resolve('../app.js'),'utf8');
 function renderWith(renderer){
  const context=vm.createContext({window:{BranchMarkdown:renderer},console:{warn(){}}});
  vm.runInContext(source.split('\n').find(line=>line.startsWith('const escapeHTML=')),context);
- const start=source.indexOf('function messageHTML(text)');
+ const start=source.indexOf('function messageHTML(');
  vm.runInContext(source.slice(start,source.indexOf('\n}',start)+2),context);
  return context.messageHTML;
 }

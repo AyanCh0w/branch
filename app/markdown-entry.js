@@ -19,15 +19,16 @@ marked.use({extensions:[{
  renderer:token=>`<span data-math="${token.display?'display':'inline'}" data-latex="${escapeMath(token.text)}"></span>`
 }]});
 // Treat model output as untrusted. GFM supplies tables, task lists and fences.
-window.BranchMarkdown = text => {
+window.BranchMarkdown = (text,{linkPreviews=true}={}) => {
  const html=marked.parse(String(text||''),{gfm:true,breaks:true,async:false});
- const clean=DOMPurify.sanitize(html,{USE_PROFILES:{html:true},FORBID_TAGS:['img','style','form','button','iframe','video','audio'],FORBID_ATTR:['style','id','name']});
+ const clean=DOMPurify.sanitize(html,{USE_PROFILES:{html:true},FORBID_TAGS:['img','style','form','button','iframe','video','audio'],FORBID_ATTR:['style','id','name'],...(linkPreviews?{}:{ALLOW_DATA_ATTR:false,ADD_ATTR:['data-math','data-latex']})});
  const template=document.createElement('template');template.innerHTML=clean;
  for(const input of template.content.querySelectorAll('input')){const check=document.createElement('span');check.className='markdown-task';check.textContent=input.checked?'☑ ':'☐ ';check.setAttribute('aria-label',input.checked?'Complete':'Incomplete');input.replaceWith(check);}
  for(const link of template.content.querySelectorAll('a')){
   const href=link.getAttribute('href')||'';
   if(!/^(https?:|mailto:)/i.test(href)){link.removeAttribute('href');continue;}
   link.target='_blank';link.rel='noopener noreferrer';
+  if(!linkPreviews){link.setAttribute('data-open-browser','');link.removeAttribute('data-node-link');link.removeAttribute('data-tooltip');link.removeAttribute('title');continue;}
   if(/^https?:/i.test(href)){
    link.dataset.nodeLink='';
    link.dataset.tooltip='Open preview beside this node';

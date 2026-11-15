@@ -2,6 +2,26 @@ import { defineSchema, defineTable } from './definitions';
 import { v } from './validation';
 
 export default defineSchema({
+  chatgptBrowserGrants: defineTable({
+    userId: v.id('users'), boardId: v.id('boards'), conversationId: v.string(), keyHash: v.string(),
+  }).index('key', ['keyHash']).index('user_chat', ['userId', 'conversationId']).index('user_board', ['userId', 'boardId']),
+  chatgptThreads: defineTable({
+    boardId: v.id('boards'), userId: v.id('users'), conversationId: v.string(), nodeKey: v.string(),
+  }).index('conversation', ['boardId', 'userId', 'conversationId']).index('card', ['boardId', 'nodeKey']),
+  chatgptUpdates: defineTable({
+    threadId: v.id('chatgptThreads'), updateId: v.string(), result: v.string(),
+  }).index('update', ['threadId', 'updateId']),
+  codingConnections: defineTable({
+    boardId: v.id('boards'), userId: v.id('users'), keyHash: v.string(),
+  }).index('board_user', ['boardId', 'userId']).index('key', ['keyHash']),
+  codingHandoffs: defineTable({
+    boardId: v.id('boards'), userId: v.id('users'), nodeId: v.id('nodes'), nodeKey: v.string(), expiresAt: v.number(),
+    oneTime: v.optional(v.boolean()), approvalHash: v.optional(v.string()), result: v.optional(v.string()),
+    content: v.object({
+      title: v.string(), text: v.string(), fileOmitted: v.boolean(),
+      sources: v.array(v.object({ title: v.string(), text: v.string(), quote: v.string(), fileOmitted: v.boolean() })),
+    }),
+  }).index('board_user', ['boardId', 'userId']).index('node_user', ['nodeId', 'userId']).index('approval', ['approvalHash']),
   uploadTickets:defineTable({fileTicket:v.id('fileUploads'),boardId:v.id('boards'),userId:v.id('users'),hash:v.string(),expiresAt:v.number(),used:v.boolean()}),
   chatgptConnections: defineTable({userId:v.id('users'),ciphertext:v.string(),subject:v.string(),clientId:v.string(),label:v.string(),models:v.array(v.object({slug:v.string(),name:v.string()})),selectedModel:v.string(),expiresAt:v.number(),revision:v.number(),refreshLease:v.optional(v.string()),refreshUntil:v.optional(v.number())}).index('user',['userId']),
   chatgptTransactions: defineTable({userId:v.id('users'),consumed:v.optional(v.boolean()),stateHash:v.string(),browserHash:v.string(),ciphertext:v.string(),expiresAt:v.number(),connectionId:v.optional(v.id('chatgptConnections'))}).index('state',['stateHash']).index('user',['userId']),
@@ -15,7 +35,11 @@ export default defineSchema({
   boardMembers: defineTable({ boardId: v.id('boards'), userId: v.id('users'), role: v.union(v.literal('owner'), v.literal('editor'), v.literal('viewer')), responsibility: v.optional(v.string()) }).index('board_user', ['boardId', 'userId']).index('user',['userId']),
   projectResponsibilities: defineTable({boardId:v.id('boards'),userId:v.id('users'),responsibility:v.string()}).index('board_user',['boardId','userId']),
   sessions: defineTable({ tokenHash: v.string(), userId: v.id('users'), expiresAt: v.number() }).index('token', ['tokenHash']),
-  nodes: defineTable({ boardId: v.id('boards'), key: v.string(), data: v.any(), textState: v.bytes(), textVersion: v.number(), createdBy: v.id('users'), updatedBy: v.id('users'), deleted: v.boolean(), deletion: v.optional(v.object({ operationId: v.string(), userId: v.id('users'), connections: v.array(v.any()) })) }).index('board_key', ['boardId', 'key']),
+  nodes: defineTable({ boardId: v.id('boards'), key: v.string(), data: v.any(), textState: v.bytes(), textVersion: v.number(), createdBy: v.id('users'), updatedBy: v.id('users'), deleted: v.boolean(),
+    chatgptSynced: v.optional(v.boolean()), chatgptLatestUpdate: v.optional(v.number()),
+    codingNote: v.optional(v.object({ sourceKey: v.string(), handoffId: v.string() })),
+    codingResult: v.optional(v.object({ handoffId: v.string(), noteKey: v.string() })),
+    deletion: v.optional(v.object({ operationId: v.string(), userId: v.id('users'), connections: v.array(v.any()) })) }).index('board_key', ['boardId', 'key']),
   boardPresence: defineTable({boardId:v.id('boards'),userId:v.id('users'),tabId:v.string(),expiresAt:v.number()}).index('board',['boardId']),
   cursors: defineTable({boardId:v.id('boards'),userId:v.id('users'),tabId:v.string(),x:v.number(),y:v.number(),expiresAt:v.number()}).index('board',['boardId']),
   editors: defineTable({ boardId: v.id('boards'), nodeKey: v.string(), field: v.string(), tabId: v.string(), userId: v.id('users'), expiresAt: v.number() }).index('board', ['boardId']).index('node', ['boardId', 'nodeKey']),

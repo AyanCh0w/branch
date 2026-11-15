@@ -34,11 +34,13 @@ implemented features; this migration does not enable them.
 
 ## Configure and run
 
-1. Apply both numbered SQL files in `migrations/` in order. For an existing deployment using the first migration, run `node scripts/apply-relational-migration.cjs` to preview, then append `--apply`. It saves a private backup and atomically copies data into typed tables; field equality and foreign-key failures roll the migration back.
+1. Apply the numbered SQL files in `migrations/` in order. For an existing deployment using the first migration, run `node scripts/apply-relational-migration.cjs` to preview, then append `--apply`. It saves a private backup and atomically copies data into typed tables; field equality and foreign-key failures roll the migration back.
 2. In the ignored root `.env.local`, configure `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, and `SUPABASE_DB_URL`. Legacy anon/service-role key variable names are also accepted. Use the session pooler connection URL for IPv4-only environments. Keep TLS verification enabled with `sslmode=verify-full` and `sslrootcert` pointing to the official Supabase certificate in `backend/certs/supabase-ca.crt` (downloaded from the database settings link). Use the correct deployment-local certificate path.
 3. Preserve `OPENAI_API_KEY` and any existing `CHATGPT_*` server settings. Preserve the exact encryption key for imported personal ChatGPT connections; a new key cannot decrypt existing tokens.
 4. Run `npm ci`, `npm run build`, then `npm run dev` and `npm run worker` in separate terminals. The app defaults to `http://127.0.0.1:4387`.
 5. For local development, keep `npm run worker` running for shared AI generation. The hosted Cloudflare deployment runs jobs through Queues and a recovery cron; it does not depend on this local process. A frontend-only or Vercel-only deployment needs its own persistent worker before cutover.
+
+For a database already on migration 002, apply `202611140003_agent_context.sql` before running this branch. It adds private coding handoff and ChatGPT reply tables, plus optional metadata on existing nodes. It preserves existing board records, IDs, and Yjs text. Use a development database when evaluating the feature branch.
 
 Only the project URL and publishable key reach the browser. Database credentials, secret keys, provider keys, and personal connection tokens stay on the server. Application records are in `branch_private`, which browser roles cannot access. The public revision table exposes only the signed-in user's own counter under RLS. Private file access uses signed URLs valid for one hour; previously issued URLs remain valid until expiry even if membership changes.
 
