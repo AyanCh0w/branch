@@ -169,7 +169,7 @@ html[data-scroll-design=enhanced] .hero-copy{transform:translate3d(0,var(--hero-
 html[data-scroll-design=enhanced] .demo-scroll-stage{transform:scale(var(--demo-scale,.96));transform-origin:50% 0}
 html[data-scroll-design=enhanced] .demo-scroll-track.can-pin{min-height:calc(var(--demo-height,0px) + var(--demo-hold,0px))}
 html[data-scroll-design=enhanced] .can-pin .demo-scroll-stage{position:sticky;top:96px}
-.scroll-arrival{opacity:.25;transform:translate3d(0,28px,0);transition:opacity 650ms cubic-bezier(.2,.65,.3,1),transform 650ms cubic-bezier(.2,.65,.3,1);transition-delay:var(--arrival-delay,0ms)}
+.scroll-arrival{opacity:.25;transform:translate3d(0,28px,0);transition:opacity 500ms cubic-bezier(.2,.65,.3,1),transform 500ms cubic-bezier(.2,.65,.3,1);transition-delay:var(--arrival-delay,0ms)}
 .scroll-arrival.is-arrived,.scroll-arrival:focus-within{opacity:1;transform:none}
 html[data-scroll-design=enhanced] :is(.comparison,.branching,.feature-list){padding-block:88px}
 @media(max-width:800px){.demo-scroll-track{margin-top:42px}}
