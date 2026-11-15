@@ -2,7 +2,7 @@
 (()=>{
  const root=document.documentElement,landing=root.dataset.defaultTheme==='light';
  const key=landing?'branch-landing-appearance':'branch-appearance',system=window.matchMedia('(prefers-color-scheme: dark)');
- const fallback=landing?'light':'system';
+ const fallback='light';
  const valid=value=>['light','dark','system'].includes(value)?value:fallback;
  let preference=fallback;
  try{preference=valid(localStorage.getItem(key));}catch{}

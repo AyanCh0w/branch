@@ -44,6 +44,14 @@ For a database already on migration 002, apply `202611140003_agent_context.sql` 
 
 Only the project URL and publishable key reach the browser. Database credentials, secret keys, provider keys, and personal connection tokens stay on the server. Application records are in `branch_private`, which browser roles cannot access. The public revision table exposes only the signed-in user's own counter under RLS. Private file access uses signed URLs valid for one hour; previously issued URLs remain valid until expiry even if membership changes.
 
+### Isolated Chrome sync development
+
+On an Apple silicon Mac, run `SUPABASE_EXPERIMENTAL_STACK=1 npx --yes --package=supabase@3.1.0 supabase start --runtime native --preparation on-demand` from this checkout. This starts a separate local Supabase stack and applies all migrations. It does not require Supabase dashboard access, `supabase link`, or a production data import.
+
+Save the local stack's API URL, publishable key, secret key, and database URL under the names above in an ignored `.env.agent-context.local` with file permissions `600`. Both URLs should point to loopback. Add `PORT=4390`, then run `npm run build` followed by `node --env-file=.env.agent-context.local app/server.cjs`. Chrome sync expects `http://localhost:4390/app` exactly. No OpenAI API key or job worker is needed to sync replies from ChatGPT.
+
+In Chrome, load the unpacked extension from `extensions/branch-sync` (version `0.2.0`), then reload ChatGPT. Use a new local Branch account and board. Open an ordinary ChatGPT conversation, send a baseline message, then choose the test board from the **Branch sync** badge. Two new replies should show up on one card in **Context** and survive a reload. The baseline and any replies sent after **Stop syncing** should stay out of Branch.
+
 ## Data and account migration
 
 Create a fresh backup from the actual source deployment. Coordinate a write freeze for a final cutover, or explicitly record the snapshot time and that later source writes are not synchronized. Keep the old deployment intact until validation and rollback decisions are complete. The original importer below requires an empty target database and never overwrites newer data.
