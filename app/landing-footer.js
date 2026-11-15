@@ -58,7 +58,9 @@
   function stop() { cancelAnimationFrame(frame); frame = 0; }
   function clear() { stop(); nodes.clear(); edges = []; previous = null; touchStart = null; host.dataset.engaged='false'; lastRemoval = 0; ctx.clearRect(0,0,width,height); }
   function add(p, time) {
-    if (p.x < 0 || p.y < 0 || p.x > width || p.y > height - 68) return false;
+    // Keep the full 20px block and its curved connector inside the clipped canvas.
+    const inset = 16;
+    if (p.x < inset || p.y < inset || p.x > width - inset || p.y > height - 68) return false;
     const existing = nodes.get(key(p));
     nodes.delete(key(p)); nodes.set(key(p), {...p, time, born: existing?.born ?? time});
     while (nodes.size > 160) nodes.delete(nodes.keys().next().value);

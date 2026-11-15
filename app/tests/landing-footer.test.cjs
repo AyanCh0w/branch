@@ -85,3 +85,12 @@ test('points sit between background dots and smoothly grow before retracting',()
  assert.ok(retiring[2]>0 && retiring[2]<20);
  }finally{b.dom.window.close();}
 });
+
+test('edge tracking keeps entire blocks inside the canvas',()=>{
+ const b=boot();try{
+ for(const [x,y] of [[0,0],[64,0],[64,32],[64,0],[390,0],[390,64],[352,64],[0,64],[32,64]]) b.pointer('pointermove',x,y);
+ b.tick(b.w.performance.now()+180);
+ const blocks=b.draws.filter(d=>d.key==='roundRect');assert.ok(blocks.length>0);
+ for(const {args:[x,y,w,h]} of blocks){assert.ok(x>=0 && y>=0 && x+w<=390 && y+h<=336);}
+ }finally{b.dom.window.close();}
+});
