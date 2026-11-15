@@ -3,12 +3,14 @@ import AppKit
 
 /// Owns one opted-in chat and its in-memory queue for the life of the sync session.
 @MainActor
-final class DesktopSyncPanel: NSObject {
+final class DesktopSyncPanel: NSObject, NSWindowDelegate {
     private let sampler = ChatWindows()
     private let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 294),
                                   styleMask: [.titled, .closable], backing: .buffered, defer: false)
     private let chatPicker = NSPopUpButton()
-    private let status = NSTextField(wrappingLabelWithString: "Choose a ChatGPT window to begin.")
+    private let status = NSTextField(wrappingLabelWithString: "Open a conversation in the ChatGPT desktop app to get started.")
+    private lazy var findButton = button("Find ChatGPT windows", #selector(findChats))
+    private lazy var settingsButton = button("Open Accessibility Settings", #selector(openAccessibilitySettings))
     private lazy var startButton = button("Sync selected chat", #selector(start))
     private lazy var stopButton = button("Stop syncing", #selector(stop))
     private lazy var openButton = button("Open Context card", #selector(openCard))
@@ -16,6 +18,8 @@ final class DesktopSyncPanel: NSObject {
 
     private var watching: Task<Void, Never>?
     private var uploading: Task<Void, Never>?
+    private var permissionCheck: Task<Void, Never>?
+    private var requestedAccess = false
     private var refreshing = false
     private var connection: DesktopSyncClient?
     private var pending: [(reply: ReplyCapture.Reply, title: String)] = []
@@ -27,12 +31,13 @@ final class DesktopSyncPanel: NSObject {
     override init() {
         super.init()
         window.title = "ChatGPT Sync"
+        window.delegate = self
         window.isReleasedWhenClosed = false
         window.center()
 
         let intro = NSTextField(wrappingLabelWithString:
-            "Pop out your ChatGPT chat and select its window. New assistant replies will appear on the Branch board you approve.")
-        let tools = row([button("Accessibility Access…", #selector(requestAccess)), button("Find ChatGPT windows", #selector(refresh))])
+            "Allow Accessibility so Branch can find your ChatGPT window. Only the conversation you choose will sync new replies to your Branch board.")
+        let tools = row([findButton, settingsButton])
         chatPicker.setAccessibilityLabel("ChatGPT window")
         chatPicker.addItem(withTitle: "Choose a ChatGPT window")
         chatPicker.target = self
@@ -62,8 +67,14 @@ final class DesktopSyncPanel: NSObject {
 
     /// Brings the sync window to the front while leaving an existing session running.
     func show() {
+        updateControls()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate()
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        permissionCheck?.cancel()
+        permissionCheck = nil
     }
 
     /// Cancels capture, clears unsent data and revokes the current write capability.
@@ -92,20 +103,48 @@ final class DesktopSyncPanel: NSObject {
         NSButton(title: title, target: self, action: action)
     }
 
-    @objc private func requestAccess() {
-        let prompt = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-        let allowed = AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary)
-        status.stringValue = allowed ? "Accessibility is enabled. Find ChatGPT windows."
-            : "Enable Branch Desktop Probe in System Settings → Privacy & Security → Accessibility."
-    }
-
-    @objc private func refresh() {
+    @objc private func findChats() {
         guard watching == nil, !refreshing else { return }
-        guard AXIsProcessTrusted() else {
-            status.stringValue = "Enable Accessibility access to find ChatGPT windows."
+        permissionCheck?.cancel()
+        permissionCheck = nil
+        if AXIsProcessTrusted() {
+            refresh()
             return
         }
+
+        let prompt = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+        _ = AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary)
+        let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Branch"
+        requestedAccess = true
+        status.stringValue = "Allow \(appName) in Accessibility. Branch will find ChatGPT windows as soon as access is approved."
+        updateControls()
+        permissionCheck = Task {
+            let clock = ContinuousClock()
+            let deadline = clock.now + .seconds(120)
+            while !AXIsProcessTrusted(), clock.now < deadline {
+                do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+            }
+            guard !Task.isCancelled else { return }
+            permissionCheck = nil
+            if AXIsProcessTrusted() {
+                refresh()
+            } else {
+                status.stringValue = "Accessibility approval is still needed. Select Allow Accessibility to continue."
+                updateControls()
+            }
+        }
+    }
+
+    @objc private func openAccessibilitySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
+        if permissionCheck == nil { findChats() }
+    }
+
+    private func refresh() {
         refreshing = true
+        status.stringValue = "Looking for ChatGPT windows…"
         updateControls()
         Task {
             let choices = await sampler.list()
@@ -113,14 +152,19 @@ final class DesktopSyncPanel: NSObject {
             chatPicker.addItem(withTitle: "Choose a ChatGPT window")
             chatPicker.addItems(withTitles: choices)
             refreshing = false
-            status.stringValue = choices.isEmpty ? "Open a ChatGPT chat window and try again." : "Choose a ChatGPT window to begin."
+            if !AXIsProcessTrusted() {
+                status.stringValue = "Allow Accessibility to find ChatGPT windows."
+            } else {
+                status.stringValue = choices.isEmpty ? "Open a conversation in the ChatGPT desktop app, then find windows again."
+                    : "Select the conversation you want to sync."
+            }
             updateControls()
         }
     }
 
     @objc private func start() {
         let index = chatPicker.indexOfSelectedItem - 1
-        guard watching == nil, !refreshing, index >= 0 else { return }
+        guard chatPicker.isEnabled, index >= 0 else { return }
         cardURL = nil
         savedCount = 0
         status.stringValue = "Checking the selected chat…"
@@ -213,7 +257,7 @@ final class DesktopSyncPanel: NSObject {
     private func initialFailure(_ sample: ChatWindows.SyncRead) -> String {
         switch sample {
         case .permissionLost: "Enable Accessibility access and try again."
-        default: "The selected chat couldn’t be read. Pop it out into its own window and try again."
+        default: "The selected chat couldn’t be read. Keep it visible in ChatGPT and find its window again."
         }
     }
 
@@ -341,7 +385,11 @@ final class DesktopSyncPanel: NSObject {
     }
 
     @objc private func updateControls() {
-        chatPicker.isEnabled = watching == nil && !refreshing && chatPicker.numberOfItems > 1
+        let trusted = AXIsProcessTrusted()
+        findButton.title = trusted ? "Find ChatGPT windows" : "Allow Accessibility…"
+        findButton.isEnabled = watching == nil && !refreshing
+        settingsButton.isHidden = trusted || !requestedAccess
+        chatPicker.isEnabled = trusted && watching == nil && !refreshing && chatPicker.numberOfItems > 1
         startButton.isEnabled = chatPicker.isEnabled && chatPicker.indexOfSelectedItem > 0
         stopButton.isEnabled = watching != nil
         openButton.isEnabled = cardURL != nil

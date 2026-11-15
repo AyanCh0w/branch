@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>Branch Desktop Probe</string>
+    <string>Branch for Mac</string>
     <key>CFBundleIdentifier</key>
-    <string>com.branch.desktop-probe</string>
+    <string>com.branch.desktop</string>
     <key>CFBundleExecutable</key>
     <string>BranchDesktopProbe</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.3.0</string>
+    <string>0.4.0</string>
     <key>CFBundleVersion</key>
-    <string>3</string>
+    <string>4</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>LSUIElement</key>

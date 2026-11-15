@@ -153,9 +153,10 @@ final class ProbeApp: NSObject, NSApplicationDelegate {
     @objc private func requestAccessibility() {
         let prompt = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         let allowed = AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary)
+        let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Branch"
         feedback.stringValue = allowed
             ? "Accessibility is enabled. Find your test window when its baseline reply is visible."
-            : "Enable Branch Desktop Probe under System Settings → Privacy & Security → Accessibility, then click Find ChatGPT windows."
+            : "Enable \(appName) under System Settings → Privacy & Security → Accessibility, then click Find ChatGPT windows."
     }
 
     @objc private func refreshWindows() {
