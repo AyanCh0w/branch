@@ -65,7 +65,7 @@
       control.setAttribute('aria-label', label);
       control.dataset.tooltip = label;
     }
-    if (dialog && !card()) dialog.close();
+    if (dialog && cardKey !== null && !card()) dialog.close();
   }
 
   function markSeen(row) {
@@ -177,9 +177,9 @@
     return label;
   }
 
-  function setupMarkup() {
+  function setupMarkup({ expanded = false } = {}) {
     const setup = element('details');
-    setup.open = !!newKey || !connection.connected;
+    setup.open = expanded || !!newKey || !connection.connected;
     const summary = element('summary', 'Connect Codex or Claude Code');
     setup.append(summary);
     if (newKey) {
@@ -330,11 +330,16 @@ My task: `;
     const body = dialog.querySelector('.coding-body');
     const row = current();
     body.replaceChildren();
-    dialog.querySelector('h2').textContent = row?.hasDraft ? 'Review coding draft' : 'Use in coding agent';
+    dialog.querySelector('h2').textContent = cardKey === null ? 'Connect a coding agent'
+      : row?.hasDraft ? 'Review coding draft' : 'Use in coding agent';
     if (error || busy) {
       const message = element('p', error || 'Saving…');
       message.setAttribute('role', error ? 'alert' : 'status');
       body.append(message);
+    }
+    if (cardKey === null) {
+      body.append(setupMarkup({ expanded: true }));
+      return;
     }
     if (row?.hasDraft) {
       if (draft?.id !== row.id) {
@@ -371,7 +376,9 @@ My task: `;
   }
 
   function open(key) {
-    if (!connection || dialog || !window.BranchHost.getState().nodes.some(node => node.id === key)) return;
+    if (!connection || dialog || window.BoardShared?.writable === false) return;
+    if (key !== null && !window.BranchHost.getState().nodes.some(node => node.id === key)) return;
+    const previousFocus = document.activeElement;
     cardKey = key;
     preview = draft = draftRequest = newKey = null;
     selection = new Set();
@@ -387,7 +394,8 @@ My task: `;
     const titles = element('div');
     const heading = element('h2');
     heading.id = 'coding-title';
-    titles.append(heading, element('p', card()?.title || 'Untitled card'));
+    titles.append(heading);
+    if (key !== null) titles.append(element('p', card()?.title || 'Untitled card'));
     const close = button('Close', () => modal.close());
     header.append(titles, close);
     const body = element('div');
@@ -403,7 +411,9 @@ My task: `;
         error = '';
       }
       modal.remove();
-      if (!dialog && !document.body.classList.contains('board-context-mode')) {
+      if (key === null && previousFocus?.isConnected) {
+        previousFocus.focus({ preventScroll: true });
+      } else if (!dialog && !document.body.classList.contains('board-context-mode')) {
         [...document.querySelectorAll('[data-coding-handoff]:not([hidden])')].find(el => el.closest('.card').dataset.node === key)?.focus({ preventScroll: true });
       }
     }, { once: true });
@@ -418,6 +428,8 @@ My task: `;
   window.addEventListener('branch:board-updated', showNextDraft);
 
   window.BranchCoding = { open, update, sync,
+    canConnect: () => !!connection && !dialog && window.BoardShared?.writable === true,
+    openConnection: () => open(null),
     pendingDrafts: () => connection?.handoffs.filter(row => row.hasDraft) || [],
     buttonState: key => buttonState(connection?.handoffs.find(row => row.nodeKey === key)), reset() {
     connection = null;

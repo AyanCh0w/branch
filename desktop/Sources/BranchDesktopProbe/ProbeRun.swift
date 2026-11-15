@@ -1,14 +1,30 @@
+import Foundation
+
 /// Generates prompts whose reply markers do not appear verbatim in the prompts.
 struct ProbePrompts: Sendable {
+    private struct Baseline: Decodable, Sendable {
+        let prompt: String
+        let reply: String
+    }
+
+    private static let desktopBaseline: Baseline = {
+        let url = Bundle.main.url(forResource: "desktop-baseline", withExtension: "json")
+            ?? Bundle.module.url(forResource: "desktop-baseline", withExtension: "json")
+        guard let url,
+              let data = try? Data(contentsOf: url),
+              let baseline = try? JSONDecoder().decode(Baseline.self, from: data) else {
+            preconditionFailure("Missing or invalid desktop baseline resource")
+        }
+        return baseline
+    }()
+
     let code = Int.random(in: 100_000...999_999)
 
-    var baseline: String { "BRANCH BASELINE \(code)" }
+    var baseline: String { Self.desktopBaseline.reply }
     var firstLine: String { "BRANCH START \(code)" }
     var lastLine: String { "BRANCH FINISH \(code)" }
 
-    var baselinePrompt: String {
-        "Output only these three items, separated by spaces instead of commas: BRANCH, BASELINE, \(code). Omit the final period."
-    }
+    var baselinePrompt: String { Self.desktopBaseline.prompt }
 
     var streamingPrompt: String {
         """

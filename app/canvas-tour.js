@@ -6,12 +6,43 @@
   {title:'Share the context.',text:'Connect the brief, notes, or files to a chat with a blue nib. Everyone can work from the same background while exploring different questions.',scene:'context'},
   {title:'Make the plan together.',text:'Keep responsibilities, decisions, and next steps in a shared note beside the conversations. Your team can update the plan as the work changes.',scene:'plan'},
   {title:'Explore in parallel.',text:'Drag a blue nib into empty space to branch a conversation. Carry its context into a new direction while the original thread stays where the team can see it.',scene:'branch'},
-  {title:'Bring your team in.',text:'Owners can invite teammates with Share. Two-finger scroll to pan, pinch to zoom, and press F to see the whole canvas. Your shared workspace is ready.',scene:'team'}
+  {title:'Bring your team in.',text:'Owners can invite teammates with Share. Two-finger scroll to pan, pinch to zoom, and press F to see the whole canvas.',scene:'team'},
+  {title:'Connect an agent.',text:'Choose how to bring work from another chat into this board’s Context view.',scene:'connections'}
  ];
  const dialog=document.createElement('dialog');dialog.id='canvas-tour';dialog.setAttribute('aria-labelledby','canvas-tour-title');dialog.setAttribute('aria-describedby','canvas-tour-copy');
- dialog.innerHTML='<div class="tour-top"><span class="tour-count"></span><button type="button" data-tour="skip">Skip tour</button></div><div class="tour-guide" aria-hidden="true"></div><div class="tour-message" aria-live="polite" aria-atomic="true"><h2 id="canvas-tour-title"></h2><p id="canvas-tour-copy"></p></div><div class="tour-controls"><button type="button" data-tour="back">Back</button><div class="tour-dots" aria-hidden="true"></div><button type="button" data-tour="next">Next</button></div>';
+ dialog.innerHTML=`
+  <div class="tour-top"><span class="tour-count"></span><div class="tour-shortcuts">
+   <button type="button" data-tour="connections">Connect an agent</button><button type="button" data-tour="skip">Skip tour</button>
+  </div></div>
+  <div class="tour-guide" aria-hidden="true"></div>
+  <div class="tour-message">
+   <div aria-live="polite" aria-atomic="true"><h2 id="canvas-tour-title"></h2><p id="canvas-tour-copy"></p></div>
+   <section class="tour-connections" aria-label="Agent setup" hidden>
+    <div class="tour-providers" role="group" aria-label="Choose an agent">
+     <button type="button" data-tour="provider" data-provider="chatgpt" aria-pressed="true">ChatGPT</button>
+     <button type="button" data-tour="provider" data-provider="claude" aria-pressed="false">Claude Code</button>
+    </div>
+    <div class="tour-provider-panel" data-tour-panel="chatgpt">
+     <p>To test ChatGPT on Mac, send this prompt in a fresh Chat, then select the chat in Branch Desktop Probe.</p>
+     <textarea readonly rows="3" aria-label="Baseline prompt"></textarea>
+     <button type="button" class="tour-action" data-tour="copy-baseline">Copy baseline prompt</button>
+     <button type="button" data-tour="chrome" hidden>Set up Chrome sync</button>
+    </div>
+    <div class="tour-provider-panel" data-tour-panel="claude" hidden>
+     <p>Connect Claude Code to send card context and return drafts for review.</p>
+     <button type="button" class="tour-action" data-tour="claude">Set up Claude Code</button>
+    </div>
+    <p class="tour-connection-status" role="status"></p>
+   </section>
+  </div>
+  <div class="tour-controls"><button type="button" data-tour="back">Back</button><div class="tour-dots" aria-hidden="true"></div><button type="button" data-tour="next">Next</button></div>`;
  document.body.append(dialog);
  let index=0,returnFocus=null,viewer=false,savedView=null,cameraFrame=null,highlighted=null,samples=null;
+ let provider='chatgpt', baselinePrompt='';
+ const connections=dialog.querySelector('.tour-connections');
+ const promptField=dialog.querySelector('textarea');
+ const connectionStatus=dialog.querySelector('.tour-connection-status');
+ const chromeControl=()=>document.querySelector('[data-open-chrome-sync]');
  const motion=window.matchMedia?.("(prefers-reduced-motion: reduce)");
  function clearHighlight(){highlighted?.classList.remove('tour-highlight');highlighted=null;}
  function animateView(target){
@@ -64,7 +95,10 @@
   const scene=slides[index].scene,examples=ensureExamples();
   if(examples)examples.dataset.scene=scene;
   let target=null,frame=null;
-  if(scene==='team'){
+  if(scene==='connections'){
+   if(document.body.classList.contains('board-context-mode')){positionGuide(null);return;}
+   target=document.querySelector('#context-tab');
+  }else if(scene==='team'){
    target=[...document.querySelectorAll('.a-share-trigger')].find(el=>el.textContent.trim()==='Share')||document.querySelector('#board-account-slot .a-avatar');
   }else if(examples){
    const node=kind=>examples.querySelector(`[data-tour-example="${kind}"]`);
@@ -75,7 +109,7 @@
    if(scene==='branch'){target=node('design').querySelector('.tour-example-nib');frame=examples.querySelector('.tour-branch-frame');}
   }
   highlighted=target;target?.classList.add('tour-highlight');
-  positionGuide(target,scene!=='team');
+  positionGuide(target,scene!=='team'&&scene!=='connections');
   if(frame)frameCard(frame,scene==='overview');else animateView(savedView);
  }
  window.addEventListener('resize',()=>{if(dialog.open)guideStep();});
@@ -88,7 +122,35 @@
   dialog.querySelector('.tour-dots').innerHTML=slides.map((_,i)=>`<i${i===index?' class="current"':''}></i>`).join('');
   dialog.querySelector('[data-tour="back"]').disabled=index===0;
   dialog.querySelector('[data-tour="next"]').textContent=index===slides.length-1?'Let’s build':'Next';
+  dialog.querySelector('[data-tour="connections"]').hidden=slide.scene==='connections';
+  connections.hidden=slide.scene!=='connections';
+  if(!connections.hidden)renderConnections();
   guideStep();
+ }
+ function renderConnections(){
+  for(const button of connections.querySelectorAll('[data-provider]')){
+   button.setAttribute('aria-pressed',String(button.dataset.provider===provider));
+  }
+  for(const panel of connections.querySelectorAll('[data-tour-panel]'))panel.hidden=panel.dataset.tourPanel!==provider;
+  promptField.value=baselinePrompt;
+  dialog.querySelector('[data-tour="copy-baseline"]').disabled=!baselinePrompt;
+  dialog.querySelector('[data-tour="chrome"]').hidden=viewer||!chromeControl();
+  dialog.querySelector('[data-tour="claude"]').hidden=viewer;
+  connectionStatus.textContent=viewer&&provider==='claude'?'Ask a board editor to connect Claude Code.':'';
+ }
+ async function copyBaseline(){
+  try{
+   await navigator.clipboard.writeText(baselinePrompt);
+   if(dialog.open&&!connections.hidden&&provider==='chatgpt')connectionStatus.textContent='Baseline prompt copied.';
+  }catch{
+   if(!dialog.open||connections.hidden||provider!=='chatgpt')return;
+   promptField.focus();promptField.select();
+   connectionStatus.textContent='Press Copy to copy the selected prompt.';
+  }
+ }
+ function showConnections(){
+  index=slides.length-1;render();
+  connections.querySelector('[aria-pressed="true"]').focus();
  }
  function finish(){
   if(!dialog.open)return;
@@ -97,19 +159,42 @@
   dialog.close();document.body.classList.remove('canvas-tour-open');
   const target=returnFocus?.isConnected?returnFocus:document.querySelector('[data-dock=agent]');target?.focus({preventScroll:true});
  }
- function start({userId,force=false,role}={}){
+ function start({userId,force=false,role,scene}={}){
   if(!userId||document.body.classList.contains('account-mode'))return false;
+  if(!force&&new URLSearchParams(location.search).has('context'))return false;
   // Replay on every canvas entry while the introduction is being refined.
   if(dialog.open)return false;
-  savedView=window.BranchHost?.captureView?.()||null;index=0;viewer=role==='viewer'||!!document.querySelector('.a-viewer-label');returnFocus=document.activeElement;
+  savedView=window.BranchHost?.captureView?.()||null;index=scene==='connections'?slides.length-1:0;provider='chatgpt';viewer=role==='viewer'||!!document.querySelector('.a-viewer-label');returnFocus=document.activeElement;
   const guide=dialog.querySelector('.tour-guide'),avatar=document.querySelector('.dock-agent-avatar img');guide.replaceChildren();
   if(avatar){const image=avatar.cloneNode(true);image.alt='';guide.append(image);}
   else {const url=window.BranchAvatar?.('Canvas guide','#6685cf',true);if(url){const image=document.createElement('img');image.src=url;image.alt='';guide.append(image);}}
-  render();document.body.classList.add('canvas-tour-open');dialog.showModal();guideStep();dialog.querySelector('[data-tour="next"]').focus();return true;
+  render();document.body.classList.add('canvas-tour-open');dialog.showModal();guideStep();
+  (scene==='connections'?connections.querySelector('[aria-pressed="true"]'):dialog.querySelector('[data-tour="next"]')).focus();
+  return true;
  }
- dialog.addEventListener('click',e=>{const action=e.target.closest('[data-tour]')?.dataset.tour;if(action==='skip')finish();if(action==='back'&&index>0){index--;render();}if(action==='next'){if(index===slides.length-1)finish();else{index++;render();}}});
+ dialog.addEventListener('click',e=>{
+  const button=e.target.closest('[data-tour]');
+  switch(button?.dataset.tour){
+   case 'skip':finish();break;
+   case 'back':if(index>0){index--;render();}break;
+   case 'next':if(index===slides.length-1)finish();else{index++;render();}break;
+   case 'connections':showConnections();break;
+   case 'provider':provider=button.dataset.provider;renderConnections();guideStep();break;
+   case 'copy-baseline':void copyBaseline();break;
+   case 'chrome':{
+    const setup=chromeControl();
+    if(!viewer&&setup){finish();setup.click();}
+    break;
+   }
+   case 'claude':
+    if(viewer)break;
+    if(window.BranchCoding?.canConnect()){finish();window.BranchCoding.openConnection();}
+    else connectionStatus.textContent='Wait for the board to finish loading, then try again.';
+    break;
+  }
+ });
  dialog.addEventListener('cancel',e=>{e.preventDefault();finish();});
  // Keep canvas shortcuts from creating or moving cards while reading the tour.
- dialog.addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='ArrowRight'){e.preventDefault();dialog.querySelector('[data-tour="next"]').click();}if(e.key==='ArrowLeft'){e.preventDefault();dialog.querySelector('[data-tour="back"]').click();}});
- window.BranchCanvasTour={start,dismiss:()=>finish()};
+ dialog.addEventListener('keydown',e=>{e.stopPropagation();if(e.target===promptField)return;if(e.key==='ArrowRight'){e.preventDefault();dialog.querySelector('[data-tour="next"]').click();}if(e.key==='ArrowLeft'){e.preventDefault();dialog.querySelector('[data-tour="back"]').click();}});
+ window.BranchCanvasTour={start,dismiss:()=>finish(),setBaselinePrompt:prompt=>{baselinePrompt=prompt;}};
 })();

@@ -54,6 +54,8 @@ In Chrome, load the unpacked extension from `extensions/branch-sync` (version `0
 
 For regular ChatGPT in the macOS app, [Branch Desktop Probe](../desktop/README.md) checks whether the selected chat exposes completed replies. The probe is read-only and does not connect to Supabase.
 
+The board’s canvas tour ends with **Connect an agent**, also available from the account menu. ChatGPT setup includes the baseline prompt shared with the Mac probe and a shortcut to Chrome sync on the supported local address. Board editors can open the Claude Code connection setup from the same step, even before creating a card. Card handoffs still start from the source card.
+
 ## Data and account migration
 
 Create a fresh backup from the actual source deployment. Coordinate a write freeze for a final cutover, or explicitly record the snapshot time and that later source writes are not synchronized. Keep the old deployment intact until validation and rollback decisions are complete. The original importer below requires an empty target database and never overwrites newer data.
