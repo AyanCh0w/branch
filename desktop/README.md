@@ -14,7 +14,7 @@ open 'build/Branch for Mac.app'
 
 Keep using the same signing identity across builds so macOS can recognize updates. `BRANCH_CODESIGN_IDENTITY` overrides the checkout setting. Without an identity, the script builds the separate ad hoc **Branch Desktop Probe** for diagnostics. Use one consistent Developer ID Application identity and notarize the signed app before distributing it to users.
 
-1. Open a board at https://joinbranch.dev/app, then **Conversation sync → Set up with your agent**. Paste the copied instructions into the conversation you want to sync. The included board link opens Branch for Mac with that board already authorized. For a first install, follow the [employee setup page](https://joinbranch.dev/mac-setup.html).
+1. Open a board at https://joinbranch.dev/app, then **Conversation sync → Set up with your agent**. This copies the setup instructions and starts the Branch for Mac download when the website ships the installer. If you need to install the app, open the disk image from Downloads and drag Branch for Mac into Applications. Paste the instructions into the conversation you want to sync. The included link carries your board choice into Branch for Mac.
 2. Open a Chat, Work, or Codex conversation, then click the Branch logo in the Mac menu bar to open **Conversation Sync**. On first use, allow Accessibility so Branch can list open windows. Choose the conversation and click **Connect conversation**.
 3. When started from a board, Branch connects as soon as it can read the selected chat. When started from the menu bar without a board authorization, choose the destination board in the browser.
 4. Wait for **Sync is on** in Branch for Mac before sending another message. After the first save, the app confirms the reply was saved and **Open in Branch** opens the saved replies. Use **Stop syncing** from the app or **Disconnect conversations** on the board to revoke access.
@@ -25,7 +25,15 @@ Each pairing uses existing history as a baseline. Branch checks the selected win
 
 Sign Branch for Mac with the team’s Developer ID Application certificate, then package and notarize a disk image containing the app. See [Apple’s distribution guide](https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution). Test the downloaded installer on a Mac independently of the development build.
 
-Set `BRANCH_MAC_INSTALLER` to the notarized and stapled `.dmg` when building the website on a Mac with Xcode. The public build checks the staple, publishes the file at `/downloads/branch-for-mac.dmg`, and enables the download button on the setup page. Keep the installer outside the repository and supply it on each release build. Without an installer, the setup page points employees to their workplace’s software catalog or IT.
+Set `BRANCH_MAC_INSTALLER` to the absolute path of the notarized and stapled `.dmg` when building the website on a Mac with Xcode. The public build checks the staple and publishes the installer and release manifest together. The board setup button and canvas tour use the manifest to start the download. The [setup page](https://joinbranch.dev/mac-setup.html) and the board link also offer a direct download. Keep the installer outside the repository and supply it on each release build. Without an installer, the setup page points employees to their workplace’s software catalog or IT.
+
+From the repository root, include the installer with the normal Cloudflare release:
+
+```sh
+BRANCH_MAC_INSTALLER='/absolute/path/to/branch-for-mac.dmg' npm run deploy:cloudflare
+```
+
+After deployment, verify **Set up with your agent** copies the board instructions and downloads the disk image from a browser on a Mac without the app installed.
 
 ## Desktop Sync Probe
 

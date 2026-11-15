@@ -6,7 +6,7 @@ const {query,mutate}=vi.hoisted(()=>({query:vi.fn(),mutate:vi.fn()}));
 vi.mock('../backend/react',()=>({api:{library:{list:'library:list'},chatgptBrowser:{connect:'connect',connectDesktop:'connectDesktop',count:'count',disconnectBoard:'disconnectBoard'}},useQuery:()=>query(),useMutation:()=>mutate}));
 import {ChromeSyncSettings,ConnectChatGPTSync} from '../accounts/chrome-sync';
 vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);
-afterEach(()=>{vi.clearAllMocks();});
+afterEach(()=>{vi.clearAllMocks();vi.restoreAllMocks();vi.unstubAllGlobals();vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);});
 it.each(['chosen','viewer','missing'])('preselects only editable destination %s and waits for explicit approval',async(hint)=>{
  query.mockReturnValue([{id:'chosen',title:'Chosen board',role:'owner'},{id:'other',title:'Other board',role:'editor'},{id:'viewer',title:'View only',role:'viewer'}]);
  const container=document.createElement('div');document.body.append(container);const root=createRoot(container);
@@ -27,9 +27,16 @@ it.each(['chosen','viewer','missing'])('preselects only editable destination %s 
  }finally{await act(async()=>root.unmount());container.remove();}
 });
 
-it('copies the board setup from the only setup action and shows a visible confirmation',async()=>{
+it('copies the board setup and starts the published download in the same click',async()=>{
  query.mockReturnValue(0);
- const writeText=vi.fn().mockResolvedValue(undefined);
+ const installer='/downloads/branch-for-mac.dmg';
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({installer})}));
+ const download=vi.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(function(this:HTMLAnchorElement){
+  expect(this.getAttribute('href')).toBe(installer);
+  expect(this.download).toBe('branch-for-mac.dmg');
+ });
+ let clipboardComplete!:()=>void;
+ const writeText=vi.fn(()=>new Promise<void>(resolve=>{clipboardComplete=resolve;}));
  const previousClipboard=Object.getOwnPropertyDescriptor(navigator,'clipboard');
  Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText}});
  const container=document.createElement('div');document.body.append(container);const root=createRoot(container);
@@ -41,8 +48,12 @@ it('copies the board setup from the only setup action and shows a visible confir
   expect(buttons[0].textContent).toBe('Set up with your agent');
   expect(container.querySelector('a')).toBeNull();
   await act(async()=>buttons[0].click());
+  expect(download).toHaveBeenCalledTimes(1);
+  expect(container.querySelector('[role="status"]')?.textContent).not.toContain('Paste the instructions');
+  await act(async()=>clipboardComplete());
   expect(buttons[0].textContent).toContain('Copied to clipboard');
   expect(container.querySelector('[role="status"]')?.textContent).toContain('Paste the instructions');
+  expect(container.querySelector('a[download]')?.textContent).toBe('Download again');
   const [[prompt]]=writeText.mock.calls;
   expect(prompt).toContain('https://joinbranch.dev/app?board=chosen#mac-sync=open');
   expect(prompt).not.toMatch(/github|swift|clone|build-probe/i);

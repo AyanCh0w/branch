@@ -25,6 +25,7 @@
     <div class="tour-provider-panel" data-tour-panel="chatgpt">
      <p>Bring new replies from an open conversation into this board’s Context.</p>
      <button type="button" class="tour-action" data-tour="copy-setup">Set up with your agent</button>
+     <a href="/mac-setup.html" data-mac-guide hidden>Installation guide ↗</a>
      <textarea readonly rows="5" aria-label="Mac sync setup instructions" data-setup-fallback hidden></textarea>
      <details class="tour-troubleshooting"><summary>Troubleshooting an installed app</summary><p>Only use this check after installation, if the app asks you to verify what it can read.</p>
       <textarea readonly rows="3" aria-label="Baseline prompt" data-baseline></textarea>
@@ -53,6 +54,7 @@
   try{localStorage.setItem(seenKey(userId),'1');}catch{}
  }
  let provider='chatgpt', baselinePrompt='';
+ let macInstaller, checkingInstaller=false;
  const connections=dialog.querySelector('.tour-connections');
  const promptField=dialog.querySelector('[data-baseline]');
  const connectionStatus=dialog.querySelector('.tour-connection-status');
@@ -151,22 +153,38 @@
   dialog.querySelector('[data-tour="chrome"]').hidden=viewer||!chromeControl();
   dialog.querySelector('[data-tour="claude"]').hidden=viewer;
   const setupButton=dialog.querySelector('[data-tour="copy-setup"]');
+  const guide=dialog.querySelector('[data-mac-guide]');
   setupButton.hidden=viewer;
+  setupButton.disabled=macInstaller===undefined;
   setupButton.textContent='Set up with your agent';
+  guide.hidden=viewer||macInstaller!==null;
+  if(!viewer&&macInstaller===undefined&&!checkingInstaller){
+   checkingInstaller=true;
+   window.BranchMacSetup.loadMacInstaller().then(installer=>{
+    macInstaller=installer;
+    setupButton.disabled=false;
+    guide.hidden=viewer||!!installer;
+   });
+  }
   dialog.querySelector('[data-setup-fallback]').hidden=true;
   connectionStatus.textContent=viewer&&provider==='claude'?'Ask a board editor to connect Claude Code.':'';
  }
  async function copySetup(button){
-  const value=window.BranchMacSetup.handoff(new URLSearchParams(location.search).get('board'));
+  const setup=window.BranchMacSetup;
+  const boardId=new URLSearchParams(location.search).get('board');
+  const value=setup.handoff(boardId);
   const field=dialog.querySelector('[data-setup-fallback]');
-  try{
-   await navigator.clipboard.writeText(value);
-   if(!dialog.open||connections.hidden||provider!=='chatgpt')return;
-   button.textContent='✓ Copied to clipboard';field.hidden=true;connectionStatus.textContent='Paste the instructions into the conversation you want to sync.';
-  }catch{
-   if(!dialog.open||connections.hidden||provider!=='chatgpt')return;
+  const installer=button.textContent==='✓ Copied to clipboard'||!field.hidden?null:macInstaller;
+  button.disabled=true;
+  const copied=await setup.copyMacSetup(value,installer);
+  button.disabled=false;
+  if(!dialog.open||connections.hidden||provider!=='chatgpt')return;
+  const installHint=macInstaller?' Open the installer from Downloads.':' The Mac installer isn’t available here yet.';
+  if(copied){
+   button.textContent='✓ Copied to clipboard';field.hidden=true;connectionStatus.textContent='Paste the instructions into the conversation you want to sync.'+installHint;
+  }else{
    button.textContent='Set up with your agent';field.value=value;field.hidden=false;field.focus();field.select();
-   connectionStatus.textContent='Copy the selected instructions, then paste them into the conversation you want to sync.';
+   connectionStatus.textContent='Copy the selected instructions, then paste them into the conversation you want to sync.'+installHint;
   }
  }
  async function copyBaseline(){

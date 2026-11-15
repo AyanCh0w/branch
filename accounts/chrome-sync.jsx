@@ -1,10 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {handoff,appURL} from '../app/desktop-setup';
+import {handoff,appURL,loadMacInstaller,copyMacSetup} from '../app/desktop-setup';
 import { api, useMutation, useQuery } from '../backend/react';
 import { isChromeSyncOrigin } from '../collaboration/chrome-sync.cjs';
 
 export const chromeSyncAvailable = isChromeSyncOrigin(location.origin);
 export const desktopSyncAvailable = chromeSyncAvailable && location.protocol === 'https:';
+
+function useMacInstaller() {
+  const [installer, setInstaller] = useState(undefined);
+  useEffect(() => {
+    let current = true;
+    loadMacInstaller().then(url => { if (current) setInstaller(url); });
+    return () => { current = false; };
+  }, []);
+  return installer;
+}
+const setupGuide = boardId => '/mac-setup.html?board=' + encodeURIComponent(boardId);
 
 export function ChromeSyncSettings({ boardId, Dialog, onClose }) {
   const count = useQuery(api.chatgptBrowser.count, { boardId });
@@ -12,6 +23,7 @@ export function ChromeSyncSettings({ boardId, Dialog, onClose }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [copyState, setCopyState] = useState('ready');
+  const installer = useMacInstaller();
   const fallback = useRef(null);
   useEffect(() => {
     if (copyState === 'manual') {
@@ -22,24 +34,21 @@ export function ChromeSyncSettings({ boardId, Dialog, onClose }) {
 
   async function copySetup() {
     setCopyState('copying');
-    try {
-      await navigator.clipboard.writeText(handoff(boardId));
-      setCopyState('copied');
-    } catch {
-      setCopyState('manual');
-    }
+    setCopyState(await copyMacSetup(handoff(boardId), copyState === 'copied' || copyState === 'manual' ? null : installer) ? 'copied' : 'manual');
   }
 
   return <Dialog title="Conversation sync" onClose={onClose}>
-    <p>Copy setup instructions, then paste them into the conversation you want to sync. New replies will appear in this board’s Context.</p>
-    <button type="button" className="a-primary" disabled={copyState === 'copying'} onClick={copySetup}>
+    <p>{installer ? 'Download Branch for Mac and copy setup instructions in one click.' : 'Copy setup instructions, then paste them into the conversation you want to sync.'} New replies will appear in this board’s Context.</p>
+    <button type="button" className="a-primary" disabled={installer === undefined || copyState === 'copying'} onClick={copySetup}>
       {copyState === 'copied' ? '✓ Copied to clipboard' : 'Set up with your agent'}
     </button>
     <div role="status">{copyState === 'copied' && <p>Paste the instructions into the conversation you want to sync.</p>}
-      {copyState === 'manual' && <p>Copy the selected instructions, then paste them into the conversation you want to sync.</p>}</div>
+      {copyState === 'manual' && <p>Copy the selected instructions, then paste them into the conversation you want to sync.</p>}
+      {installer && (copyState === 'copied' || copyState === 'manual') && <p>Open the installer from Downloads. <a href={installer} download>Download again</a></p>}</div>
     {copyState === 'manual' && <label className="a-field">Setup instructions
       <textarea ref={fallback} rows={5} readOnly value={handoff(boardId)} />
     </label>}
+    {installer === null && <p className="a-muted">The Mac installer isn’t available here yet. If you don’t have the app, see the <a href={setupGuide(boardId)}>installation guide</a>.</p>}
     {!!count && <button type="button" className="a-secondary" disabled={busy} onClick={async () => {
       setBusy(true);
       try {
@@ -58,6 +67,7 @@ export function ChromeSyncSettings({ boardId, Dialog, onClose }) {
 export function OpenBranchForMac({ boardId, Dialog, onClose, onOpen }) {
   const [launching, setLaunching] = useState(false);
   const [status, setStatus] = useState('');
+  const installer = useMacInstaller();
   return <Dialog title="Connect to this board" onClose={onClose}>
     <p>Choose which conversation to sync in Branch for Mac.</p>
     <button type="button" className="a-primary" disabled={launching} onClick={async () => {
@@ -72,7 +82,9 @@ export function OpenBranchForMac({ boardId, Dialog, onClose, onOpen }) {
       }
     }}>{launching ? 'Opening Branch for Mac…' : 'Open Branch for Mac'}</button>
     <p role="status">{status}</p>
-    <a className="a-muted" href={'/mac-setup.html?board=' + encodeURIComponent(boardId)}>Installation guide ↗</a>
+    {installer && <p>Don’t have the app? <a href={installer} download>Download Branch for Mac</a>, install it, then click Open Branch for Mac.</p>}
+    <a className="a-muted" href={setupGuide(boardId)}>Installation guide ↗</a>
+    {installer === null && <p className="a-muted">The Mac installer isn’t available here yet.</p>}
   </Dialog>;
 }
 

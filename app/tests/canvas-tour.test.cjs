@@ -82,7 +82,11 @@ test('installation handoff contains setup and only the board destination, not UR
  const {dom,w,d,tour,click}=boot();try{
   w.history.replaceState({},'', '/?board=boards_test&token=private-test-token#secret');
   let copied;Object.defineProperty(w.navigator,'clipboard',{value:{async writeText(value){copied=value;}}});
-  tour.start({userId:'one',scene:'connections'});click('copy-setup');await new Promise(setImmediate);
+  const downloads=[];
+  w.fetch=async()=>({ok:true,json:async()=>({installer:'/downloads/branch-for-mac.dmg'})});
+  w.HTMLAnchorElement.prototype.click=function(){downloads.push(this.getAttribute('href'));};
+  tour.start({userId:'one',scene:'connections'});await new Promise(setImmediate);click('copy-setup');await new Promise(setImmediate);
+  assert.deepEqual(downloads,['/downloads/branch-for-mac.dmg']);
   assert.match(copied,/https:\/\/joinbranch.dev\/mac-setup.html/);
   assert.match(copied,/software catalog or IT/);
   assert.match(copied,/https:\/\/joinbranch.dev\/app\?board=boards_test/);assert.doesNotMatch(copied,/private-test-token|#secret|branch_desktop_launch_/);
@@ -105,8 +109,11 @@ test('Mac launch link encodes the selected chat and keeps the launch ticket out 
 test('clipboard failure exposes selectable installation instructions',async()=>{
  const {dom,w,d,tour,click}=boot();try{
   Object.defineProperty(w.navigator,'clipboard',{value:{async writeText(){throw Error('denied');}}});
-  tour.start({userId:'one',scene:'connections'});click('copy-setup');await new Promise(setImmediate);
+  w.fetch=async()=>({ok:false});
+  w.HTMLAnchorElement.prototype.click=function(){assert.fail('No installer is published');};
+  tour.start({userId:'one',scene:'connections'});await new Promise(setImmediate);click('copy-setup');await new Promise(setImmediate);
   const field=d.querySelector('[data-setup-fallback]');assert.equal(field.hidden,false);assert.match(field.value,/Help me connect this conversation/);
+  assert.equal(d.querySelector('[data-mac-guide]').hidden,false);
   const count=d.querySelector('.tour-count').textContent;field.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));assert.equal(d.querySelector('.tour-count').textContent,count);
  }finally{dom.window.close();}
 });
