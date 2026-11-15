@@ -67,3 +67,42 @@ it.each([false,true])('keeps deletion working after a remote branch deletion (in
  expect(w.localStorage.getItem('branch-unsynced-board')).toBeTruthy();
  await shared.disconnect();
 });
+it.each([true,false])('hides a deleted card before the server answers (server accepts: %s)',async(accepts)=>{
+ vi.useFakeTimers();
+ dom=new JSDOM('<button id="undo"></button><span id="save-state"></span>',{url:'http://localhost/app'});
+ const w=dom.window;
+ for(const name of ['window','document','location','localStorage','HTMLTextAreaElement','NodeFilter'])vi.stubGlobal(name,name==='window'?w:(w as any)[name]);
+ vi.stubGlobal('getSelection',()=>w.getSelection());
+ const note={id:'note',type:'plan',body:'Saved note',title:'Note',x:10,y:20,sharedTextState:initialDocument({body:'Saved note',title:'Note'})};
+ const other={id:'other',type:'plan',body:'Other',title:'Other',x:500,y:20,sharedTextState:initialDocument({body:'Other',title:'Other'})};
+ let nodes:any[]=[note,other],state:any={title:'Board',nodes:[]},answer:any,receive:any;
+ const snapshot=()=>({title:'Board',role:'owner',nodes:structuredClone(nodes)});
+ const client={query:vi.fn(async()=>snapshot()),mutation:vi.fn(async(name:string,args:any)=>{
+  if(name==='boards:deleteNode')return new Promise<void>((resolve,reject)=>{answer=()=>{if(accepts){nodes=nodes.filter(n=>n.id!==args.nodeKey);resolve();}else reject(Error('This card has already been removed'));};});
+  // A plain sync removal would skip undo and connection cleanup.
+  throw Error('Unexpected mutation: '+name);
+ }),connectionState:()=>({isWebSocketConnected:true}),onUpdate:(name:string,_args:any,cb:any)=>{if(name==='boards:read')receive=cb;return ()=>{};},subscribeToConnectionState:()=>()=>{}};
+ const notify=vi.fn();
+ (w as any).BranchHost={getState:()=>state,receive:(next:any)=>{state=next;},notify};
+ await import('./client.js');
+ const shared=(w as any).BoardShared;
+ await shared.connect({client,boardId:'board',token:'test'});
+ const deletion=shared.deleteNode('note');
+ // Gone at once, while the server hasn't answered yet.
+ expect(state.nodes.map((n:any)=>n.id)).toEqual(['other']);
+ await vi.advanceTimersByTimeAsync(0);
+ // A board update arriving mid-deletion must not bring it back.
+ receive(snapshot());
+ expect(state.nodes.map((n:any)=>n.id)).toEqual(['other']);
+ answer();
+ await deletion;
+ expect(client.mutation.mock.calls.map(c=>c[0])).toEqual(['boards:deleteNode']);
+ if(accepts){
+  expect(state.nodes.map((n:any)=>n.id)).toEqual(['other']);
+  expect(notify).toHaveBeenCalledWith('Card removed · undo available');
+ }else{
+  expect(state.nodes.map((n:any)=>n.id)).toEqual(['note','other']);
+  expect(notify).toHaveBeenCalledWith('This card has already been removed');
+ }
+ await shared.disconnect();
+});
