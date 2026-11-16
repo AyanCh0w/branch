@@ -2,7 +2,9 @@
 
 ## Connect a board agent
 
-In an editable board, open **Agents**. Save shared Markdown under **Project instructions**, then name a connection and choose **Read only** or **Read and contribute**. Use the displayed URL and connection key with a client that accepts a remote Streamable HTTP MCP server and a bearer token. Store the key in the client's private configuration. The URL is `/api/backend?agent=1` on the same Branch instance you connected from.
+On a board you can edit, open **Agents** and click **Copy setup instructions**. Branch creates a connection for this board and copies three steps with the server URL and a private connection key. Add Branch in a client that accepts a remote Streamable HTTP MCP server with a bearer token, save the key in that client’s private settings, then ask the agent to read the board. The URL is `/api/backend?agent=1` on the same Branch instance.
+
+**Agent settings** holds optional project instructions, the read-only option for the next connection, and controls for disconnecting connections. Setup gives the agent read and contribution access by default. Anyone who can edit the board can create a connection under their own account.
 
 For Codex CLI, set `BRANCH_AGENT_TOKEN` in the environment that launches Codex, then register the server with the URL shown in Branch:
 

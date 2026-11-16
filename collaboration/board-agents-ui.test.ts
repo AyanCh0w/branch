@@ -9,6 +9,7 @@ const { query, mutate } = vi.hoisted(() => ({ query: vi.fn(), mutate: vi.fn() })
 vi.mock('../backend/react', () => ({
   api: {
     agentContext: { read: 'agentContext:read' },
+    chatgptBrowser: { count: 'chatgptBrowser:count', disconnectBoard: 'chatgptBrowser:disconnectBoard' },
     boardAgents: Object.fromEntries(['settings', 'connect', 'disconnect', 'saveInstructions', 'activity', 'review']
       .map(name => [name, 'boardAgents:' + name])),
   },
@@ -22,34 +23,60 @@ afterEach(() => vi.resetAllMocks());
 const Dialog = ({ children, title }: { children: React.ReactNode; title: string }) =>
   React.createElement('section', { 'aria-label': title }, children);
 
-function change(input: HTMLInputElement | HTMLTextAreaElement, text: string) {
-  Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), 'value')!.set!.call(input, text);
-  input.dispatchEvent(new Event('input', { bubbles: true }));
+function clipboard(writeText: (text: string) => Promise<void>) {
+  const previous = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+  return () => {
+    if (previous) Object.defineProperty(navigator, 'clipboard', previous);
+    else Reflect.deleteProperty(navigator, 'clipboard');
+  };
 }
 
-it('issues a named connection from the board settings and shows its key only after creation', async () => {
+it.each([false, true])('copies a complete setup with no form, reusing the key after a clipboard failure (%s)', async (failsFirst) => {
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
-  query.mockReturnValue({ instructions: { text: 'Use the API contract.', version: 1 }, connections: [] });
+  query.mockImplementation(name => name === 'boardAgents:settings'
+    ? { instructions: { text: 'Use the API contract.', version: 1 }, connections: [] } : 1);
   mutate.mockResolvedValue({ id: 'connection', code: 'synthetic-agent-key' });
+  const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
+  if (failsFirst) writeText.mockRejectedValueOnce(new Error('Clipboard denied'));
+  const restoreClipboard = clipboard(writeText);
 
   try {
     await act(async () => root.render(React.createElement(BoardAgentSettings, { boardId: 'board', Dialog, onClose() {} })));
-    const forms = container.querySelectorAll('form');
-    expect(container.querySelector('textarea')?.value).toBe('Use the API contract.');
-    expect(container.querySelector('[aria-label="Agent connection details"]')).toBeNull();
-    await act(async () => change(forms[1].querySelector('input')!, 'Architecture agent'));
-    await act(async () => forms[1].dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+    const setupButton = container.querySelector<HTMLButtonElement>('button.a-primary')!;
+    expect(setupButton.textContent).toBe('Copy setup instructions');
+    expect(setupButton.disabled).toBe(false);
+    expect(container.querySelector('details')?.open).toBe(false);
+    expect(mutate).not.toHaveBeenCalled();
+    await act(async () => setupButton.click());
     expect(mutate).toHaveBeenCalledWith('boardAgents:connect', {
-      boardId: 'board', token: '', name: 'Architecture agent', mode: 'edit',
+      boardId: 'board', token: '', name: 'Board agent 1', mode: 'edit',
     });
-    const fields = container.querySelectorAll<HTMLInputElement>('[aria-label="Agent connection details"] input');
-    expect(fields[0].value).toContain('/api/backend?agent=1');
-    expect(fields[1].value).toBe('synthetic-agent-key');
+    const value = writeText.mock.calls[0][0];
+    expect(value).toContain('/app?board=board');
+    expect(value).toContain('/api/backend?agent=1');
+    expect(value).toContain('Connection key: synthetic-agent-key');
+    expect(value).toContain('outside chats and shared files');
+    expect(value.match(/^\d\./gm)).toHaveLength(3);
+    if (failsFirst) {
+      expect(container.querySelector<HTMLTextAreaElement>('textarea[readonly]')?.value).toBe(value);
+      await act(async () => setupButton.click());
+      expect(writeText.mock.calls[1][0]).toBe(value);
+    }
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(setupButton.textContent).toContain('Copied to clipboard');
+    expect(container.querySelector('textarea[readonly]')).toBeNull();
+    expect(container.textContent).not.toContain('synthetic-agent-key');
+    const disconnect = [...container.querySelectorAll('button')].find(button => button.textContent?.includes('Disconnect previous chats'))!;
+    expect(disconnect.closest('details')?.open).toBe(false);
+    await act(async () => disconnect.click());
+    expect(mutate).toHaveBeenCalledWith('chatgptBrowser:disconnectBoard', { boardId: 'board' });
   } finally {
     await act(async () => root.unmount());
     container.remove();
+    restoreClipboard();
   }
 });
 
