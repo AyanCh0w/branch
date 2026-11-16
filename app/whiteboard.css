@@ -2,6 +2,12 @@
 .card.plain-note .note-content { padding: 18px 22px 22px; }
 .card.plain-note .plan-body { min-height: 32px; font-size: 16px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .plan-body:empty::before { content: attr(data-placeholder); color: var(--theme-muted, #92979e); pointer-events: none; }
+.agent-note-content .plan-body[hidden],
+.agent-note-content:has(> [data-agent-note-editor]:not([hidden])) .agent-note-preview { display: none; }
+.agent-note-preview { font-size: 16px; line-height: 1.6; }
+.agent-note-preview > :last-child { margin-bottom: 0; }
+.header-actions .agent-note-edit { width: auto; padding: 0 6px; font-size: 12px; }
+body.board-viewer .agent-note-edit { display: none; }
 .card.plain-note { min-height: 76px; }
 .whiteboard-tools { display: flex; align-items: center; gap: 3px; }
 #creation-dock .whiteboard-tools img { width: 21px; height: 21px; }

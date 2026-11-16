@@ -60,10 +60,31 @@ function githubMarkup(n){const g=n.github||{};if(g.kind==='repo')return githubRe
  const writable=!window.BoardShared?.enabled||window.BoardShared.writable;
  return `<div class="card-main github-content"><div class="gh-head">${icon('github')}<span class="gh-repo">${escapeHTML(g.repo||'')}</span><span class="gh-kind">${label}</span>${g.kind==='file'?'':`<span class="gh-state" data-state="${escapeHTML(g.state||'open')}">${escapeHTML(g.state||'open')}</span>`}</div><div class="gh-meta">${meta}</div>${body}${g.truncated?'<p class="gh-note">Long content was truncated to fit a card.</p>':''}</div><div class="card-footer gh-footer"><span class="gh-fetched">${g.fetchedAt?'Fetched '+escapeHTML(new Date(g.fetchedAt).toLocaleString([], {dateStyle:'medium',timeStyle:'short'})):''}</span><span class="gh-actions">${url?`<a href="${escapeHTML(url)}" target="_blank" rel="noopener noreferrer">GitHub ${icon('arrow-up-right')}</a>`:''}${writable?`<button type="button" data-github-refresh aria-label="Refresh from GitHub">${icon('refresh')}<span>Refresh</span></button>`:''}</span></div>`;
 }
+// Board agent notes already use agent-prefixed UUIDs, including notes saved before Markdown rendering.
+function isBoardAgentNote(n){
+ return n.type==='plan'&&!n.codingNote&&!n.chatgptSynced&&/^agent-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(n.id);
+}
+function noteMarkup(n){
+ const markdown=isBoardAgentNote(n);
+ const editor=`<div class="plan-body" contenteditable="plaintext-only" role="textbox" aria-label="Note text" aria-multiline="true" data-edit="body" data-placeholder="Write anything…"${markdown?' data-agent-note-editor hidden':''}>${escapeHTML(n.body)}</div>`;
+ if(!markdown)return `<div class="card-main note-content">${editor}</div>`;
+ return `<div class="card-main note-content agent-note-content"><div class="agent-note-preview" data-message-text>${messageHTML(n.body,{linkPreviews:false})}</div>${editor}</div>`;
+}
+function focusAgentNoteEditor(editor){
+ if(editor?.getAttribute('contenteditable')!=='plaintext-only'||document.body.classList.contains('board-viewer'))return false;
+ editor.hidden=false;
+ editor.focus({preventScroll:true});
+ editor.hidden=document.activeElement!==editor;
+ return !editor.hidden;
+}
+function refreshNotePreview(card,body){
+ const preview=card.querySelector('.agent-note-preview');
+ if(preview)preview.innerHTML=messageHTML(body,{linkPreviews:false});
+}
 function bodyMarkup(n){
  if(n.chatgptSynced)return `<div class="card-main synced-card-content"><button type="button" class="shared-context-button" data-shared-context aria-controls="board-context">${icon('link')} Shared context</button></div>`;
  if(n.codingNote)return `<div class="card-main coding-note-body" tabindex="0" role="region" aria-label="Note content"><div data-message-text>${formatCodingResult(n.body)}</div></div>`;
- if(n.type==='plan')return `<div class="card-main note-content"><div class="plan-body" contenteditable="plaintext-only" role="textbox" aria-label="Note text" aria-multiline="true" data-edit="body" data-placeholder="Write anything…">${escapeHTML(n.body)}</div></div>`;
+ if(n.type==='plan')return noteMarkup(n);
  if(n.type==='thread')return `<div class="chat-surface" role="region" aria-label="Conversation transcript" tabindex="${compactChat(n)?-1:0}"><div class="messages">${n.messages.map(m=>`<div class="message ${m.role}" data-message="${m.id}"><div class="message-label"><span class="sr-only">${m.role==='user'?'You':m.model||'Previous demo reply'}</span>${messageNibMarkup(m)}</div><div data-message-text>${m.role==='user'?`<div class="user-message-copy">${personMarkup(m.person)}${messageHTML(m.text)}</div>`:messageHTML(m.text)}${githubReadsMarkup(m)}${m.error?`<div class="message-error" role="alert">${escapeHTML(m.error)} <button type="button" data-retry-message="${m.id}">Retry</button></div>`:''}</div></div>`).join('')}</div></div>${n.messages.length?`<button type="button" class="chat-preview-toggle" aria-expanded="${!compactChat(n)}">${compactChat(n)?'Show conversation':'Show less'} ${icon('nav-arrow-down')}</button>`:''}<form class="composer chat-composer"><div class="context-list">${(n.contexts||[]).map(contextMarkup).join('')}</div>${contextDetails(n)}<textarea data-prompt aria-label="Message in ${escapeHTML(n.title)}" placeholder="${n.agent?(n.messages.length?'Give a new research goal…':'Give your agent a goal…'):n.messages.length?'Continue the conversation…':'Ask anything…'}" rows="2">${escapeHTML(n.draft||'')}</textarea><div class="composer-controls"><button type="button" class="add-context" aria-label="Add context node" data-tooltip="Add context node" aria-haspopup="menu" aria-controls="context-menu" aria-expanded="false">${icon('plus')}</button><span class="mode-chip">${icon(n.agent?'flash':'chat-bubble')}<span>${n.agent?'Agent':'Chat'}</span></span>${modelPickerMarkup(n)}<button type="submit" class="send-message" aria-label="Send message" ${generatingChats.has(n.id)?'disabled':''}><span>${n.agent?'Run':'Send'}</span>${icon('arrow-up')}</button></div></form>`;
  if(n.type==='search')return searchMarkup(n);
  if(n.type==='media')return mediaMarkup(n);
@@ -119,7 +140,7 @@ function overviewMarkup(n){
  const symbol={plan:'page',thread:'chat-bubble',search:'search',web:'arrow-up-right',upload:'attachment',github:'github',media:n.mediaType==='video'?'youtube':'media-image'}[n.type]||'page';
  return `<div class="node-overview"><span class="overview-icon" aria-hidden="true">${icon(symbol)}</span><div class="overview-label"><span class="overview-type">${type}</span><strong>${escapeHTML(n.title||'Untitled')}</strong></div></div>`;
 }
-function cardMarkup(n,i){const kind={plan:'Plan',thread:'Chat',search:'Search',web:'Source',upload:'File',media:'Media',github:'GitHub'}[n.type];const titleLabel=n.type==='plan'?'Note title':n.type==='thread'?'Conversation title':'Card title';return `<article class="card ${lastHeldNode===n.id?'last-held':''} ${n.agent?'agent-card':''} ${n.researchSource?'research-source-card':''} ${n.autoGroup?'auto-group-member':''} ${n.codingNote?'coding-note':n.type==='plan'&&!n.chatgptSynced?'plain-note':''} ${compactChat(n)?'compact-chat':''} ${n.type==='thread'&&!n.messages?.length&&!n.contexts?.length?'empty-chat':''} ${n.type==='web'?'web-card':''} ${n.type==='github'?'github-card':''} ${focused===n.id?'focused':''}" data-node="${n.id}" data-kind="${n.type}" data-bottom-ports="${!!n.bottomPorts}" aria-busy="${generatingChats.has(n.id)}" tabindex="0" aria-label="${escapeHTML(n.type+' card: '+n.title)}" style="--note-height:${n.minHeight||360}px;--page-height:${n.minHeight||469}px;width:${n.width||(n.type==='web'?540:n.type==='thread'?520:380)}px;min-height:${n.minHeight||0}px;transform:translate3d(${n.x}px,${n.y}px,0)"><button class="title-grip" aria-label="Move ${escapeHTML(n.title)}"><span class="grip-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span></button><div class="card-header"><h2 class="node-label" contenteditable="plaintext-only" role="textbox" aria-label="${titleLabel}" data-edit="title">${escapeHTML(n.title||'Untitled')}</h2><span class="drag-strip" aria-hidden="true"></span><div class="header-actions">${websitePerspectiveButton(n)}${sourceInfoButton(n)}${expandIdeaButton(n)}${n.type==='search'||n.chatgptSynced?'':codingButton(n)}${n.type==='thread'?`<button class="open-chat-panel" aria-label="Open chat in side panel" data-tooltip="Open in side panel">${icon('arrow-up-right')}</button><button class="collapse-card" aria-label="${compactChat(n)?'Expand':'Collapse'} conversation" title="${compactChat(n)?'Expand':'Collapse'}" aria-expanded="${!compactChat(n)}">${icon('nav-arrow-down')}</button>`:''}<button class="delete-card" aria-label="Delete ${escapeHTML(n.title)}" title="Delete card">${icon('trash')}</button></div></div>${overviewMarkup(n)}${n.agent?agentIdentityMarkup(n):''}${bodyMarkup(n)}${codingReviewButton(n)}${codingResultMarkup(n)}${['plan','thread','upload','media','web','github'].includes(n.type)||n.contextFor?'':`<div class="node-controls"><button class="add-file" aria-label="Add file beside ${escapeHTML(n.title)}">${icon('plus')}</button><span class="mode-chip" title="${kind}" aria-label="${kind}"><span class="mode-icon">${icon({plan:'page',thread:'chat-bubble',search:'search',web:'arrow-up-right',upload:'upload',media:n.mediaType==='video'?'youtube':'media-image'}[n.type])}</span><span class="sr-only">${kind}</span></span><span class="node-byline">${n.type==='thread'?'AI demo':n.type==='plan'?escapeHTML(n.author||'You'):''}</span></div>`}${sourceInfoMarkup(n)}${ideaPreviewMarkup(n)}${n.type!=='search'&&!n.chatgptSynced?nibMarkup(n):''}${n.type==='thread'||n.contexts?.length||n.previewOrigin?`<span class="socket ${n.previewOrigin?'preview-input':''} ${n.contexts?.length||n.previewOrigin?'has-context':''}" role="img" aria-label="Incoming context"></span>`:''}<span class="drop-inline" aria-hidden="true">${icon('plus')}</span><button class="resize-handle" aria-label="Resize ${escapeHTML(n.title)}" title="Resize">${icon('resize-diagonal')}</button></article>`}
+function cardMarkup(n,i){const kind={plan:'Plan',thread:'Chat',search:'Search',web:'Source',upload:'File',media:'Media',github:'GitHub'}[n.type];const titleLabel=n.type==='plan'?'Note title':n.type==='thread'?'Conversation title':'Card title';return `<article class="card ${lastHeldNode===n.id?'last-held':''} ${n.agent?'agent-card':''} ${n.researchSource?'research-source-card':''} ${n.autoGroup?'auto-group-member':''} ${n.codingNote?'coding-note':n.type==='plan'&&!n.chatgptSynced?'plain-note':''} ${compactChat(n)?'compact-chat':''} ${n.type==='thread'&&!n.messages?.length&&!n.contexts?.length?'empty-chat':''} ${n.type==='web'?'web-card':''} ${n.type==='github'?'github-card':''} ${focused===n.id?'focused':''}" data-node="${n.id}" data-kind="${n.type}" data-bottom-ports="${!!n.bottomPorts}" aria-busy="${generatingChats.has(n.id)}" tabindex="0" aria-label="${escapeHTML(n.type+' card: '+n.title)}" style="--note-height:${n.minHeight||360}px;--page-height:${n.minHeight||469}px;width:${n.width||(n.type==='web'?540:n.type==='thread'?520:380)}px;min-height:${n.minHeight||0}px;transform:translate3d(${n.x}px,${n.y}px,0)"><button class="title-grip" aria-label="Move ${escapeHTML(n.title)}"><span class="grip-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span></button><div class="card-header"><h2 class="node-label" contenteditable="plaintext-only" role="textbox" aria-label="${titleLabel}" data-edit="title">${escapeHTML(n.title||'Untitled')}</h2><span class="drag-strip" aria-hidden="true"></span><div class="header-actions">${websitePerspectiveButton(n)}${isBoardAgentNote(n)?'<button type="button" class="agent-note-edit" data-edit-agent-note aria-label="Edit note">Edit</button>':''}${sourceInfoButton(n)}${expandIdeaButton(n)}${n.type==='search'||n.chatgptSynced?'':codingButton(n)}${n.type==='thread'?`<button class="open-chat-panel" aria-label="Open chat in side panel" data-tooltip="Open in side panel">${icon('arrow-up-right')}</button><button class="collapse-card" aria-label="${compactChat(n)?'Expand':'Collapse'} conversation" title="${compactChat(n)?'Expand':'Collapse'}" aria-expanded="${!compactChat(n)}">${icon('nav-arrow-down')}</button>`:''}<button class="delete-card" aria-label="Delete ${escapeHTML(n.title)}" title="Delete card">${icon('trash')}</button></div></div>${overviewMarkup(n)}${n.agent?agentIdentityMarkup(n):''}${bodyMarkup(n)}${codingReviewButton(n)}${codingResultMarkup(n)}${['plan','thread','upload','media','web','github'].includes(n.type)||n.contextFor?'':`<div class="node-controls"><button class="add-file" aria-label="Add file beside ${escapeHTML(n.title)}">${icon('plus')}</button><span class="mode-chip" title="${kind}" aria-label="${kind}"><span class="mode-icon">${icon({plan:'page',thread:'chat-bubble',search:'search',web:'arrow-up-right',upload:'upload',media:n.mediaType==='video'?'youtube':'media-image'}[n.type])}</span><span class="sr-only">${kind}</span></span><span class="node-byline">${n.type==='thread'?'AI demo':n.type==='plan'?escapeHTML(n.author||'You'):''}</span></div>`}${sourceInfoMarkup(n)}${ideaPreviewMarkup(n)}${n.type!=='search'&&!n.chatgptSynced?nibMarkup(n):''}${n.type==='thread'||n.contexts?.length||n.previewOrigin?`<span class="socket ${n.previewOrigin?'preview-input':''} ${n.contexts?.length||n.previewOrigin?'has-context':''}" role="img" aria-label="Incoming context"></span>`:''}<span class="drop-inline" aria-hidden="true">${icon('plus')}</span><button class="resize-handle" aria-label="Resize ${escapeHTML(n.title)}" title="Resize">${icon('resize-diagonal')}</button></article>`}
 function render(){commitEdit();$('#chat-panel .card')?.remove();$('#cards').innerHTML=state.nodes.map(cardMarkup).join('');mountChatPanel();state.nodes.forEach(updateActivity);$('#board-title').textContent=state.title;$('#undo').disabled=!undoHistory.length;observeCards();requestDraw()}
 function refreshCard(n){if(!window.BoardShared?.applying)commitEdit();const old=cardEl(n.id),reading=panelNodeId===n.id?old?.querySelector('.chat-surface'):null,readingTop=reading?.scrollTop,follow=reading?reading.scrollHeight-reading.scrollTop-reading.clientHeight<60:true,entrance=old?.getAnimations().find(a=>a.id==='idea-entrance'),entranceTime=entrance?.currentTime;if(old)old.outerHTML=cardMarkup(n,state.nodes.indexOf(n));else $('#cards').insertAdjacentHTML('beforeend',cardMarkup(n,state.nodes.indexOf(n)));if(entrance&&entranceTime<300){const next=cardEl(n.id),animation=next.animate(entrance.effect.getKeyframes(),{duration:300,easing:'cubic-bezier(.2,.8,.2,1)',id:'idea-entrance'});animation.currentTime=entranceTime;next.addEventListener('pointerdown',()=>animation.cancel(),{once:true});}mountChatPanel();if(reading){const area=cardEl(n.id)?.querySelector('.chat-surface');if(area)area.scrollTop=follow?area.scrollHeight:readingTop;}observeCards();requestDraw();if(!window.BoardShared?.applying)scheduleNodeTitle(n);window.BoardShared?.refreshLocks();updateActivity(n)}
 function sourceText(n,cutoff){return BranchContext.textOf(n,cutoff)}
@@ -286,10 +307,22 @@ document.addEventListener('selectionchange',updateSelectionHandle);
 document.addEventListener('scroll',()=>{updateSelectionHandle();requestDraw();},true);
 onCardEvent('dragstart',e=>e.preventDefault());
 onCardEvent('focusin',rememberEditing);
-onCardEvent('focusout',e=>{if(e.target.matches('[data-edit]'))commitEdit()});
+onCardEvent('focusout',e=>{
+ if(!e.target.matches('[data-edit]'))return;
+ commitEdit();
+ if(e.target.matches('[data-agent-note-editor]')){
+  e.target.hidden=true;
+  const card=e.target.closest('.card'),note=nodeById(card.dataset.node);
+  if(note)refreshNotePreview(card,note.body);
+ }
+});
 onCardEvent('input',e=>{const n=nodeById(e.target.closest('.card')?.dataset.node);if(!n)return;if(e.target.matches('[data-idea-prompt]')){const preview=ideaPreviews.get(n.id);if(preview?.ideas)preview.ideas[+e.target.dataset.ideaPrompt].prompt=e.target.value;return;}if(e.target.dataset.edit){if(e.target.dataset.edit==='title')n.titleEdited=true;n[e.target.dataset.edit]=e.target.innerText;window.BoardShared?.edit(n,e.target.dataset.edit,e.target.innerText);syncNib(n);if(n.type==='web'){const detail=cardEl(n.id)?.querySelector('.source-context-detail pre');if(detail)detail.textContent=sourceText(n);}$('#save-state').textContent='Editing';requestDraw()}if(e.target.matches('[data-prompt]')){n.draft=e.target.value;window.BoardShared?.edit(n,'draft',n.draft);save()}if(e.target.matches('[data-query]')){n.query=e.target.value;save()}});
 onCardEvent('click',async e=>{
  const n=nodeById(e.target.closest('.card')?.dataset.node);if(!n)return;
+ if(e.target.closest('[data-edit-agent-note]')){
+  focusAgentNoteEditor(cardEl(n.id)?.querySelector('[data-agent-note-editor]'));
+  return;
+ }
  if(e.target.closest('[data-shared-context]')){showSharedContext(n);return;}
  if(e.target.closest('[data-coding-handoff]')){commitEdit();window.BranchCoding?.open(n.id);return;}
  const link=e.target.closest('a[href]');
@@ -812,13 +845,32 @@ async function launchIdeas(source){
 }
 
 
-window.BranchHost={isManipulating(id){return !!gesture&&(gesture.kind==='move'?gesture.members?.some(n=>n.id===id):gesture.kind==='resize'&&gesture.source===id);},previewGeometry(id,patch){
+window.BranchHost={focusAgentNoteEditor,isManipulating(id){return !!gesture&&(gesture.kind==='move'?gesture.members?.some(n=>n.id===id):gesture.kind==='resize'&&gesture.source===id);},previewGeometry(id,patch){
  const n=nodeById(id),el=cardEl(id);if(!n||!el)return;if(this.isManipulating(id)||id===panelNodeId){delete el.dataset.liveGeometry;return;}
  if(Object.keys(patch).length)el.dataset.liveGeometry='true';else delete el.dataset.liveGeometry;
  const view={...n,...patch};el.style.transform=`translate3d(${view.x}px,${view.y}px,0)`;
  el.style.width=(view.width||(view.type==='thread'?520:380))+'px';el.style.minHeight=(view.minHeight||0)+'px';
  el.style.setProperty('--page-height',(view.minHeight||0)+'px');if(view.codingNote)el.style.setProperty('--note-height',(view.minHeight||360)+'px');requestDraw();
-},captureView:()=>({...camera}),setView(view){if(!view||!['x','y','z'].every(k=>Number.isFinite(view[k]))||view.z<.1||view.z>3)return;camera={x:view.x,y:view.y,z:view.z};applyCamera();},curve,formatCodingResult,boardPoint,screenPoint,prepareVideoTranscripts,readLocalFile,getState:()=>state,notify,refreshText(n){const el=cardEl(n.id);if(!el)return;for(const field of ['body','title']){const target=el.querySelector(`[data-edit="${field}"]`);if(target&&target.textContent!==(n[field]||''))target.textContent=n[field]||'';}const draft=el.querySelector('[data-prompt]');if(draft&&draft.value!==(n.draft||''))draft.value=n.draft||'';syncNib(n);if(n.type==='web'){const detail=el.querySelector('.source-context-detail pre');if(detail)detail.textContent=sourceText(n);}requestDraw();},receive(snapshot){
+},captureView:()=>({...camera}),setView(view){if(!view||!['x','y','z'].every(k=>Number.isFinite(view[k]))||view.z<.1||view.z>3)return;camera={x:view.x,y:view.y,z:view.z};applyCamera();},curve,formatCodingResult,boardPoint,screenPoint,prepareVideoTranscripts,readLocalFile,getState:()=>state,notify,
+refreshText(n){
+ const el=cardEl(n.id);
+ if(!el)return;
+ for(const field of ['body','title']){
+  const target=el.querySelector(`[data-edit="${field}"]`);
+  if(target&&target.textContent!==(n[field]||'')){
+   target.textContent=n[field]||'';
+   if(field==='body')refreshNotePreview(el,n.body);
+  }
+ }
+ const draft=el.querySelector('[data-prompt]');
+ if(draft&&draft.value!==(n.draft||''))draft.value=n.draft||'';
+ syncNib(n);
+ if(n.type==='web'){
+  const detail=el.querySelector('.source-context-detail pre');
+  if(detail)detail.textContent=sourceText(n);
+ }
+ requestDraw();
+},receive(snapshot){
  const previous=new Map(state.nodes.map(n=>[n.id,n]));const result=[];
  for(const incoming of snapshot.nodes){if(gesture?.kind==='move'&&incoming.autoGroup&&gesture.members.some(item=>item.id===incoming.autoGroup&&nodeById(item.id)?.agent)&&!gesture.members.some(item=>item.id===incoming.id)){gesture.members.push({id:incoming.id,x:incoming.x,y:incoming.y});incoming.x+=(gesture.lastX-gesture.sx)/camera.z;incoming.y+=(gesture.lastY-gesture.sy)/camera.z;}if(incoming.activeRun)generatingChats.set(incoming.id,{abort(){}});else generatingChats.delete(incoming.id);let n=previous.get(incoming.id);previous.delete(incoming.id);if(!n){n=incoming;state.nodes.push(n);refreshCard(n);}else{
  const oldMessages=n.messages||[],messages=incoming.messages||[];const sameMessages=oldMessages.length===messages.length&&oldMessages.every((m,i)=>m.id===messages[i].id);

@@ -30,6 +30,37 @@ test('notes are the default creation action and use a single plaintext editor wi
   assert.equal(d.querySelector('#selection-tools,[data-selection-action]'),null);
  }finally{w.dispatchEvent(new w.Event('pagehide'));w.close();}
 });
+test('saved agent notes render Markdown and keep the source editable and in sync',()=>{
+ const id='agent-01234567-89ab-4def-8123-456789abcdef';
+ const source='Summary.\n\n- **Web design:** Build a site.\n- **Search:** Help customers find it.\n\n[Visit the site](https://example.com/)';
+ const dom=boot([{...note(id,100,100),body:source},{...note('plain',500,100),body:source}]);
+ const w=dom.window,d=w.document;
+ try{
+  const card=d.querySelector(`[data-node="${id}"]`);
+  const preview=card.querySelector('.agent-note-preview');
+  const editor=card.querySelector('[data-edit="body"]');
+  assert.equal(preview.querySelector('li strong').textContent,'Web design:');
+  assert.equal(preview.querySelectorAll('li').length,2);
+  assert.equal(preview.querySelector('a[data-open-browser]').href,'https://example.com/');
+  assert.equal(editor.textContent,source);
+  assert.equal(editor.hidden,true);
+  assert.equal(d.querySelector('[data-node="plain"] .plan-body').textContent,source);
+  assert.equal(d.querySelector('[data-node="plain"] .plan-body strong'),null);
+  card.querySelector('[data-edit-agent-note]').click();
+  assert.equal(d.activeElement,editor);
+  assert.equal(editor.hidden,false);
+  editor.innerText='**Edited locally**';
+  editor.dispatchEvent(new w.Event('input',{bubbles:true}));
+  editor.blur();
+  assert.equal(editor.hidden,true);
+  assert.equal(preview.querySelector('strong').textContent,'Edited locally');
+  const state=w.BranchHost.getState();
+  const updated='**Edited remotely**';
+  w.BranchHost.receive({...state,nodes:state.nodes.map(n=>n.id===id?{...n,body:updated}:n)});
+  assert.equal(preview.querySelector('strong').textContent,'Edited remotely');
+  assert.equal(editor.textContent,updated);
+ }finally{w.dispatchEvent(new w.Event('pagehide'));w.close();}
+});
 test('marquee selects intersecting cards, shift adds, and cancellation restores the previous selection',()=>{
  const dom=boot([note('a',100,100),note('b',500,100),note('c',900,100)]),w=dom.window,d=w.document,b=d.querySelector('#board');
  try{
