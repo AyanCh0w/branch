@@ -61,6 +61,14 @@ it('shares project instructions and routes updates and cards from two connection
   try {
     const board = await planner.call('read_board');
     expect(board).toMatchObject({ boardId, instructions: { text: instructions, version: 1 } });
+    const workflow = planner.client.getInstructions();
+    expect(workflow).toBe(board.agentInstructions);
+    expect(workflow).toContain('Do not open Chrome or use screen control');
+    expect(workflow).toContain('Before sending every assistant message');
+    expect(workflow).toContain('call publish_update');
+    expect(workflow).toContain('progress messages, questions, and final replies');
+    const publish = (await planner.client.listTools()).tools.find(tool => tool.name === 'publish_update');
+    expect(publish?.description).toContain('Before every assistant message');
     await expect(planner.call('read_card', { nodeKey: 'other-board-note' })).rejects.toThrow('unavailable on this board');
     const note = { requestId: 'api-contract', title: 'API contract', body: 'GET /issues returns a list.' };
     const card = await planner.call('create_card', note);
@@ -101,6 +109,11 @@ it('protects edits with ownership, human changes and version checks, and makes p
   try {
     expect((await readOnly.client.listTools()).tools.map(tool => tool.name))
       .toEqual(['read_board', 'read_card', 'read_context']);
+    const observerBoard = await readOnly.call('read_board');
+    expect(observerBoard.agentInstructions).toBe(readOnly.client.getInstructions());
+    expect(observerBoard.agentInstructions).toContain('This connection is read only');
+    expect(observerBoard.agentInstructions).not.toContain('call publish_update');
+    expect(observerBoard.agentInstructions).toContain('Do not use Chrome or screen control');
     await expect(readOnly.call('create_card', { requestId: 'readonly', title: 'Forbidden', body: '' })).rejects.toThrow();
     const card = await first.call('create_card', { requestId: 'architecture', title: 'Architecture', body: 'Initial proposal' });
     const patch = { nodeKey: card.id, expectedVersion: 0, title: 'Architecture', body: 'Agent revision' };

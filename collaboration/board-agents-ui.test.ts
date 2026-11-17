@@ -32,7 +32,11 @@ function clipboard(writeText: (text: string) => Promise<void>) {
   };
 }
 
-it.each([false, true])('copies a complete setup with no form, reusing the key after a clipboard failure (%s)', async (failsFirst) => {
+it.each([
+  { failsFirst: false, readOnly: false },
+  { failsFirst: true, readOnly: false },
+  { failsFirst: false, readOnly: true },
+])('copies the correct workflow and reuses the key on retry ($failsFirst, $readOnly)', async ({ failsFirst, readOnly }) => {
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
@@ -50,9 +54,13 @@ it.each([false, true])('copies a complete setup with no form, reusing the key af
     expect(setupButton.disabled).toBe(false);
     expect(container.querySelector('details')?.open).toBe(false);
     expect(mutate).not.toHaveBeenCalled();
+    if (readOnly) {
+      const checkbox = container.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+      await act(async () => checkbox.click());
+    }
     await act(async () => setupButton.click());
     expect(mutate).toHaveBeenCalledWith('boardAgents:connect', {
-      boardId: 'board', token: '', name: 'Board agent 1', mode: 'edit',
+      boardId: 'board', token: '', name: 'Board agent 1', mode: readOnly ? 'read' : 'edit',
     });
     const value = writeText.mock.calls[0][0];
     expect(value).toContain('/app?board=board');
@@ -60,6 +68,15 @@ it.each([false, true])('copies a complete setup with no form, reusing the key af
     expect(value).toContain('Connection key: synthetic-agent-key');
     expect(value).toContain('outside chats and shared files');
     expect(value.match(/^\d\./gm)).toHaveLength(3);
+    expect(value).toContain('Do not open Chrome or use screen control');
+    if (readOnly) {
+      expect(value).toContain('This connection is read only');
+      expect(value).not.toContain('call publish_update');
+    } else {
+      expect(value).toContain('Before sending every assistant message');
+      expect(value).toContain('call publish_update');
+      expect(value).toContain('questions, and final replies');
+    }
     if (failsFirst) {
       expect(container.querySelector<HTMLTextAreaElement>('textarea[readonly]')?.value).toBe(value);
       await act(async () => setupButton.click());

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { tokenHash } from './functions/access';
 import { BoardAgentError } from './functions/boardAgents';
 import type { Engine } from './engine';
+import { boardAgentInstructions } from './board-agent-instructions';
 
 export async function boardAgentRequest(request: Request, engine: Engine) {
   const headers = { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' };
@@ -22,7 +23,7 @@ export async function boardAgentRequest(request: Request, engine: Engine) {
   }
 
   const server = new McpServer({ name: 'branch-board', version: '1.0.0' }, {
-    instructions: 'Use read_board to get the project instructions before working. Use publish_update to share useful progress, decisions and blockers.',
+    instructions: boardAgentInstructions(mode),
   });
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined, enableJsonResponse: true, maxRequestBodySize: 256 * 1024,
@@ -49,14 +50,14 @@ export async function boardAgentRequest(request: Request, engine: Engine) {
   }
 
   tool('read_board', 'readBoard',
-    'Start here to read this board’s project instructions and find cards. Use nextOffset to continue.',
+    'Start here to read this board’s project instructions, agent workflow, and cards. Follow agentInstructions and use nextOffset to continue.',
     { offset: z.number().int().nonnegative().default(0) }, 'query');
   tool('read_card', 'readCard', 'Read a card’s saved text and current version from this board.', { nodeKey }, 'query');
   tool('read_context', 'readContext', 'Read recent agent progress and decisions published to this board.',
     { limit: z.number().int().min(1).max(30).default(12) }, 'query');
   if (mode === 'edit') {
     tool('publish_update', 'publish',
-      'Share a decision, milestone, or blocker in the board’s live Context view. Optionally link a board card.',
+      'Before every assistant message, automatically publish a concise summary in the board’s Context. Include progress, questions, decisions, and final replies. Use a new requestId per message and reuse it only for a retry. Optionally link a board card.',
       { requestId, title: z.string().trim().min(1).max(120), result: z.string().trim().min(1).max(8_000), nodeKey: nodeKey.optional() },
       'mutation', true);
     tool('create_card', 'createCard', 'Create a visible note card on the whiteboard.', { requestId, ...note }, 'mutation', true);

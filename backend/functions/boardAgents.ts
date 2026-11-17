@@ -4,6 +4,7 @@ import { access, accessForUser, tokenHash } from './access';
 import { encodeDocument, initialDocument, loadDocument, readText } from './documents';
 import { textOf } from '../../app/context.js';
 import { place } from '../../app/auto-layout.js';
+import { boardAgentInstructions } from '../board-agent-instructions';
 
 const scope = { boardId: v.id('boards'), token: v.string() };
 const key = { keyHash: v.string() };
@@ -185,6 +186,7 @@ export const readBoard = internalQuery({
     }));
     return {
       boardId: board._id, title: board.title, agent: connection.name, mode: connection.mode,
+      agentInstructions: boardAgentInstructions(connection.mode),
       instructions: { text: instructions?.text || '', version: instructions?.version || 0 },
       cards, nextOffset: rows.length > size ? offset + size : null,
     };

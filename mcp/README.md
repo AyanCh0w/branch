@@ -14,7 +14,7 @@ codex mcp add branch-board --url 'https://joinbranch.dev/api/backend?agent=1' --
 
 Use the URL from **Agents** for local or preview boards. The connection uses a Branch key and does not need macOS Accessibility. Each connection covers one board and can be disconnected from **Agents**. Saved updates remain in Context after disconnecting.
 
-Ask the agent to read the board instructions before beginning, then post milestone updates with links to the relevant cards. Try “Read the board and project instructions, create a note for the API contract, and post a short update in Context when it’s ready.”
+The copied setup guide, MCP initialization instructions, and every `read_board` response provide the same agent workflow. Agents use this connection to read and change the board, without opening Chrome or using screen control for supported operations. Contribution connections instruct the agent to call `publish_update` before every assistant message, including progress, questions, and final replies. Each message gets a new request ID, reused only for a retry. The update is a concise public summary, with a card link when relevant. Read-only connections explain their access and do not request writes. External clients control their own message lifecycle, so this behavior relies on the agent following the instructions. Reconnect clients that cache MCP initialization instructions to pick up the new workflow immediately.
 
 | Tool | Behavior |
 | --- | --- |

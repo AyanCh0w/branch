@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { api, useMutation, useQuery } from '../backend/react';
+import { boardAgentInstructions } from '../backend/board-agent-instructions';
 
-function setupInstructions(boardId, code) {
+function setupInstructions(boardId, code, mode) {
   const server = new URL('/api/backend?agent=1', location.origin).href;
   const board = new URL('/app', location.origin);
   board.searchParams.set('board', boardId);
@@ -14,7 +15,9 @@ function setupInstructions(boardId, code) {
     '2. Set authentication to Bearer token and enter the connection key below. If your client asks for a header instead, use Authorization: Bearer followed by a space and the key.',
     '   Connection key: ' + code,
     '   Save the connection. Keep the key in private settings, outside chats and shared files.',
-    '3. Open the conversation you want to use and send: “Use Branch to read the board and its project instructions.”',
+    '3. Open the conversation you want to use and send the following instructions:',
+    '',
+    boardAgentInstructions(mode),
   ].join('\n');
 }
 
@@ -63,7 +66,7 @@ function BoardAgentForm({ boardId, settings }) {
         while (names.has('Board agent ' + number)) number++;
         const name = 'Board agent ' + number;
         const created = await connect({ ...scope, name, mode: readOnly ? 'read' : 'edit' });
-        const current = { id: created.id, instructions: setupInstructions(boardId, created.code) };
+        const current = { id: created.id, instructions: setupInstructions(boardId, created.code, readOnly ? 'read' : 'edit') };
         issuedNames.current.add(name);
         setConnection(current);
         return current;
