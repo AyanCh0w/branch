@@ -6,13 +6,110 @@ const stepY = 174;
 const cardWidth = 306;
 const cardHeight = 130;
 const shortDate = timestamp => new Date(timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
-const initialCamera = () => ({ x: 32, y: 48, z: Math.min(1, Math.max(.25, (innerWidth - 64) / cardWidth)) });
+const icon = name => ({ __html: window.Iconoir?.[name] || '' });
+const kindLabel = { decision: 'Decision', finding: 'Finding', question: 'Open question', risk: 'Risk', note: 'Note' };
+const statusLabel = { pending: 'To do', working: 'In progress', done: 'Done', blocked: 'Blocked' };
+const sourceIcon = { website: 'link', video: 'youtube', file: 'attachment', github: 'github' };
 
-export function ContextCanvas({ active, boardId, token, cards, selection, onSelect, canReview }) {
+// The board's plan, laid out the same way as on the Canvas, with what stands behind
+// each part attached to it: the reasoning, the sources, and every entry agents wrote.
+function useBoardNodes(active) {
+  const current = () => window.BranchHost?.getState?.().nodes || [];
+  const [nodes, setNodes] = useState(current);
+  useEffect(() => {
+    if (!active) return;
+    const read = () => setNodes([...current()]);
+    window.addEventListener('branch:board-updated', read);
+    read();
+    return () => window.removeEventListener('branch:board-updated', read);
+  }, [active]);
+  return nodes;
+}
+
+function Documents({ docs, onOpen }) {
+  if (!docs.length) return <p className="cx-none">Nothing attached yet</p>;
+  return <ul className="cx-docs">{docs.map(doc => <li key={doc.key}>
+    {doc.href
+      ? <a className="cx-doc" href={doc.href} target="_blank" rel="noopener noreferrer"><span dangerouslySetInnerHTML={icon(doc.icon)} /><span className="cx-doc-label">{doc.label}</span>{doc.meta && <small>{doc.meta}</small>}</a>
+      : <button type="button" className="cx-doc" onClick={() => onOpen(doc)}><span dangerouslySetInnerHTML={icon(doc.icon)} /><span className="cx-doc-label">{doc.label}</span>{doc.meta && <small>{doc.meta}</small>}</button>}
+  </li>)}</ul>;
+}
+
+function StructuredContext({ nodes, entries, onOpen, measure }) {
+  const plan = nodes.find(node => node.visualPlan && node.plan?.format === 2 && node.body === node.planBody);
+  const box = useRef(null);
+  useLayoutEffect(() => {
+    if (!box.current) { measure(0); return; }
+    const observer = new ResizeObserver(() => measure(box.current ? box.current.offsetHeight : 0));
+    observer.observe(box.current);
+    measure(box.current.offsetHeight);
+    return () => observer.disconnect();
+  }, [!!plan]);
+  if (!plan) return null;
+  const known = new Set(nodes.map(node => node.id));
+  const byNode = new Map();
+  for (const entry of entries) {
+    const key = entry.nodeKey && known.has(entry.nodeKey) ? entry.nodeKey : '';
+    byNode.set(key, [...(byNode.get(key) || []), entry]);
+  }
+  const entryDocs = key => (byNode.get(key) || []).map(entry => ({
+    key: 'entry-' + entry.id, icon: 'chat-bubble', label: entry.title, meta: `${entry.author} · ${shortDate(entry.timestamp)}`,
+    title: entry.title, body: entry.result, nodeKey: entry.nodeKey,
+  }));
+  const sourceDocs = (owner, sources) => (sources || []).filter(item => item && typeof item === 'object').map((item, index) => ({
+    key: owner + '-source-' + index, icon: sourceIcon[item.kind] || 'link', label: item.title, meta: item.note || '',
+    ...(/^https?:\/\//.test(item.url || '') ? { href: item.url } : { title: item.title, body: item.text ? '```\n' + item.text + '\n```' : item.note || item.title }),
+  }));
+  const cardDocs = card => [
+    ...(card.brief.detail ? [{ key: card.id + '-why', icon: 'page', label: 'Reasoning', meta: card.brief.by || '', title: card.title + ': reasoning', body: card.brief.detail, nodeKey: card.id }] : []),
+    ...sourceDocs(card.id, card.brief.sources),
+    ...entryDocs(card.id),
+    ...(card.brief.history?.length ? [{
+      key: card.id + '-versions', icon: 'refresh', label: `${card.brief.history.length} earlier version${card.brief.history.length === 1 ? '' : 's'}`, meta: '',
+      title: card.title + ': earlier versions', nodeKey: card.id,
+      body: card.brief.history.map(version => `**${version.by}** · ${shortDate(version.at)}\n\n${version.title}: ${version.summary}`).join('\n\n---\n\n'),
+    }] : []),
+  ];
+  const live = plan.plan.steps.filter(step => !step.archived);
+  const cards = nodes.filter(node => node.brief && !node.visualPlan && node.lane?.plan === plan.id);
+  const under = id => cards.filter(card => (live.some(step => step.id === card.brief.step) ? card.brief.step : '') === id);
+  const columns = [...live.map((step, index) => ({ id: step.id, label: `Step ${index + 1} · ${statusLabel[step.status]}`, title: step.title, sources: step.sources })),
+    ...(under('').length ? [{ id: '', label: 'No step yet', title: 'Unsorted' }] : [])];
+  const loose = (byNode.get('') || []);
+  const research = loose.filter(entry => entry.title.startsWith('Research:')), other = loose.filter(entry => !entry.title.startsWith('Research:'));
+  const asDocs = list => list.map(entry => ({ key: 'entry-' + entry.id, icon: 'chat-bubble', label: entry.title, meta: `${entry.author} · ${shortDate(entry.timestamp)}`, title: entry.title, body: entry.result }));
+  return <div className="cx-structure" ref={box}>
+    <section className="cx-plan card">
+      <span className="cx-eyebrow">Plan</span><strong>{plan.title}</strong><p>{plan.plan.goal}</p>
+      <h4>Plan changes</h4><Documents docs={entryDocs(plan.id)} onOpen={onOpen} />
+      {!!research.length && <><h4>Research</h4><Documents docs={asDocs(research)} onOpen={onOpen} /></>}
+      {!!other.length && <><h4>Other updates</h4><Documents docs={asDocs(other)} onOpen={onOpen} /></>}
+      {!!plan.plan.sources?.length && <><h4>Sources</h4><Documents docs={sourceDocs(plan.id, plan.plan.sources)} onOpen={onOpen} /></>}
+    </section>
+    <div className="cx-steps">{columns.map(column => <section key={column.id || 'unsorted'} className="cx-step">
+      <header className="card"><span className="cx-eyebrow">{column.label}</span><strong>{column.title}</strong>
+        {!!column.sources?.length && <Documents docs={sourceDocs(plan.id + column.id, column.sources)} onOpen={onOpen} />}</header>
+      {under(column.id).map(card => <article key={card.id} className={'cx-card card' + (card.brief.closed ? ' closed' : '')} data-brief-kind={card.brief.kind}>
+        <span className="brief-chip">{kindLabel[card.brief.kind] || 'Note'}{card.brief.closed ? ' · closed' : ''}</span>
+        <strong>{card.title}</strong><p>{card.body === card.brief.text ? card.brief.summary : card.body}</p>
+        <Documents docs={cardDocs(card)} onOpen={onOpen} />
+      </article>)}
+      {!under(column.id).length && <p className="cx-none">No cards under this step</p>}
+    </section>)}</div>
+  </div>;
+}
+
+const initialCamera = () => ({ x: 32, y: 48, z: Math.min(.8, Math.max(.25, (innerWidth - 64) / cardWidth)) });
+
+export function ContextCanvas({ active, boardId, token, cards, selection, onSelect, canReview, focus }) {
   const surface = useRef(null);
   const gesture = useRef(null);
   const [camera, setCamera] = useState(initialCamera);
   const [openUpdate, setOpenUpdate] = useState('');
+  const [doc, setDoc] = useState(null);
+  const [offset, setOffset] = useState(0);
+  const nodes = useBoardNodes(active);
+  const map = useQuery(api.boardAgents.contextMap, active ? { boardId, token } : 'skip');
   const selected = cards.find(card => card.id === selection) ?? cards[0];
   const row = cards.findIndex(card => card.id === selected?.id);
   const [page, setPage] = useState({ card: '', size: 10 });
@@ -23,6 +120,9 @@ export function ContextCanvas({ active, boardId, token, cards, selection, onSele
     active && selected?.boardAgent ? { boardId, token, connectionId: selected.id, limit } : 'skip');
   const activity = selected?.boardAgent ? agentTimeline : timeline;
   const results = activity?.items || [];
+  // Arriving from a canvas card opens the update that explains it.
+  const focused = focus ? results.find(item => item.nodeKey === focus)?.id : '';
+  useEffect(() => { if (active && focused) setOpenUpdate(focused); }, [active, focus, focused]);
 
   function zoom(factor, x, y) {
     setCamera(previous => {
@@ -104,14 +204,19 @@ export function ContextCanvas({ active, boardId, token, cards, selection, onSele
   ];
   const update = items.find(item => item.id === openUpdate && !item.privateDraft);
   const y = row * stepY;
+  // Agent timelines sit below the structured view.
+  const rowsTop = offset ? offset + 90 : 0;
   const wire = window.BranchHost.curve;
   const gridStep = 24 * camera.z;
 
   return <div ref={surface} className="context-canvas"
     style={{ '--context-grid': gridStep + 'px', backgroundPosition: camera.x + 'px ' + camera.y + 'px' }}
     onPointerDown={startPan} onPointerMove={movePan} onLostPointerCapture={stopPan}>
-    {!cards.length && <p className="context-canvas-empty">Updates from board agents, synced conversations and coding handoffs appear here.</p>}
+    {!cards.length && !offset && <p className="context-canvas-empty">Updates from board agents, synced conversations and coding handoffs appear here.</p>}
     <div className="context-world" style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.z})` }}>
+      <StructuredContext nodes={nodes} entries={map?.items || []} measure={setOffset} onOpen={next => { setOpenUpdate(''); setDoc(next); }} />
+      <div className="cx-rows" style={{ top: rowsTop }}>
+      {!!rowsTop && !!cards.length && <h3 className="cx-rows-title">Activity by agent</h3>}
       <svg className="context-wires" aria-hidden="true">
         {items.map((item, index) => {
           const start = { x: cardWidth + index * stepX, y: y + 65 };
@@ -139,7 +244,7 @@ export function ContextCanvas({ active, boardId, token, cards, selection, onSele
         aria-expanded={item.privateDraft ? undefined : item.id === update?.id}
         onClick={() => {
           if (item.privateDraft) window.BranchCoding?.open(selected.id);
-          else setOpenUpdate(item.id === update?.id ? '' : item.id);
+          else { setDoc(null); setOpenUpdate(item.id === update?.id ? '' : item.id); }
         }}>
         {item.timestamp && <time dateTime={new Date(item.timestamp).toISOString()}>{shortDate(item.timestamp)}</time>}
         <strong>{item.privateDraft ? 'Review draft' : item.coding ? item.title || 'Published coding result' : item.title || item.prompt || 'Shared update'}</strong>
@@ -147,7 +252,15 @@ export function ContextCanvas({ active, boardId, token, cards, selection, onSele
       </button>)}
       {activity?.hasMore && limit < 200 && <button type="button" className="context-load a-secondary" onFocus={revealFocused}
         style={{ left: (results.length + 1) * stepX, top: y + 38 }} onClick={() => setPage({ card: selected.id, size: limit + 10 })}>Load older updates</button>}
+      </div>
     </div>
+    {doc && !update && <article className="context-reader card" aria-label={doc.title}>
+      <header><strong>{doc.title}</strong><button type="button" aria-label="Close" onClick={() => setDoc(null)}>×</button></header>
+      {doc.meta && <p className="a-muted">{doc.meta}</p>}
+      <div className="a-context-result" data-message-text dangerouslySetInnerHTML={{ __html: window.BranchHost.formatCodingResult(doc.body || '') }} />
+      {doc.nodeKey && <button type="button" className="a-secondary"
+        onClick={() => window.dispatchEvent(new CustomEvent('branch:open-board-card', { detail: doc.nodeKey }))}>Open card on canvas</button>}
+    </article>}
     {update && <article className="context-reader card" aria-label={update.coding ? 'Published coding result' : 'Shared update'}>
       <header>{update.coding ? <strong>Published coding result</strong> : <time dateTime={new Date(update.timestamp).toISOString()}>{shortDate(update.timestamp)}</time>}
         <button type="button" aria-label="Close update" onClick={() => setOpenUpdate('')}>×</button></header>

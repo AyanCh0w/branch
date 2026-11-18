@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit -p backend",
     "build:vercel": "npm run build && node scripts/build-public.cjs",
     "mcp": "node mcp/server.cjs",
+    "demo:plan-board": "PLAN_BOARD_SNAPSHOT=/tmp/branch-plan-board.json vitest run --config vitest.supabase.config.ts backend/tests/planning.test.ts && node scripts/preview-board.cjs /tmp/branch-plan-board.json",
     "build:backend": "esbuild --tsconfig=tsconfig.json backend/http.ts --bundle --platform=node --packages=external --outfile=backend/server.bundle.cjs && esbuild --tsconfig=tsconfig.json backend/worker.ts --bundle --platform=node --packages=external --outfile=backend/worker.bundle.cjs && esbuild --tsconfig=tsconfig.json backend/schema.ts --bundle --platform=node --outfile=backend/schema.bundle.cjs",
     "worker": "node backend/worker.bundle.cjs",
     "test:supabase": "vitest run --config vitest.supabase.config.ts",

@@ -12,9 +12,15 @@ test('MCP handshake, tool discovery, plan writes, validation and redacted failur
  const server=createServer(backend),client=new Client({name:'test',version:'1'});
  const [a,b]=InMemoryTransport.createLinkedPair();await server.connect(a);await client.connect(b);
  try{
-  const {tools}=await client.listTools();assert.equal(tools.length,5);
+  const {tools}=await client.listTools();assert.deepEqual(tools.map(t=>t.name),['list_boards','create_board','get_brief','read_board','read_card','read_context','update_plan','add_card','revise_card','record_decision','add_source','log_research','add_chat_draft']);
   const board=await client.callTool({name:'create_board',arguments:{title:'Research'}});assert.match(board.content[0].text,/board-1/);
-  const plan=await client.callTool({name:'update_plan',arguments:{boardId:'board-1',planId:'task',goal:'Compare',expectedVersion:-1,steps:[{title:'Verify',status:'working',detail:'Check evidence'}]}});assert.ok(!plan.isError);assert.equal(calls.at(-1).name,'boards:updatePlan');
+  const plan=await client.callTool({name:'update_plan',arguments:{boardId:'board-1',planId:'task',goal:'Compare',expectedVersion:-1,steps:[{title:'Verify',status:'working',note:'Check evidence'}]}});assert.ok(!plan.isError);assert.equal(calls.at(-1).name,'planning:updatePlan');assert.equal(calls.at(-1).args.agent,'test');
+  // The canvas limits are part of the tool contract, and actionable backend guidance reaches the agent.
+  const long=await client.callTool({name:'add_card',arguments:{boardId:'board-1',cardId:'c1',kind:'finding',title:'Permits',summary:'x'.repeat(201)}});assert.ok(long.isError);
+  const decision=await client.callTool({name:'record_decision',arguments:{boardId:'board-1',cardId:'d1',title:'Private lots',summary:'Sell on private lots.',planChanges:[{step:2,status:'working'}],sources:[{url:'https://example.com'}]}});assert.ok(!decision.isError);assert.equal(calls.at(-1).name,'planning:recordDecisionCard');
+  backend.mutation=async()=>{throw Error('Fix and retry: Summary is 260 characters; the limit is 200.');};
+  const guided=await client.callTool({name:'add_card',arguments:{boardId:'board-1',cardId:'c2',kind:'risk',title:'Lead time',summary:'Plan check takes a month.'}});assert.ok(guided.isError);assert.match(guided.content[0].text,/limit is 200/);
+  backend.mutation=async(name,args)=>{calls.push({name,args});if(args.title==='fail')throw Error('secret-credential');return name==='library:create'?'board-1':{id:'plan-task',version:0};};
   const bad=await client.callTool({name:'update_plan',arguments:{boardId:'board-1',planId:'task',goal:'Compare',expectedVersion:-1,steps:[]}});assert.ok(bad.isError);
   const fail=await client.callTool({name:'create_board',arguments:{title:'fail'}});assert.ok(fail.isError);assert.doesNotMatch(JSON.stringify(fail),/secret-credential/);
  }finally{await client.close();await server.close();}

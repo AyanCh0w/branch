@@ -11,6 +11,7 @@ const modes = [
 export function BoardViews({ boardId, token, canReview }) {
   const [mode, setMode] = useState('visualization');
   const [selection, setSelection] = useState('');
+  const [focus, setFocus] = useState('');
   const [cards, setCards] = useState([]);
   const tabs = useRef({});
   const previousDrafts = useRef(new Set());
@@ -23,7 +24,9 @@ export function BoardViews({ boardId, token, canReview }) {
 
   useEffect(() => {
     const openCard = event => {
-      setSelection(event.detail.id);
+      // A canvas card can open the agent's row and the update written for that card.
+      if (event.detail.id) setSelection(event.detail.id);
+      setFocus(event.detail.nodeKey || '');
       setMode('context');
       tabs.current.context?.focus({ preventScroll: true });
     };
@@ -151,7 +154,7 @@ export function BoardViews({ boardId, token, canReview }) {
     </div>, slot)}
     <main id="board-context" role="tabpanel" aria-labelledby="context-tab" tabIndex={0} hidden={!showingContext}>
       <ContextCanvas active={showingContext} boardId={boardId} token={token} cards={[...cards, ...agentCards]}
-        canReview={canReview} selection={selection} onSelect={setSelection} />
+        canReview={canReview} selection={selection} onSelect={setSelection} focus={focus} />
     </main>
   </>;
 }

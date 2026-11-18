@@ -6,7 +6,7 @@ export function boardAgentInstructions(mode: 'read' | 'edit'): string {
 
   if (mode === 'edit') {
     instructions.push(
-      'Use create_card to add whiteboard notes, update_card for notes created by this connection, and propose_edit for changes to other notes. Read the current card version before editing.',
+      'Call get_brief first. Use update_plan, add_card and record_decision for plan work; use create_card only for a long document a person asked for, update_card for notes created by this connection, and propose_edit for changes to other notes. Read the current card version before editing.',
       'Before sending every assistant message to the user, call publish_update to update the board’s Context automatically. This includes progress messages, questions, and final replies. Publish one concise summary per message of the work, decision, question, or blocker. Link a relevant card with nodeKey when available. Do this without asking the user to request or confirm routine Context updates.',
       'Give each message update a new requestId. Reuse that requestId only when retrying the same update. Wait for the tool result before reporting delivery. If publishing fails, tell the user that Context could not be updated and explain the returned blocker.',
     );

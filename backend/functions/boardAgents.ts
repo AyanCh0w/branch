@@ -4,8 +4,9 @@ import { access, accessForUser, tokenHash } from './access';
 import { encodeDocument, initialDocument, loadDocument, readText } from './documents';
 import { textOf } from '../../app/context.js';
 import { place } from '../../app/auto-layout.js';
-import { boardAgentInstructions } from '../board-agent-instructions';
+import { agentWorkflow } from '../agent-workflow';
 import { clientLabel, cleanClientName } from '../board-agent-clients';
+import { deliverBrief, implicitConnection, logResearch, recordDecision, resolvePlanKey, saveCard, savePlan, saveSource, updateCard as revisePlanCardText, type Actor } from './planning';
 
 const scope = { boardId: v.id('boards'), token: v.string() };
 const key = { keyHash: v.string() };
@@ -125,7 +126,7 @@ export const settings = query({
     const connected = rows.filter(c => c.connectedAt).sort((a, b) => a.connectedAt - b.connectedAt);
     return {
       instructions: { text: instructions?.text || '', version: instructions?.version || 0 },
-      connections: await Promise.all(connected.map(async c => ({
+      connections: await Promise.all(connected.filter(c => !implicitConnection(c)).map(async c => ({
         id: c._id, name: c.name, mode: c.mode, client: clientLabel(c.client) || null,
         owner: c.userId === userId ? 'You' : await ownerName(ctx, c.userId), connectedAt: c.connectedAt,
       }))),
@@ -234,11 +235,12 @@ export const readBoard = internalQuery({
     );
     const cards = await Promise.all(rows.slice(0, size).map(async ({ id }) => {
       const card = await ctx.db.get(id);
-      return { id: card.key, title: cardText(card).title, kind: card.data.type, version: card.textVersion };
+      const role = card.data.visualPlan ? 'plan' : card.data.brief?.kind || (card.data.lane?.role === 'source' ? 'source' : undefined);
+      return { id: card.key, title: cardText(card).title, kind: card.data.type, ...(role ? { role } : {}), version: card.textVersion };
     }));
     return {
       boardId: board._id, title: board.title, agent: connection.name, mode: connection.mode,
-      agentInstructions: boardAgentInstructions(connection.mode),
+      agentInstructions: agentWorkflow(connection.mode),
       instructions: { text: instructions?.text || '', version: instructions?.version || 0 },
       cards, nextOffset: rows.length > size ? offset + size : null,
     };
@@ -255,6 +257,8 @@ export const readCard = internalQuery({
     const ownership = await ctx.db.query('boardAgentCards').withIndex('node', q => q.eq('nodeId', card._id)).unique();
     return {
       id: card.key, kind: card.data.type, title, text: source.slice(0, 32_000), truncated: source.length > 32_000,
+      // The reasoning an agent saved with a short canvas card.
+      ...(card.data.brief?.detail ? { detail: String(card.data.brief.detail).slice(0, 32_000) } : {}),
       version: card.textVersion,
       canEdit: connection.mode === 'edit' && ownership?.connectionId === connection._id &&
         title === card.data.title && body === card.data.body,
@@ -419,5 +423,127 @@ export const readContext = internalQuery({
   handler: async (ctx, args) => {
     const { connection } = await connectionFor(ctx, args.keyHash);
     return timeline(ctx, connection.boardId, pageSize(args.limit, 30));
+  },
+});
+
+// Planning tools: short structured cards on the canvas, full reasoning in Context.
+const actorOf = (connection: any): Actor => ({
+  boardId: connection.boardId, userId: connection.userId, agent: connection.name, connectionId: connection._id,
+});
+const planKey = (planId?: string) => {
+  if (planId === undefined) return undefined;
+  if (!/^[a-zA-Z0-9_-]{1,100}$/.test(planId)) throw new BoardAgentError('Use a plan ID of letters, numbers, dashes or underscores.');
+  return 'plan-' + planId;
+};
+// Retries of the same request resolve to the same card.
+async function cardKey(connection: any, requestId: string) {
+  const hex = await tokenHash(JSON.stringify([connection._id, operationId(requestId)]));
+  return `agent-${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+async function claimCard(ctx: any, connection: any, requestId: string, key: string, created: boolean) {
+  if (!created) return;
+  const card = await cardFor(ctx, connection.boardId, key);
+  await ctx.db.insert('boardAgentCards', {
+    boardId: connection.boardId, connectionId: connection._id, nodeId: card._id, requestId, fingerprint: 'plan-card',
+  });
+}
+const planCard = {
+  ...request, planId: v.optional(v.string()), title: v.string(), summary: v.string(), points: v.optional(v.array(v.string())),
+  step: v.optional(v.union(v.string(), v.number())), detail: v.optional(v.string()), sources: v.optional(v.array(v.any())),
+  replaces: v.optional(v.array(v.string())), files: v.optional(v.array(v.string())), related: v.optional(v.array(v.any())),
+};
+
+export const brief = internalMutation({
+  args: { ...key, focus: v.optional(v.any()), full: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const { connection } = await connectionFor(ctx, args.keyHash);
+    return { you: { agent: connection.name, mode: connection.mode }, ...(await deliverBrief(ctx, actorOf(connection), { focus: args.focus, full: args.full })) };
+  },
+});
+
+export const updatePlan = internalMutation({
+  args: {
+    ...key, planId: v.optional(v.string()), title: v.optional(v.string()), goal: v.string(), steps: v.array(v.any()),
+    expectedVersion: v.number(), summary: v.optional(v.string()), detail: v.optional(v.string()), moves: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const { connection } = await connectionFor(ctx, args.keyHash, true);
+    return savePlan(ctx, actorOf(connection), {
+      key: await resolvePlanKey(ctx, connection.boardId, args.planId), title: args.title, goal: args.goal, steps: args.steps,
+      expectedVersion: args.expectedVersion, summary: args.summary, detail: args.detail, shared: true, goalLimit: 280, moves: args.moves,
+    });
+  },
+});
+
+export const addPlanCard = internalMutation({
+  args: { ...planCard, kind: v.string() },
+  handler: async (ctx, args) => {
+    const { connection } = await connectionFor(ctx, args.keyHash, true);
+    const id = await cardKey(connection, args.requestId);
+    const result = await saveCard(ctx, actorOf(connection), { ...args, key: id, planKey: planKey(args.planId) });
+    await claimCard(ctx, connection, args.requestId, id, result.created);
+    return result;
+  },
+});
+
+export const recordPlanDecision = internalMutation({
+  args: { ...planCard, planChanges: v.optional(v.array(v.any())) },
+  handler: async (ctx, args) => {
+    const { connection } = await connectionFor(ctx, args.keyHash, true);
+    const id = await cardKey(connection, args.requestId);
+    const result = await recordDecision(ctx, actorOf(connection), { ...args, key: id, planKey: planKey(args.planId) });
+    await claimCard(ctx, connection, args.requestId, id, result.created);
+    return result;
+  },
+});
+
+export const addPlanSource = internalMutation({
+  args: {
+    ...key, planId: v.optional(v.string()), url: v.optional(v.string()), file: v.optional(v.any()), cardId: v.optional(v.string()),
+    title: v.optional(v.string()), note: v.optional(v.string()), forCard: v.optional(v.string()),
+    step: v.optional(v.union(v.string(), v.number())),
+  },
+  handler: async (ctx, args) => {
+    const { connection } = await connectionFor(ctx, args.keyHash, true);
+    return saveSource(ctx, actorOf(connection), { ...args, planKey: planKey(args.planId) });
+  },
+});
+
+// Account-authenticated agents read the same Context timeline as connected agents.
+export const recent = query({
+  args: { ...scope, limit: v.number() },
+  handler: async (ctx, args) => {
+    await access(ctx, args.token, args.boardId);
+    return timeline(ctx, args.boardId, pageSize(args.limit, 30));
+  },
+});
+
+export const revisePlanCard = internalMutation({
+  args: {
+    ...key, cardId: v.string(), title: v.optional(v.string()), summary: v.optional(v.string()), points: v.optional(v.array(v.string())),
+    detail: v.optional(v.string()), sources: v.optional(v.array(v.any())), step: v.optional(v.union(v.string(), v.number())),
+    expectedRevision: v.optional(v.number()), files: v.optional(v.array(v.string())), related: v.optional(v.array(v.any())),
+  },
+  handler: async (ctx, args) => {
+    const { connection } = await connectionFor(ctx, args.keyHash, true);
+    return revisePlanCardText(ctx, actorOf(connection), { ...args, key: args.cardId });
+  },
+});
+
+export const logPlanResearch = internalMutation({
+  args: { ...key, title: v.string(), detail: v.string() },
+  handler: async (ctx, args) => {
+    const { connection } = await connectionFor(ctx, args.keyHash, true);
+    return logResearch(ctx, actorOf(connection), args);
+  },
+});
+
+// Everything agents have written about this board, for the structured Context view:
+// each entry is attached to the card it explains, or to the plan when it has none.
+export const contextMap = query({
+  args: scope,
+  handler: async (ctx, args) => {
+    await access(ctx, args.token, args.boardId);
+    return timeline(ctx, args.boardId, 500);
   },
 });

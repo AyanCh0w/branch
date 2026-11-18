@@ -2,6 +2,7 @@ import { revokeCardHandoffs } from './coding';
 import { nodeArgs } from '../../collaboration/agent.cjs';
 import { place } from '../../app/auto-layout.js';
 import { stepsValidator, writePlan } from './visualPlan';
+import { pinMovedCards, saveLegacyCard } from './planning';
 import { mutation, query } from '../definitions';
 import { v } from '../validation';
 import { access, requireDevelopmentSecret, tokenHash } from './access';
@@ -137,6 +138,8 @@ export const patchNodes = mutation({
   handler: async (ctx, args) => {
     const { userId } = await access(ctx, args.token, args.boardId, true);
     if (args.changes.length > 300) throw Error('Too many changes');
+    // A card a person drags out of its plan lane stays where they put it.
+    const pinned = await pinMovedCards(ctx, args.boardId, args.changes);
     for (const change of args.changes) {
       const node = await ctx.db.query('nodes').withIndex('board_key', q => q.eq('boardId', args.boardId).eq('key', change.id)).unique();
       if (change.create && !node) {
@@ -149,6 +152,7 @@ export const patchNodes = mutation({
         // GitHub card content comes only from the server's fetch, never from a client.
         const locked = node.data.type === 'github' ? new Set(['text', 'github', 'revision']) : null;
         for (const [key, value] of Object.entries(change.patch || {})) if (editableFields.has(key) && !locked?.has(key)) patch[key] = value;
+        if (pinned.has(change.id) && node.data.lane) patch.lane = { ...node.data.lane, pinned: true };
         await ctx.db.patch(node._id, { data: { ...node.data, ...patch }, updatedBy: userId });
       }
     }
@@ -172,6 +176,8 @@ export const addAgentCard = mutation({
   const {userId}=await access(ctx,args.token,args.boardId,true);
   const a=nodeArgs(args);if(!/^[a-zA-Z0-9_-]{1,100}$/.test(args.cardId)||args.sourceIds.length>12)throw Error('Invalid card or sources');
   const key='mcp-'+args.cardId;
+  // Notes and websites join the plan's lanes as short cards; the full text goes to Context.
+  if(a.kind!=='chat'){const user=await ctx.db.get(userId);return saveLegacyCard(ctx,{boardId:args.boardId,userId,agent:'Agent'+(user?.name?' · '+user.name:''),client:'Agent'},{key,kind:a.kind,title:a.title,content:a.content,url:a.url,sourceIds:args.sourceIds});}
   const rows=await ctx.db.query('nodes').withIndex('board_key',q=>q.eq('boardId',args.boardId)).collect();
   const existing=rows.find(n=>n.key===key);
   if(existing){if(existing.deleted||existing.createdBy!==userId)throw Error('Card ID unavailable');return {id:key};}
