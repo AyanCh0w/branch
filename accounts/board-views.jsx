@@ -18,7 +18,7 @@ export function BoardViews({ boardId, token, canReview }) {
   const showingContext = mode === 'context';
   const sources = useQuery(api.boardAgents.sources, showingContext ? { boardId, token } : 'skip');
   const agentCards = (sources || []).map(source => ({
-    id: source.id, title: source.name, latest: source.latest, boardAgent: true,
+    id: source.id, title: source.name, owner: source.owner, latest: source.latest, boardAgent: true,
   }));
 
   useEffect(() => {

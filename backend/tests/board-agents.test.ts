@@ -30,11 +30,16 @@ beforeAll(async () => {
 });
 afterAll(() => h?.close());
 
-async function openAgent(person: typeof owner, name: string, mode = 'edit') {
+// The test client reports `client` as its MCP clientInfo name, which Branch uses to label the connection.
+async function openAgent(person: typeof owner, name: string, mode = 'edit', clientName = name) {
   const grant = await h.call(person, 'boardAgents:connect', { ...scope(), name, mode });
-  const client = new Client({ name: 'board agent integration test', version: '1.0.0' });
+  return { ...grant, ...await connectClient(grant.code, clientName) };
+}
+
+async function connectClient(code: string, clientName: string) {
+  const client = new Client({ name: clientName, version: '1.0.0' });
   const transport = new StreamableHTTPClientTransport(url, {
-    requestInit: { headers: { Authorization: 'Bearer ' + grant.code } },
+    requestInit: { headers: { Authorization: 'Bearer ' + code } },
     fetch: async (input, init) => boardAgentRequest(new Request(input, init), h.engine),
   });
   await client.connect(transport);
@@ -44,8 +49,11 @@ async function openAgent(person: typeof owner, name: string, mode = 'edit') {
     if (result.isError) throw new Error(content.text);
     return JSON.parse(content.text);
   }
-  return { ...grant, client, call };
+  return { client, call };
 }
+
+const connections = async (person: typeof owner) =>
+  (await h.call(person, 'boardAgents:settings', scope(), 'query'));
 
 it('shares project instructions and routes updates and cards from two connections to the right board', async () => {
   const notify = vi.fn(async () => {});
@@ -157,4 +165,81 @@ it('stops remote calls after a connection is revoked or its creator loses edit a
     await expect(agent.call('publish_update', { requestId: 'revoked', title: 'Forbidden', result: 'Forbidden' }))
       .rejects.toMatchObject({ code: 401 });
   } finally { await agent.client.close(); }
+});
+
+it('lists a copied key only after a client uses it, named after the client and its owner', async () => {
+  const before = await connections(owner);
+  const unused = await h.call(owner, 'boardAgents:connect', { ...scope(), name: 'Board agent 1', mode: 'edit' });
+  const copiedAgain = await h.call(owner, 'boardAgents:connect', { ...scope(), name: 'Board agent 2', mode: 'edit' });
+  let settings = await connections(owner);
+  expect(settings.connections).toEqual(before.connections);
+  expect(settings.unusedKeys).toBe(before.unusedKeys + 2);
+
+  const claude = await connectClient(unused.code, 'claude-ai');
+  const chatgpt = await connectClient(copiedAgain.code, 'openai-mcp');
+  const secondClaude = await openAgent(editor, 'Board agent 3', 'read', 'claude-ai');
+  try {
+    settings = await connections(owner);
+    expect(settings.unusedKeys).toBe(before.unusedKeys);
+    const added = settings.connections.slice(before.connections.length);
+    expect(added).toMatchObject([
+      { id: unused.id, name: 'Claude', client: 'Claude', owner: 'You', mode: 'edit' },
+      { id: copiedAgain.id, name: 'ChatGPT', client: 'ChatGPT', owner: 'You', mode: 'edit' },
+      { id: secondClaude.id, name: 'Claude 2', client: 'Claude', owner: 'agent-board-editor', mode: 'read' },
+    ]);
+    const editorView = (await connections(editor)).connections;
+    expect(editorView.find(c => c.id === secondClaude.id)).toMatchObject({ owner: 'You' });
+    expect(editorView.map(c => c.id)).not.toContain(unused.id);
+    expect((await claude.call('read_board')).agent).toBe('Claude');
+    await claude.call('publish_update', { requestId: 'labelled', title: 'Started', result: 'Reading the board.' });
+    expect((await chatgpt.call('read_context')).items[0]).toMatchObject({ author: 'Claude' });
+    expect((await h.call(viewer, 'boardAgents:sources', scope(), 'query')))
+      .toContainEqual(expect.objectContaining({ id: unused.id, name: 'Claude', owner: 'agent-board-owner' }));
+    // Reconnecting with another client name keeps the first label.
+    const renamed = await connectClient(unused.code, 'codex-mcp-client');
+    await renamed.client.close();
+    expect((await connections(owner)).connections.find(c => c.id === unused.id).name).toBe('Claude');
+  } finally {
+    await claude.client.close();
+    await chatgpt.client.close();
+    await secondClaude.client.close();
+    for (const { id } of [unused, copiedAgain, secondClaude]) {
+      await h.call(owner, 'boardAgents:disconnect', { ...scope(), connectionId: id });
+    }
+  }
+});
+
+it('expires unused keys after a day and revokes unused keys on request', async () => {
+  const stale = await h.call(owner, 'boardAgents:connect', { ...scope(), name: 'Board agent 1', mode: 'edit' });
+  const waiting = await h.call(owner, 'boardAgents:connect', { ...scope(), name: 'Board agent 2', mode: 'edit' });
+  const legacy = await h.call(owner, 'boardAgents:connect', { ...scope(), name: 'Board agent 3', mode: 'edit' });
+  const active = await openAgent(owner, 'Active', 'edit', 'gemini-cli-mcp-client');
+  const unusedBefore = (await connections(owner)).unusedKeys;
+  await h.pg.query('update branch_private.board_agent_connections set expires_at=$2 where id=$1', [stale.id, Date.now() - 1]);
+  // Keys created before expiry existed have no expiresAt and keep working.
+  await h.pg.query('update branch_private.board_agent_connections set expires_at=null where id=$1', [legacy.id]);
+  try {
+    expect((await connections(owner)).unusedKeys).toBe(unusedBefore - 1);
+    await expect(connectClient(stale.code, 'claude-ai')).rejects.toThrow();
+    const old = await connectClient(legacy.code, 'Some Custom Agent!');
+    await old.client.close();
+    expect((await connections(owner)).connections).toContainEqual(expect.objectContaining({ id: legacy.id, name: 'Some Custom Agent' }));
+    // Keys whose client reports no name are numbered when they connect, even if the dialog reused a placeholder.
+    const unnamed = await Promise.all([1, 2].map(() =>
+      h.call(owner, 'boardAgents:connect', { ...scope(), name: 'Board agent 1', mode: 'read' })));
+    for (const { code } of unnamed) await (await connectClient(code, '***')).client.close();
+    const listed = (await connections(owner)).connections;
+    expect(unnamed.map(({ id }) => listed.find(c => c.id === id))).toMatchObject([
+      { name: 'Board agent 1', client: null }, { name: 'Board agent 2', client: null },
+    ]);
+    for (const { id } of unnamed) await h.call(owner, 'boardAgents:disconnect', { ...scope(), connectionId: id });
+    expect(await h.call(owner, 'boardAgents:revokeUnused', scope())).toEqual({ revoked: 1 });
+    await expect(connectClient(waiting.code, 'claude-ai')).rejects.toThrow();
+    expect((await connections(owner)).unusedKeys).toBe(0);
+    expect((await active.call('read_board')).agent).toBe('Gemini');
+    await expect(h.call(viewer, 'boardAgents:revokeUnused', scope())).rejects.toThrow('Board access denied');
+  } finally {
+    await active.client.close();
+    for (const { id } of [legacy, active]) await h.call(owner, 'boardAgents:disconnect', { ...scope(), connectionId: id });
+  }
 });

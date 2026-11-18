@@ -5,6 +5,7 @@ import { tokenHash } from './functions/access';
 import { BoardAgentError } from './functions/boardAgents';
 import type { Engine } from './engine';
 import { boardAgentInstructions } from './board-agent-instructions';
+import { initializeClient } from './board-agent-clients';
 
 export async function boardAgentRequest(request: Request, engine: Engine) {
   const headers = { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' };
@@ -16,7 +17,15 @@ export async function boardAgentRequest(request: Request, engine: Engine) {
   const keyHash = await tokenHash(code);
   let mode;
   try {
-    ({ mode } = await engine.call('boardAgents:checkConnection', { keyHash }, {}, 'query', true));
+    const connection = await engine.call('boardAgents:checkConnection', { keyHash }, {}, 'query', true);
+    mode = connection.mode;
+    if (!connection.connected || !connection.identified) {
+      // The first use turns a copied key into a listed connection; initialize says which client it is.
+      const client = initializeClient(await request.clone().json().catch(() => null));
+      if (!connection.connected || client) {
+        await engine.call('boardAgents:activate', { keyHash, client }, {}, 'mutation', true);
+      }
+    }
   } catch (error) {
     if (error instanceof BoardAgentError) return unauthorized();
     throw error;

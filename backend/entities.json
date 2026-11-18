@@ -1001,6 +1001,21 @@
         "column": "last_update_at",
         "type": "double precision",
         "optional": true
+      },
+      "expiresAt": {
+        "column": "expires_at",
+        "type": "double precision",
+        "optional": true
+      },
+      "connectedAt": {
+        "column": "connected_at",
+        "type": "double precision",
+        "optional": true
+      },
+      "client": {
+        "column": "client",
+        "type": "text",
+        "optional": true
       }
     }
   },

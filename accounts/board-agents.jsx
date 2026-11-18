@@ -14,7 +14,7 @@ function setupInstructions(boardId, code, mode) {
     '   Server URL: ' + server,
     '2. Set authentication to Bearer token and enter the connection key below. If your client asks for a header instead, use Authorization: Bearer followed by a space and the key.',
     '   Connection key: ' + code,
-    '   Save the connection. Keep the key in private settings, outside chats and shared files.',
+    '   Save the connection. Keep the key in private settings, outside chats and shared files. If no agent uses the key within 24 hours, it expires.',
     '3. Open the conversation you want to use and send the following instructions:',
     '',
     boardAgentInstructions(mode),
@@ -31,6 +31,7 @@ export function BoardAgentSettings({ boardId, Dialog, onClose }) {
 function BoardAgentForm({ boardId, settings }) {
   const connect = useMutation(api.boardAgents.connect);
   const disconnect = useMutation(api.boardAgents.disconnect);
+  const revokeUnused = useMutation(api.boardAgents.revokeUnused);
   const saveInstructions = useMutation(api.boardAgents.saveInstructions);
   const oldSyncCount = useQuery(api.chatgptBrowser.count, { boardId });
   const disconnectOldSync = useMutation(api.chatgptBrowser.disconnectBoard);
@@ -46,6 +47,8 @@ function BoardAgentForm({ boardId, settings }) {
   const scope = { boardId, token: '' };
   const savedInstructions = lastSave?.version > settings.instructions.version ? lastSave : settings.instructions;
   const stale = draft && draft.version !== savedInstructions.version;
+  // A copied key appears under Agent connections only after an agent first uses it.
+  const joined = connection && settings.connections.find(agent => agent.id === connection.id);
 
   async function run(action) {
     setBusy(true);
@@ -85,7 +88,7 @@ function BoardAgentForm({ boardId, settings }) {
           await clipboard.writeText(value.instructions);
         }
         setCopyState('copied');
-        setStatus('Setup instructions copied. Use them in your agent’s private settings, then send the test message.');
+        setStatus('Setup instructions copied. Use them in your agent’s private settings, then send the test message. The agent will appear here once it connects.');
       } catch {
         try {
           await pending;
@@ -119,6 +122,9 @@ function BoardAgentForm({ boardId, settings }) {
       {copyState === 'manual' && connection && <label className="a-field">Setup instructions
         <textarea value={connection.instructions} rows={6} readOnly onFocus={event => event.target.select()} />
       </label>}
+      {connection && copyState !== 'copying' && <p className="a-agent-waiting" role="status">
+        {joined ? '✓ ' + (joined.client || joined.name) + ' connected' : 'Waiting for your agent to connect…'}
+      </p>}
       {connection && copyState !== 'copying' &&
         <button type="button" className="a-text-button a-agent-add" disabled={busy} onClick={resetSetup}>Set up another agent</button>}
     </section>
@@ -156,7 +162,8 @@ function BoardAgentForm({ boardId, settings }) {
       {!!settings.connections.length && <section className="a-agent-section" aria-label="Agent connections">
         <strong>Agent connections</strong>
         <ul className="a-agent-list">{settings.connections.map(agent => <li key={agent.id}>
-          <span>{agent.name}<small>{agent.mode === 'edit' ? 'Read and contribute' : 'Read only'}</small></span>
+          <span>{agent.name}<small>{[agent.client ? null : 'Client not reported', agent.owner,
+            agent.mode === 'edit' ? 'Read and contribute' : 'Read only'].filter(Boolean).join(' · ')}</small></span>
           <button type="button" className="a-secondary" disabled={busy} aria-label={'Disconnect ' + agent.name}
             onClick={() => run(async () => {
               await disconnect({ ...scope, connectionId: agent.id });
@@ -164,6 +171,14 @@ function BoardAgentForm({ boardId, settings }) {
               setStatus(agent.name + ' disconnected.');
             })}>Disconnect</button>
         </li>)}</ul>
+      </section>}
+      {settings.unusedKeys > 0 && <section className="a-agent-section" aria-label="Unused setup keys">
+        <p className="a-muted">{settings.unusedKeys === 1 ? '1 copied key hasn’t' : settings.unusedKeys + ' copied keys haven’t'} been used by an agent yet.</p>
+        <button type="button" className="a-secondary" disabled={busy} onClick={() => run(async () => {
+          await revokeUnused(scope);
+          if (connection && !joined) resetSetup();
+          setStatus('Unused setup keys revoked.');
+        })}>Revoke unused keys</button>
       </section>}
       {oldSyncCount > 0 && <section className="a-agent-section" aria-label="Previous chat connections">
         <button type="button" className="a-secondary" disabled={busy} onClick={() => run(async () => {

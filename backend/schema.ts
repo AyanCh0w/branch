@@ -53,6 +53,8 @@ export default defineSchema({
   boardAgentConnections: defineTable({
     boardId: v.id('boards'), userId: v.id('users'), name: v.string(), keyHash: v.string(),
     mode: v.union(v.literal('read'), v.literal('edit')), revoked: v.boolean(), lastUpdateAt: v.optional(v.number()),
+    // Unused setup keys expire; the connection is listed once a client first uses the key.
+    expiresAt: v.optional(v.number()), connectedAt: v.optional(v.number()), client: v.optional(v.string()),
   }).index('key', ['keyHash']).index('board', ['boardId']),
   boardAgentInstructions: defineTable({
     boardId: v.id('boards'), text: v.string(), version: v.number(),

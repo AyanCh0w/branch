@@ -2,7 +2,7 @@
 
 ## Connect a board agent
 
-On a board you can edit, open **Agents** and click **Copy setup instructions**. Branch creates a connection for this board and copies three steps with the server URL and a private connection key. Add Branch in a client that accepts a remote Streamable HTTP MCP server with a bearer token, save the key in that client’s private settings, then ask the agent to read the board. The URL is `/api/backend?agent=1` on the same Branch instance.
+On a board you can edit, open **Agents** and click **Copy setup instructions**. Branch creates a key for this board and copies three steps with the server URL and the private connection key. The key becomes a listed connection the first time an agent uses it. A key that no agent uses within 24 hours expires. Add Branch in a client that accepts a remote Streamable HTTP MCP server with a bearer token, save the key in that client’s private settings, then ask the agent to read the board. The URL is `/api/backend?agent=1` on the same Branch instance.
 
 **Agent settings** holds optional project instructions, the read-only option for the next connection, and controls for disconnecting connections. Setup gives the agent read and contribution access by default. Anyone who can edit the board can create a connection under their own account.
 
@@ -12,7 +12,7 @@ For Codex CLI, set `BRANCH_AGENT_TOKEN` in the environment that launches Codex, 
 codex mcp add branch-board --url 'https://joinbranch.dev/api/backend?agent=1' --bearer-token-env-var BRANCH_AGENT_TOKEN
 ```
 
-Use the URL from **Agents** for local or preview boards. The connection uses a Branch key and does not need macOS Accessibility. Each connection covers one board and can be disconnected from **Agents**. Saved updates remain in Context after disconnecting.
+Use the URL from **Agents** for local or preview boards. The connection uses a Branch key and does not need macOS Accessibility. Each connection covers one board and can be disconnected from **Agents**. Branch names a connection after the client that first used it, such as Claude, ChatGPT, Codex or Gemini. The client reports this name itself in the MCP handshake. **Agent settings** shows who created each connection and can revoke copied keys that haven’t been used. Saved updates remain in Context after disconnecting.
 
 The copied setup guide, MCP initialization instructions, and every `read_board` response provide the same agent workflow. Agents use this connection to read and change the board, without opening Chrome or using screen control for supported operations. Contribution connections instruct the agent to call `publish_update` before every assistant message, including progress, questions, and final replies. Each message gets a new request ID, reused only for a retry. The update is a concise public summary, with a card link when relevant. Read-only connections explain their access and do not request writes. External clients control their own message lifecycle, so this behavior relies on the agent following the instructions. Reconnect clients that cache MCP initialization instructions to pick up the new workflow immediately.
 
@@ -26,7 +26,7 @@ The copied setup guide, MCP initialization instructions, and every `read_board` 
 | `update_card` | Edits a note created by this connection if its text has not changed since it was read and no teammate is editing it. |
 | `propose_edit` | Queues an edit in Context for a board editor to apply or dismiss. |
 
-The four write tools require **Read and contribute**. Use a stable request ID when retrying a create, update to Context, or proposal. For an edit to a card, re-read its text and version after a version conflict. Each call rechecks the person’s board access. Apply [the board agent migration](../supabase/migrations/202611150004_board_agents.sql) before deploying the feature.
+The four write tools require **Read and contribute**. Use a stable request ID when retrying a create, update to Context, or proposal. For an edit to a card, re-read its text and version after a version conflict. Each call rechecks the person’s board access. Apply [the board agent migration](../supabase/migrations/202611150004_board_agents.sql) and [the connection label migration](../supabase/migrations/202611170001_board_agent_clients.sql) before deploying the feature.
 
 ## Local visual planning tools
 

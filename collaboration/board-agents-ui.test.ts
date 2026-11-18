@@ -10,7 +10,7 @@ vi.mock('../backend/react', () => ({
   api: {
     agentContext: { read: 'agentContext:read' },
     chatgptBrowser: { count: 'chatgptBrowser:count', disconnectBoard: 'chatgptBrowser:disconnectBoard' },
-    boardAgents: Object.fromEntries(['settings', 'connect', 'disconnect', 'saveInstructions', 'activity', 'review']
+    boardAgents: Object.fromEntries(['settings', 'connect', 'disconnect', 'revokeUnused', 'saveInstructions', 'activity', 'review']
       .map(name => [name, 'boardAgents:' + name])),
   },
   useQuery: (name, args) => args === 'skip' ? undefined : query(name, args),
@@ -90,6 +90,45 @@ it.each([
     expect(disconnect.closest('details')?.open).toBe(false);
     await act(async () => disconnect.click());
     expect(mutate).toHaveBeenCalledWith('chatgptBrowser:disconnectBoard', { boardId: 'board' });
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    restoreClipboard();
+  }
+});
+
+it('waits for the copied key to connect, then shows its client, owner and unused keys', async () => {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  const teammate = { id: 'teammate', name: 'ChatGPT', client: 'ChatGPT', owner: 'Sam', mode: 'read', connectedAt: 1 };
+  let settings = { instructions: { text: '', version: 0 }, connections: [teammate], unusedKeys: 0 };
+  query.mockImplementation(name => name === 'boardAgents:settings' ? settings : 0);
+  mutate.mockImplementation(async name => name === 'boardAgents:connect' ? { id: 'mine', code: 'synthetic-agent-key' } : null);
+  const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
+  const restoreClipboard = clipboard(writeText);
+  const render = () => root.render(React.createElement(BoardAgentSettings, { boardId: 'board', Dialog, onClose() {} }));
+  try {
+    await act(async () => render());
+    expect(container.querySelector('.a-agent-list')?.textContent).toContain('ChatGPTSam · Read only');
+    await act(async () => container.querySelector<HTMLButtonElement>('button.a-primary')!.click());
+    expect(mutate).toHaveBeenCalledWith('boardAgents:connect', expect.objectContaining({ name: 'Board agent 1' }));
+    expect(writeText.mock.calls[0][0]).toContain('within 24 hours');
+    expect(container.querySelector('.a-agent-waiting')?.textContent).toBe('Waiting for your agent to connect…');
+
+    settings = { ...settings, unusedKeys: 2 };
+    await act(async () => render());
+    expect(container.textContent).toContain('2 copied keys haven’t been used by an agent yet.');
+
+    settings = { ...settings, unusedKeys: 1, connections: [teammate,
+      { id: 'mine', name: 'Claude', client: 'Claude', owner: 'You', mode: 'edit', connectedAt: 2 }] };
+    await act(async () => render());
+    expect(container.querySelector('.a-agent-waiting')?.textContent).toBe('✓ Claude connected');
+    expect(container.querySelector('.a-agent-list')?.textContent).toContain('ClaudeYou · Read and contribute');
+    const revoke = [...container.querySelectorAll('button')].find(button => button.textContent === 'Revoke unused keys')!;
+    await act(async () => revoke.click());
+    expect(mutate).toHaveBeenCalledWith('boardAgents:revokeUnused', { boardId: 'board', token: '' });
+    expect(container.querySelector('.a-agent-waiting')?.textContent).toBe('✓ Claude connected');
   } finally {
     await act(async () => root.unmount());
     container.remove();
