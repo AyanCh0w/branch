@@ -170,7 +170,8 @@ export async function savePlan(ctx: any, actor: Actor, input: PlanInput) {
     const summary = line(input.summary, 'Summary', 280, false) || clip(changes.join('; '), 280);
     const agentId = input.byPerson || input.silent ? undefined : (await contextConnection(ctx, actor))?._id;
     const plan: Plan = {
-      ...(before?.format ? { format: before.format } : {}),
+      // A text-only plan an agent restructures starts in the current layout.
+      ...(before?.format ? { format: before.format } : !before && !row.data.autoGroup ? { format: 2 } : {}),
       goal, steps, revision: (before?.revision || 0) + 1, updatedAt: now, updatedBy: actor.agent,
       log: [{ at: now, by: actor.agent, text: summary, ...(input.byPerson ? { person: true } : {}), ...(agentId ? { agentId } : {}) }, ...(before?.log || [])].slice(0, BUDGET.log),
     };
@@ -203,6 +204,12 @@ export async function savePlan(ctx: any, actor: Actor, input: PlanInput) {
           key: `plan:${input.key}:${version}`, title: 'Plan updated: ' + summary, nodeKey: input.key,
           result: [`**What changed:** ${changes.join('; ') || summary}`, block(input.detail, 'Detail', LIMITS.detail, false), planMarkdown(plan)].filter(Boolean).join('\n\n'),
         });
+      }
+      // Agents can't press Organize, so an agent's update brings an older-layout plan up to date.
+      // It changes no text, and people can still use Undo organize on the plan.
+      if (!input.byPerson && plan.format !== 2 && !row.data.autoGroup) {
+        await organize(ctx, actor, input.key, true, { byAgent: true });
+        return planResult(input.key, version + 1, { ...plan, format: 2 }, true);
       }
       return planResult(input.key, version, plan, true);
     } finally { doc.destroy(); }
@@ -1187,7 +1194,7 @@ export async function setPulledOut(ctx: any, boardId: string, key: string, out: 
 // step, sources become chips on their card, and the plan becomes one board. Every
 // card it changes is saved first so the whole thing can be undone.
 const undoKey = (planKey: string) => 'undo-' + planKey;
-export async function organize(ctx: any, actor: Actor, nodeKey: string, apply: boolean) {
+export async function organize(ctx: any, actor: Actor, nodeKey: string, apply: boolean, options: { byAgent?: boolean } = {}) {
   const { row: planRow, rows } = await boardPlanCard(ctx, actor.boardId, nodeKey);
   const planNode = materialize(planRow);
   if (!structured(planNode)) throw new PlanError('This plan was edited as text, so it cannot be organized automatically.');
@@ -1267,7 +1274,7 @@ export async function organize(ctx: any, actor: Actor, nodeKey: string, apply: b
   for (const { row, data } of edits.values()) await ctx.db.patch(row._id, { data });
   for (const row of removed) await ctx.db.patch(row._id, { deleted: true });
   plan.format = 2; plan.revision = (plan.revision || 0) + 1; plan.updatedAt = now; plan.updatedBy = actor.agent;
-  plan.log = [{ at: now, by: user?.name || actor.agent, person: true, text: clip('Organized the board: ' + actions.map(item => `${item.count} ${item.text}`).join('; '), 280) }, ...(plan.log || [])].slice(0, BUDGET.log);
+  plan.log = [{ at: now, ...(options.byAgent ? { by: actor.agent } : { by: user?.name || actor.agent, person: true }), text: clip('Organized the board: ' + actions.map(item => `${item.count} ${item.text}`).join('; '), 280) }, ...(plan.log || [])].slice(0, BUDGET.log);
   const body = shape.planText(plan);
   // The saved copy lives in a hidden record, so it is never sent to anyone's browser.
   const payload = { planKey: planRow.key, at: now, plan: planRow.data, nodes: [...saved].map(([key, data]) => ({ key, data })), removed: removed.map(row => row.key) };

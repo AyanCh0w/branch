@@ -246,6 +246,45 @@ it('organizes an older free-floating board without changing a word, and can undo
   } finally { await claude.close(); boardId = previous; }
 });
 
+it('brings an older-layout plan up to date when an agent updates it', async () => {
+  const board = await h.call(alex, 'library:create', { title: 'Agent upgrade' });
+  const previous = boardId;
+  boardId = board;
+  const claude = await localAgent(alex, 'claude-code');
+  try {
+    // A plan written by an older client is text only, with no structured plan behind it.
+    expect(await h.call(alex, 'boards:updatePlan', {
+      boardId: board, token: '', planId: 'taco', goal: 'Launch a taco truck.', expectedVersion: -1,
+      steps: [{ title: 'Pick the menu', status: 'pending', detail: 'Six items.' }, { title: 'Get permits', status: 'pending', detail: '' }],
+    })).toEqual({ id: 'plan-taco', version: 0 });
+    const restructured = await claude.call('update_plan', { planId: 'taco', goal: 'Launch a taco truck in San Jose.', steps: steps.slice(0, 3), expectedVersion: 0 });
+    expect(restructured).toMatchObject({ id: 'plan-taco', version: 1, changed: true });
+    let nodes = await read(board);
+    expect(planOf(nodes).plan.format).toBe(2);
+    expect(nodes.filter(node => node.stepCard)).toHaveLength(3);
+    expect(healthOf(nodes)).toEqual({ ok: true, issues: [] });
+
+    // A structured plan still in the older layout, with sources as separate cards.
+    await h.pool.query(`update branch_private.nodes set data = data #- '{plan,format}' where board_id=$1 and key='plan-taco'`, [board]);
+    await claude.call('add_card', { cardId: 'permits', kind: 'finding', step: 2, title: 'Three approvals', summary: 'Three city approvals are needed.',
+      sources: [{ url: 'https://example.com/a', title: 'Checklist' }] });
+    nodes = await read(board);
+    expect(healthOf(nodes).issues.map((issue: any) => issue.rule).sort()).toEqual(['format', 'sources']);
+    const brief = (await claude.call('get_brief')).plan;
+    const updated = await claude.call('update_plan', { planId: 'taco', goal: brief.goal, steps: [...brief.steps.map((step: any) => ({ id: step.id, title: step.title, status: step.status })), { title: 'Open', status: 'pending' }], expectedVersion: brief.version });
+    nodes = await read(board);
+    const plan = planOf(nodes);
+    expect((await claude.call('get_brief')).plan.version).toBe(updated.version);
+    expect(healthOf(nodes)).toEqual({ ok: true, issues: [] });
+    expect(nodes.find(node => node.id === 'mcp-permits').brief.sources).toEqual([expect.objectContaining({ url: 'https://example.com/a' })]);
+    expect(plan.plan.log[0]).toMatchObject({ by: 'Claude Code · alex', text: expect.stringContaining('Organized the board') });
+    expect(plan.plan.log[0].person).toBeUndefined();
+    expect(plan).toMatchObject({ canUndoOrganize: expect.any(Number) });
+    // The agent's next update works from the version it was given.
+    await claude.call('update_plan', { planId: 'taco', goal: 'Launch a taco truck in San Jose this spring.', steps: updated.steps.map((step: any) => ({ id: step.id, title: step.title, status: step.status })), expectedVersion: updated.version });
+  } finally { await claude.close(); boardId = previous; }
+});
+
 it('keeps notes from older clients short and inside the board', async () => {
   const board = await h.call(alex, 'library:create', { title: 'Older client' });
   const auth = { boardId: board, token: '' };
