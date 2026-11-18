@@ -48,6 +48,7 @@ async function localAgent(person: typeof alex, clientName: string) {
 }
 
 // A hosted board agent connected with a board key.
+// The connection is named after the client that connects ("Codex"), whatever name it was created with.
 async function boardAgent(person: typeof alex, name: string) {
   const grant = await h.call(person, 'boardAgents:connect', { ...scope(), name, mode: 'edit' });
   const client = new Client({ name: 'codex', version: '1.0.0' });
@@ -169,7 +170,7 @@ it('lets people and teammates’ agents change the same board, keeping who chang
     await codex.call('revise_card', { cardId: 'mcp-zoning', title: 'Zoning clearance rules' });
     let nodes = await read();
     const zoning = nodes.find(node => node.id === 'mcp-zoning');
-    expect(zoning.brief).toMatchObject({ rev: 3, editedBy: 'Codex · Eric' });
+    expect(zoning.brief).toMatchObject({ rev: 3, editedBy: 'Codex' });
     expect(zoning.brief.history.map((version: any) => [version.by, !!version.person])).toEqual([['alex', true], ['Claude Code · alex', false]]);
     // A teammate's decision lands on the shared plan.
     const decision = await codex.call('record_decision', { requestId: 'used-truck', step: hostsStep, title: 'Buy a used truck', summary: 'Buy a used, already-permitted truck.', planChanges: [{ step: 1, note: 'Used truck only.' }] });
@@ -277,7 +278,7 @@ it('keeps cards short and sourced on a board without a plan', async () => {
   boardId = board;
   const agent = await boardAgent(alex, 'Research helper');
   try {
-    expect(await agent.call('get_brief')).toMatchObject({ plan: null, you: { agent: 'Research helper', mode: 'edit' }, guidance: expect.stringContaining('No plan yet') });
+    expect(await agent.call('get_brief')).toMatchObject({ plan: null, you: { agent: 'Codex', mode: 'edit' }, guidance: expect.stringContaining('No plan yet') });
     const card = await agent.call('add_card', { requestId: 'pricing', kind: 'finding', title: 'Lunch pricing', summary: 'Nearby trucks charge $4–5 per taco.', detail: 'Checked three menus.' });
     expect(card).toMatchObject({ created: true, step: null });
     expect(await agent.call('add_source', { url: 'https://youtu.be/aqz-KE-bpKQ', note: 'Menu walkthrough.', forCard: card.id })).toMatchObject({ added: true, kind: 'video' });
@@ -328,7 +329,7 @@ it('sends each agent the cards for its work, says why, and after that only what 
 
     // The plan card keeps what each agent was sent, so the board can show it.
     let lens = planOf(await read()).lens;
-    const [codexId] = Object.entries(lens.reads).find(([, entry]: any) => entry.name === 'Codex · Eric')!;
+    const [codexId] = Object.entries(lens.reads).find(([, entry]: any) => entry.name === 'Codex')!;
     expect(lens.reads[codexId]).toMatchObject({ focus: { files: ['src/sync/merge.ts'] }, cards: ['mcp-r-sync', 'mcp-q-signin'] });
     expect(lens.reads[codexId].tokens).toBeLessThan(lens.reads[codexId].whole + 1000);
 
@@ -356,7 +357,7 @@ it('sends each agent the cards for its work, says why, and after that only what 
     expect(fresh.forYou.basedOn).toBe('your latest card');
     expect(fresh.forYou.cards.map((card: any) => card.id)).toEqual(['mcp-r-sync', 'mcp-q-signin']);
     lens = planOf(await read()).lens;
-    expect(Object.values(lens.reads).map((entry: any) => entry.name).sort()).toEqual(['Claude Code · alex', 'Codex · Eric']);
+    expect(Object.values(lens.reads).map((entry: any) => entry.name).sort()).toEqual(['Claude Code · alex', 'Codex']);
     if (process.env.PLAN_BOARD_SNAPSHOT) writeFileSync(process.env.PLAN_BOARD_SNAPSHOT.replace(/\.json$/, '') + '.todo.json', JSON.stringify({ title: 'Todo app', nodes: await read() }, null, 1));
   } finally { await claude.close(); await codex.close(); boardId = previous; }
 });

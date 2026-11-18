@@ -252,10 +252,12 @@
         + (history.length ? `<button type="button" class="plan-link" data-item-history aria-expanded="${historyOpen.has(n.id)}">${plural(history.length, 'earlier version')}</button>` : '')
         + (canEdit ? '<button type="button" class="plan-link" data-start-edit>Edit</button>' : '')
         + (canEdit ? `<button type="button" class="plan-link" data-close-item="${brief.closed ? 'open' : 'close'}">${brief.closed ? 'Reopen' : 'Close'}</button>` : '')
-        + '<button type="button" class="plan-link" data-open-context aria-controls="board-context">Context</button></div>';
+        + '</div>';
     }
+    const linked = L.linksOf(n, nodes()).filter(link => find(link.id)?.brief).length + sources.length + (brief.files || []).length;
     return `<article class="pb-item${open ? ' open' : ''}${brief.closed ? ' closed' : ''}" data-item="${esc(n.id)}" data-brief-kind="${esc(brief.kind)}">${head}${body}${more}`
-      + `<div class="pb-item-foot"><span>${edited}${(brief.rev || 1) > 1 ? ` · v${brief.rev}` : ''}</span><span>${closed}${sources.length && !open ? `<span class="brief-sources">${glyph('link')}${sources.length}</span>` : ''}</span></div></article>`;
+      + `<div class="pb-item-foot"><span>${edited}${(brief.rev || 1) > 1 ? ` · v${brief.rev}` : ''}</span><span>${closed}`
+      + `<button type="button" class="plan-link pb-open-layer" data-open-layer aria-pressed="${layer?.id === n.id}">${glyph('git-branch')}Context${linked ? ' · ' + linked : ''}</button></span></div></article>`;
   }
 
   const countsLine = cards => {
@@ -325,7 +327,7 @@
       + (plan.log?.length ? `<button type="button" class="plan-link" data-plan-history aria-expanded="${history}">History</button>` : '')
       + '<button type="button" class="plan-link" data-open-context aria-controls="board-context">Context</button></div>'
       + (history ? `<ol class="pb-history">${plan.log.map(entry => `<li><b>${esc(entry.by)}</b> · ${esc(ago(entry.at))}<span>${esc(entry.text)}</span></li>`).join('')}</ol>` : '')
-      + (plan.sources?.length ? `<div class="pb-chips">${sourceChips(n.id, plan.sources, 6, '')}</div>` : '') + '</div>';
+      + (plan.sources?.length ? `<div class="pb-chips">${sourceChips(n.id, plan.sources, 6, '')}</div>` : '') + agentsMarkup(n) + '</div>';
   }
 
   function stepMarkup(n) {
@@ -349,7 +351,7 @@
       + (n.lane.pinned && canEdit ? '<button type="button" class="plan-link" data-put-back>Put back</button>' : '')
       + '</div></div>';
   }
-  const itemCardMarkup = n => `<div class="card-main pb-card">${itemMarkup(n, find(n.lane.plan))}`
+  const itemCardMarkup = n => `<div class="card-main pb-card">${lensReason(n)}${itemMarkup(n, find(n.lane.plan))}`
     + (n.lane.pinned && writable() ? '<button type="button" class="plan-link pb-putback" data-put-back>Put back in its column</button>' : '') + '</div>';
 
   // Lay the unmoved cards out and return the short connectors between them.
@@ -398,12 +400,16 @@
       }
       // A step someone moved keeps its place and brings its cards with it.
       for (const step of steps.filter(item => item.lane.pinned)) column(plan, step, segments, size, put);
+      const sent = lens?.plan === plan.id ? sentTo(plan, lens.agent) : null;
       for (const n of all) {
         if (!(isStepCard(n) ? n.stepCard.plan === plan.id : boardCard(n) && n.lane.plan === plan.id)) continue;
-        cardEl(n.id)?.classList.toggle('pb-dim', dimmed(n));
+        const el = cardEl(n.id);
+        el?.classList.toggle('pb-dim', dimmed(n) || (!!sent && boardCard(n) && !sent.has(n.id)));
+        el?.classList.toggle('pb-lens-hit', !!sent && sent.has(n.id));
       }
     }
     document.getElementById('cards')?.classList.toggle('pb-animate', !gesture);
+    layerSegments(segments);
     return segments;
   }
   function column(plan, step, segments, size, put) {
@@ -434,6 +440,222 @@
       applyCamera(); requestDraw();
     }));
   }
+
+  // ---- What each agent was sent -------------------------------------------------------
+  // The plan card lists every agent that has read the board. Choosing one lights up the
+  // cards it was sent, with the reason on each, and lets people pin or mute cards for it.
+  let lens = null;                     // { plan, agent } while showing one agent's view
+  const readsOf = plan => Object.entries(plan?.lens?.reads || {}).map(([id, read]) => ({ id, ...read })).sort((a, b) => b.at - a.at);
+  const prefsOf = (plan, agent) => plan?.lens?.prefs?.[agent] || {};
+  const sentTo = (plan, agent) => new Map((plan?.lens?.reads?.[agent]?.items || []).map(item => [item.card, item]));
+  const tokens = count => count >= 1000 ? (Math.round(count / 100) / 10) + 'k' : String(Math.round(count || 0));
+  function setLens(next) {
+    const before = lens;
+    lens = next;
+    for (const key of new Set([before?.plan, next?.plan].filter(Boolean))) {
+      const plan = find(key);
+      if (!plan) continue;
+      refreshCard(plan);
+      for (const card of nodes()) if (boardCard(card) && card.lane.plan === key) refreshCard(card);
+    }
+    requestDraw();
+  }
+  let lensSeen = '';
+  function syncLens() {
+    const plan = lens && find(lens.plan);
+    if (lens && !plan?.lens?.reads?.[lens.agent]) { lens = null; lensSeen = ''; return; }
+    const seen = plan ? JSON.stringify(plan.lens.reads[lens.agent].items) : '';
+    if (seen !== lensSeen) { lensSeen = seen; if (plan) for (const card of nodes()) if (boardCard(card) && card.lane.plan === plan.id) refreshCard(card); }
+  }
+  function lensReason(n) {
+    if (lens?.plan !== n.lane?.plan) return '';
+    const item = sentTo(find(lens.plan), lens.agent).get(n.id);
+    return item ? `<p class="pb-lens-why">${glyph('flash')}<span>${esc(item.why)}${item.unchanged ? ' · already had it' : ''}</span></p>` : '';
+  }
+  function agentsMarkup(plan) {
+    const reads = readsOf(plan);
+    if (!reads.length) return '';
+    const active = lens?.plan === plan.id ? reads.find(read => read.id === lens.agent) : null;
+    return `<div class="pb-agents"><span class="plan-eyebrow">What each agent was sent</span><div class="pb-agent-list">`
+      + reads.map(read => `<button type="button" class="pb-agent" data-lens-agent="${esc(read.id)}" aria-pressed="${read === active}">${glyph('flash')}<span>${esc(read.name)}</span><small>${tokens(read.tokens)} tokens · ${esc(ago(read.at))}</small></button>`).join('')
+      + '</div>' + (active ? lensPanel(plan, active) : '') + '</div>';
+  }
+  function lensPanel(plan, read) {
+    const prefs = prefsOf(plan, read.id), sent = sentTo(plan, read.id), canEdit = writable() && !!window.BoardShared?.enabled;
+    const live = L.liveSteps(plan.plan), stepIndex = live.findIndex(step => step.id === read.focus?.step);
+    const focus = [stepIndex >= 0 ? `step ${stepIndex + 1}, ${live[stepIndex].title}` : '', ...(read.focus?.files || []), read.focus?.topic ? `“${read.focus.topic}”` : '']
+      .filter(Boolean).join(' · ') || 'nothing in particular';
+    const skipped = new Map((read.skipped || []).map(item => [item.card, item.why]));
+    const cards = nodes().filter(card => boardCard(card) && card.lane.plan === plan.id && L.isOpen(card));
+    const order = card => sent.has(card.id) ? 0 : skipped.has(card.id) ? 1 : 2;
+    const items = [...sent.values()].reduce((sum, item) => sum + (item.tokens || 0), 0);
+    const row = card => {
+      const item = sent.get(card.id), pinned = (prefs.pinned || []).includes(card.id), muted = (prefs.muted || []).includes(card.id);
+      const why = item ? item.why + (item.unchanged ? ' · already had it' : '') : skipped.has(card.id) ? skipped.get(card.id) + ' · over its budget' : muted ? 'muted' : 'not near its work';
+      return `<li class="pb-lens-row${item ? ' sent' : ''}"><div><button type="button" class="pb-lens-card" data-context-card="${esc(card.id)}">${esc(card.title)}</button><small>${esc(why)}</small></div>`
+        + `<span class="pb-lens-tokens">${item ? tokens(item.tokens) : '–'}</span>`
+        + (canEdit ? `<span class="pb-lens-prefs"><button type="button" data-agent-pref="pin" data-card="${esc(card.id)}" aria-pressed="${pinned}">${pinned ? 'Pinned' : 'Pin'}</button>`
+          + `<button type="button" data-agent-pref="mute" data-card="${esc(card.id)}" aria-pressed="${muted}">${muted ? 'Muted' : 'Mute'}</button></span>` : '') + '</li>';
+    };
+    return `<div class="pb-lens"><p class="pb-lens-focus">Working on ${esc(focus)}<span>Chosen from ${esc(read.basis)}</span></p>`
+      + `<div class="pb-lens-metrics"><div><small>Sent at its last read</small><b>${tokens(read.tokens)} tokens</b></div><div><small>Everything on this board</small><b>${tokens(read.whole)} tokens</b></div></div>`
+      + `<ul class="pb-lens-rows"><li class="pb-lens-row sent"><div><span class="pb-lens-card">The plan, decisions and open questions</span><small>always sent</small></div><span class="pb-lens-tokens">${tokens(Math.max(0, read.tokens - items))}</span>${canEdit ? '<span class="pb-lens-prefs"></span>' : ''}</li>`
+      + cards.sort((a, b) => order(a) - order(b)).map(row).join('') + '</ul>'
+      + (canEdit ? '<p class="pb-lens-note">Pins and mutes apply from its next read.</p>' : '') + '</div>';
+  }
+
+  // ---- Context around a card ----------------------------------------------------------
+  // Opening a card's context lays out what stands behind it, on the board itself: its
+  // reasoning, sources and history on the left, the cards it links to on the right, and
+  // the files it is about and the agents that were sent it underneath. Everything else
+  // dims. Following a link moves the same view to that card.
+  let layer = null;                    // { id, trail } while a card's context is open
+  const LAYER = { side: 270, linked: 290, gap: 70, row: 58, linkRow: 96, space: 14, below: 64, foot: 236 };
+  function openLayer(id, close) {
+    if (close || !find(id)?.brief) return closeLayer();
+    const target = find(id);
+    if (boardCard(target) && !target.lane.pinned) {
+      const key = target.lane.plan + ':' + stepOf(target);
+      stepOpen.set(key, true);
+      if (!L.isOpen(target)) closedOpen.add(key);
+      if (viewOf.get(target.lane.plan) === 'outline') viewOf.set(target.lane.plan, 'all');
+    }
+    const trail = layer ? [...layer.trail.slice(0, layer.trail.includes(id) ? layer.trail.indexOf(id) : undefined), id].slice(-5) : [id];
+    const previous = layer?.id;
+    layer = { id, trail };
+    for (const key of [previous, id]) { const card = key && find(key); if (card) refreshCard(card); }
+    const plan = board(target);
+    if (plan) refreshCard(plan);
+    requestDraw();
+    requestAnimationFrame(() => requestAnimationFrame(fitLayer));
+  }
+  function closeLayer() {
+    const previous = layer?.id;
+    layer = null;
+    document.getElementById('pb-layer')?.remove();
+    document.getElementById('cards')?.classList.remove('pb-layer-on');
+    const card = previous && find(previous);
+    if (card) refreshCard(card);
+    requestDraw();
+  }
+  function layerParts(n) {
+    const brief = n.brief, plan = find(n.lane?.plan), all = nodes();
+    const left = [];
+    if (brief.detail || brief.points?.length) left.push({ icon: 'page', title: 'Reasoning', sub: brief.detail ? 'The full why, saved with the card' : plural(brief.points.length, 'point'), act: 'reasoning' });
+    for (const source of (brief.sources || []).filter(item => item && typeof item === 'object')) {
+      left.push({ icon: SOURCE_ICON[source.kind] || 'link', title: source.title, sub: source.note || { website: 'Website', video: 'Video', file: 'File', github: 'GitHub' }[source.kind] || 'Source', href: /^https?:\/\//.test(source.url || '') ? source.url : '' });
+    }
+    left.push({ icon: 'refresh', title: 'History', sub: `${plural((brief.history || []).length + 1, 'version')} · last by ${brief.editedBy || brief.by || 'an agent'}`, act: 'history' });
+    const right = L.linksOf(n, all).map(link => ({ card: find(link.id), why: link.why })).filter(item => item.card?.brief && !item.card.visualPlan);
+    const bottom = [
+      ...(brief.files || []).map(file => ({ icon: 'git-branch', title: file.split('/').pop(), sub: file })),
+      ...readsOf(plan).filter(read => (read.items || []).some(item => item.card === n.id))
+        .map(read => ({ icon: 'flash', title: read.name, sub: 'was sent this: ' + read.items.find(item => item.card === n.id).why, agent: read.id })),
+    ];
+    return { left, right, bottom };
+  }
+  // World-space boxes for the open layer, around the card's current place.
+  function layerGeometry() {
+    const n = layer && find(layer.id), el = n && cardEl(n.id);
+    if (!n || !el || el.hidden || embedded(n)) return null;
+    const w = el.offsetWidth, h = el.offsetHeight, parts = layerParts(n), boxes = [];
+    const stack = (list, x, width, height) => {
+      const total = list.length * height + Math.max(0, list.length - 1) * LAYER.space;
+      let y = Math.max(n.y, n.y + h / 2 - total / 2);
+      for (const part of list) { boxes.push({ ...part, x, y, w: width, h: height }); y += height + LAYER.space; }
+    };
+    stack(parts.left.map(part => ({ ...part, side: 'left' })), n.x - LAYER.gap - LAYER.side, LAYER.side, LAYER.row);
+    stack(parts.right.map(part => ({ ...part, side: 'right' })), n.x + w + LAYER.gap, LAYER.linked, LAYER.linkRow);
+    const across = parts.bottom.length * LAYER.foot + Math.max(0, parts.bottom.length - 1) * LAYER.space;
+    parts.bottom.forEach((part, index) => boxes.push({ ...part, side: 'bottom', x: n.x + w / 2 - across / 2 + index * (LAYER.foot + LAYER.space), y: n.y + h + LAYER.below, w: LAYER.foot, h: LAYER.row }));
+    return { n, w, h, boxes };
+  }
+  function satelliteMarkup(box) {
+    const style = `transform:translate3d(${box.x}px,${box.y}px,0);width:${box.w}px;height:${box.h}px`;
+    if (box.card) {
+      const brief = box.card.brief;
+      return `<button type="button" class="pb-sat pb-sat-card" style="${style}" data-layer-go="${esc(box.card.id)}" data-brief-kind="${esc(brief.kind)}">`
+        + `<small>${esc(box.why || 'linked')}</small><span class="brief-chip">${glyph(KIND_ICON[brief.kind] || 'page')}${esc(L.KIND_LABEL[brief.kind] || 'Note')}${brief.closed ? ' · closed' : ''}</span>`
+        + `<strong>${esc(box.card.title)}</strong></button>`;
+    }
+    const inner = `${glyph(box.icon)}<span><strong>${esc(box.title)}</strong><small>${esc(box.sub)}</small></span>`;
+    if (box.href) return `<a class="pb-sat" style="${style}" href="${esc(box.href)}" target="_blank" rel="noopener noreferrer">${inner}</a>`;
+    if (box.act) return `<button type="button" class="pb-sat" style="${style}" data-layer-act="${box.act}">${inner}</button>`;
+    if (box.agent) return `<button type="button" class="pb-sat" style="${style}" data-layer-agent="${esc(box.agent)}">${inner}</button>`;
+    return `<div class="pb-sat" style="${style}">${inner}</div>`;
+  }
+  let layerShape = '';
+  function layerSegments(segments) {
+    const cards = document.getElementById('cards');
+    if (!layer) return;
+    const geometry = layerGeometry();
+    if (!geometry) { if (!find(layer.id)) closeLayer(); return; }
+    const { n, w, h, boxes } = geometry;
+    cards?.classList.add('pb-layer-on');
+    for (const el of cards?.children || []) el.classList.toggle('pb-layer-focus', el.dataset.node === n.id);
+    let root = document.getElementById('pb-layer');
+    if (!root) {
+      root = document.createElement('div');
+      root.id = 'pb-layer';
+      root.addEventListener('pointerdown', event => { if (event.target.closest('button,a')) event.stopPropagation(); });
+      document.getElementById('world').append(root);
+    }
+    const trail = layer.trail.map(find).filter(Boolean);
+    const shape = JSON.stringify([n.x, n.y, w, h, boxes.map(box => [box.x, box.y, box.title, box.sub, box.card?.id, box.why]), trail.map(card => card.id)]);
+    if (shape !== layerShape || !root.childElementCount) {
+      layerShape = shape;
+      root.innerHTML = `<nav class="pb-layer-bar" style="transform:translate3d(${n.x}px,${n.y - 46}px,0);width:${Math.max(w, 420)}px" aria-label="Context trail">`
+        + trail.map((card, index) => `${index ? `<i aria-hidden="true">›</i>` : ''}<button type="button" data-layer-go="${esc(card.id)}" aria-current="${card.id === n.id}">${esc(card.title)}</button>`).join('')
+        + `<span class="pb-layer-actions"><button type="button" data-layer-context>Context tab</button><button type="button" data-layer-close aria-label="Close context">${glyph('xmark')}</button></span></nav>`
+        + boxes.map(satelliteMarkup).join('');
+    }
+    const anchor = { x: n.x, y: n.y + Math.min(h / 2, 70) };
+    for (const box of boxes) {
+      if (box.side === 'bottom') {
+        segments.push({ d: bend({ x: n.x + w / 2, y: n.y + h }, { x: box.x + box.w / 2, y: box.y }, true), kind: 'wire-base wire-cite pb-layer-wire' });
+      } else {
+        const from = box.side === 'left' ? anchor : { x: n.x + w, y: anchor.y };
+        const to = { x: box.side === 'left' ? box.x + box.w : box.x, y: box.y + box.h / 2 };
+        segments.push({ d: bend(from, to, false), kind: 'wire-base wire-cite pb-layer-wire' });
+      }
+    }
+  }
+  // A soft curve between two world points, drawn in screen space like every other wire.
+  function bend(a, b, vertical) {
+    const p = screen(a.x, a.y), q = screen(b.x, b.y);
+    if (vertical) { const m = (p.y + q.y) / 2; return `M${p.x},${p.y} C${p.x},${m} ${q.x},${m} ${q.x},${q.y}`; }
+    const m = (p.x + q.x) / 2;
+    return `M${p.x},${p.y} C${m},${p.y} ${m},${q.y} ${q.x},${q.y}`;
+  }
+  function fitLayer() {
+    const geometry = layerGeometry();
+    if (!geometry) return;
+    const { n, w, h, boxes } = geometry;
+    const left = Math.min(n.x, ...boxes.map(box => box.x)), right = Math.max(n.x + w, ...boxes.map(box => box.x + box.w));
+    const top = Math.min(n.y - 50, ...boxes.map(box => box.y)), bottom = Math.max(n.y + h, ...boxes.map(box => box.y + box.h));
+    camera.z = Math.max(0.3, Math.min(1, (innerWidth - 120) / (right - left), (innerHeight - 220) / (bottom - top)));
+    camera.x = (innerWidth - (right - left) * camera.z) / 2 - left * camera.z;
+    camera.y = 100 - top * camera.z;
+    applyCamera(); requestDraw();
+  }
+  document.addEventListener('click', event => {
+    if (!event.target.closest?.('#pb-layer')) return;
+    const hit = selector => event.target.closest(selector);
+    const n = layer && find(layer.id);
+    if (hit('[data-layer-close]')) return closeLayer();
+    if (hit('[data-layer-go]')) return openLayer(hit('[data-layer-go]').dataset.layerGo);
+    if (!n) return;
+    if (hit('[data-layer-act]')) {
+      const act = hit('[data-layer-act]').dataset.layerAct;
+      itemOpen.add(n.id);
+      const set = act === 'reasoning' ? openDetails : historyOpen;
+      set.has(n.id) ? set.delete(n.id) : set.add(n.id);
+      return redraw(n);
+    }
+    if (hit('[data-layer-agent]')) return setLens({ plan: n.lane.plan, agent: hit('[data-layer-agent]').dataset.layerAgent });
+    if (hit('[data-layer-context]')) window.dispatchEvent(new CustomEvent('branch:show-context', { detail: { id: n.brief?.agentId || '', nodeKey: n.id } }));
+  });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && layer && !event.target.closest?.('input,textarea,[contenteditable]')) closeLayer(); });
 
   // Organize shows what it will do before it does anything.
   function organizeDialog(n, preview, apply) {
@@ -538,6 +760,16 @@
       }
       return;
     }
+    if (itemEl && hit('[data-open-layer]')) { event.stopImmediatePropagation(); return openLayer(n.id, layer?.id === n.id); }
+    if (hit('[data-lens-agent]')) {
+      const plan = board(owner) || owner, agent = hit('[data-lens-agent]').dataset.lensAgent;
+      return setLens(lens?.plan === plan.id && lens.agent === agent ? null : { plan: plan.id, agent });
+    }
+    if (hit('[data-context-card]')) { event.stopImmediatePropagation(); return openLayer(hit('[data-context-card]').dataset.contextCard); }
+    if (hit('[data-agent-pref]') && lens && window.BoardShared?.enabled) {
+      const button = hit('[data-agent-pref]'), on = button.getAttribute('aria-pressed') === 'true';
+      return attempt(() => remote('setAgentCard', { nodeKey: lens.plan, agentId: lens.agent, card: button.dataset.card, pref: on ? 'none' : button.dataset.agentPref }));
+    }
     if (hit('[data-organize]') && window.BoardShared?.enabled) {
       return attempt(async () => {
         const plan = board(owner) || owner;
@@ -600,6 +832,8 @@
   });
 
   // Keep everything in place the moment new board data arrives, before the next paint.
-  window.addEventListener('branch:board-updated', () => { try { arrange(); } catch { /* the canvas is still starting */ } });
+  window.addEventListener('branch:board-updated', () => {
+    try { syncLens(); arrange(); } catch { /* the canvas is still starting */ }
+  });
   window.BranchPlanBoard = { markup, cardClass, headerActions, overviewType, briefView, wire, laneWires, ownsWire, moveMembers, isPlan, isBrief, isSource, isBoard, embedded, managed };
 })();
