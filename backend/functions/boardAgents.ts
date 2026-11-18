@@ -5,6 +5,7 @@ import { encodeDocument, initialDocument, loadDocument, readText } from './docum
 import { textOf } from '../../app/context.js';
 import { place } from '../../app/auto-layout.js';
 import { boardAgentInstructions } from '../board-agent-instructions';
+import { clientLabel, cleanClientName } from '../board-agent-clients';
 
 const scope = { boardId: v.id('boards'), token: v.string() };
 const key = { keyHash: v.string() };
@@ -15,6 +16,10 @@ const editFields = { nodeKey: v.string(), expectedVersion: v.number(), ...noteFi
 // Distinguish user-facing failures from infrastructure and database errors.
 export class BoardAgentError extends Error {}
 const denied = () => new BoardAgentError('The agent connection is unavailable or its board access was removed.');
+// A copied setup key that no client has used yet stops working after this long.
+export const SETUP_KEY_TTL = 24 * 60 * 60 * 1000;
+const unused = (connection: any) => !connection.revoked && !connection.connectedAt;
+const expired = (connection: any, now = Date.now()) => unused(connection) && !!connection.expiresAt && connection.expiresAt <= now;
 
 function text(value: string, label: string, limit: number, allowEmpty = false) {
   const trimmed = value.trim();
@@ -46,7 +51,7 @@ async function signedInEditor(ctx: any, args: { boardId: string; token: string }
 async function connectionFor(ctx: any, keyHash: string, edit = false) {
   const connection = await ctx.db.query('boardAgentConnections')
     .withIndex('key', q => q.eq('keyHash', keyHash)).unique();
-  if (!connection || connection.revoked || (edit && connection.mode !== 'edit')) throw denied();
+  if (!connection || connection.revoked || expired(connection) || (edit && connection.mode !== 'edit')) throw denied();
   if ((await ctx.db.get(connection.userId))?.kind !== 'account') throw denied();
   try {
     const { board } = await accessForUser(ctx, connection.userId, connection.boardId, connection.mode === 'edit');
@@ -103,19 +108,28 @@ async function writeNote(ctx: any, card: any, title: string, body: string, userI
   } finally { doc.destroy(); }
 }
 
+const ownerName = async (ctx: any, userId: string) => (await ctx.db.get(userId))?.name || 'Unknown';
+
+async function manageable(ctx: any, args: { boardId: string; token: string }) {
+  const { userId, membership } = await signedInEditor(ctx, args);
+  const rows = await ctx.db.query('boardAgentConnections').withIndex('board', q => q.eq('boardId', args.boardId)).collect();
+  return { userId, rows: rows.filter(c => !c.revoked && (c.userId === userId || membership.role === 'owner')) };
+}
+
 export const settings = query({
   args: scope,
   handler: async (ctx, args) => {
-    const { userId, membership } = await signedInEditor(ctx, args);
-    const [instructions, connections] = await Promise.all([
-      instructionsFor(ctx, args.boardId),
-      ctx.db.query('boardAgentConnections').withIndex('board', q => q.eq('boardId', args.boardId)).collect(),
-    ]);
+    const [instructions, { userId, rows }] = await Promise.all([instructionsFor(ctx, args.boardId), manageable(ctx, args)]);
+    const now = Date.now();
+    // Only keys a client has used are connections; copied keys still waiting are counted, not listed.
+    const connected = rows.filter(c => c.connectedAt).sort((a, b) => a.connectedAt - b.connectedAt);
     return {
       instructions: { text: instructions?.text || '', version: instructions?.version || 0 },
-      connections: connections
-        .filter(c => !c.revoked && (c.userId === userId || membership.role === 'owner'))
-        .map(c => ({ id: c._id, name: c.name, mode: c.mode })),
+      connections: await Promise.all(connected.map(async c => ({
+        id: c._id, name: c.name, mode: c.mode, client: clientLabel(c.client) || null,
+        owner: c.userId === userId ? 'You' : await ownerName(ctx, c.userId), connectedAt: c.connectedAt,
+      }))),
+      unusedKeys: rows.filter(c => unused(c) && !expired(c, now)).length,
     };
   },
 });
@@ -129,6 +143,7 @@ export const connect = mutation({
       byte => byte.toString(16).padStart(2, '0')).join('');
     const id = await ctx.db.insert('boardAgentConnections', {
       boardId: args.boardId, userId, name, keyHash: await tokenHash(code), mode: args.mode, revoked: false,
+      expiresAt: Date.now() + SETUP_KEY_TTL,
     });
     return { id, code };
   },
@@ -143,6 +158,17 @@ export const disconnect = mutation({
       throw new BoardAgentError('You cannot disconnect this agent.');
     }
     await ctx.db.patch(connection._id, { revoked: true });
+  },
+});
+
+// Revokes copied keys that no client has used, such as setups that were abandoned or shared by mistake.
+export const revokeUnused = mutation({
+  args: scope,
+  handler: async (ctx, args) => {
+    const { rows } = await manageable(ctx, args);
+    const pending = rows.filter(c => unused(c));
+    for (const connection of pending) await ctx.db.patch(connection._id, { revoked: true });
+    return { revoked: pending.filter(c => !expired(c)).length };
   },
 });
 
@@ -165,7 +191,33 @@ export const checkConnection = internalQuery({
   args: key,
   handler: async (ctx, args) => {
     const { connection } = await connectionFor(ctx, args.keyHash);
-    return { mode: connection.mode };
+    return { mode: connection.mode, connected: !!connection.connectedAt, identified: !!connection.client };
+  },
+});
+
+// Called on a key's first use, and on an initialize request until the client has named itself.
+export const activate = internalMutation({
+  args: { ...key, client: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const { connection } = await connectionFor(ctx, args.keyHash);
+    const patch: Record<string, unknown> = {};
+    if (!connection.connectedAt) Object.assign(patch, { connectedAt: Date.now(), expiresAt: undefined });
+    const client = cleanClientName(args.client);
+    if (client && !connection.client) patch.client = client;
+    // Name the connection after its client, numbered when the board already has one with that name.
+    // A client that doesn't report a name gets the next free "Board agent N".
+    const label = patch.client ? clientLabel(client) : patch.connectedAt ? 'Board agent' : undefined;
+    if (label) {
+      const rows = await ctx.db.query('boardAgentConnections')
+        .withIndex('board', q => q.eq('boardId', connection.boardId)).collect();
+      const taken = new Set(rows.filter(c => c._id !== connection._id && !c.revoked && c.connectedAt).map(c => c.name));
+      const candidate = (n: number) => patch.client && n === 1 ? label : label + ' ' + n;
+      let number = 1;
+      while (taken.has(candidate(number))) number++;
+      patch.name = candidate(number);
+    }
+    if (Object.keys(patch).length) await ctx.db.patch(connection._id, patch);
+    return null;
   },
 });
 
@@ -337,8 +389,9 @@ export const sources = query({
     await access(ctx, args.token, args.boardId);
     const rows = await ctx.db.query('boardAgentConnections')
       .withIndex('board', q => q.eq('boardId', args.boardId)).collect();
-    return rows.filter(row => row.lastUpdateAt)
-      .map(row => ({ id: row._id, name: row.name, latest: row.lastUpdateAt }));
+    return Promise.all(rows.filter(row => row.lastUpdateAt).map(async row => ({
+      id: row._id, name: row.name, latest: row.lastUpdateAt, owner: await ownerName(ctx, row.userId),
+    })));
   },
 });
 

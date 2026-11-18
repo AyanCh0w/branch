@@ -397,6 +397,7 @@ html[data-theme=dark] .a-context-prompt{background:#262626}
 .a-agent-setup ol{padding:12px 14px 12px 32px;border-radius:10px;background:var(--theme-control,#f5f6f8);line-height:1.55}
 .a-agent-setup li+li{margin-top:4px}
 .a-agent-setup button{justify-self:start}
+.a-agent-setup .a-agent-waiting{font-size:13px;color:var(--theme-muted,#596472)}
 .a-agent-options{border-top:1px solid var(--theme-line,#dcdfe3);margin-top:18px;padding-top:12px}
 .a-agent-options summary{cursor:pointer;color:var(--theme-muted,#596472);font-size:13px;width:fit-content}
 .a-agent-access{display:flex;align-items:center;gap:8px;margin-top:12px}
