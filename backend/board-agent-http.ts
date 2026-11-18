@@ -3,8 +3,10 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { z } from 'zod';
 import { tokenHash } from './functions/access';
 import { BoardAgentError } from './functions/boardAgents';
+import { PlanError } from './functions/planning';
+import { DESCRIPTIONS, shapes } from '../collaboration/plan-tools.cjs';
 import type { Engine } from './engine';
-import { boardAgentInstructions } from './board-agent-instructions';
+import { agentWorkflow } from './agent-workflow';
 import { initializeClient } from './board-agent-clients';
 
 export async function boardAgentRequest(request: Request, engine: Engine) {
@@ -32,7 +34,7 @@ export async function boardAgentRequest(request: Request, engine: Engine) {
   }
 
   const server = new McpServer({ name: 'branch-board', version: '1.0.0' }, {
-    instructions: boardAgentInstructions(mode),
+    instructions: agentWorkflow(mode),
   });
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined, enableJsonResponse: true, maxRequestBodySize: 256 * 1024,
@@ -41,25 +43,29 @@ export async function boardAgentRequest(request: Request, engine: Engine) {
   const requestId = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).describe('Reuse this ID only when retrying the same request.');
   const note = { title: z.string().trim().min(1).max(100), body: z.string().max(24_000).describe('Markdown note text.') };
   const edit = { nodeKey, expectedVersion: z.number().int().nonnegative(), ...note };
+  const shape = shapes(z);
 
   function tool(name: string, operation: string, description: string, inputSchema: z.ZodRawShape,
-    kind: 'query' | 'mutation', idempotentHint = false) {
+    kind: 'query' | 'mutation', idempotentHint = false, readOnlyHint = kind === 'query') {
     server.registerTool(name, {
       description, inputSchema,
-      annotations: { readOnlyHint: kind === 'query', destructiveHint: false, idempotentHint, openWorldHint: false },
+      annotations: { readOnlyHint, destructiveHint: false, idempotentHint, openWorldHint: false },
     }, async args => {
       try {
         const result = await engine.call('boardAgents:' + operation, { ...args, keyHash }, {}, kind, true);
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       } catch (error) {
-        const text = error instanceof BoardAgentError ? error.message : 'Branch could not complete this request.';
+        const text = error instanceof BoardAgentError || error instanceof PlanError ? error.message : 'Branch could not complete this request.';
         return { isError: true, content: [{ type: 'text', text }] };
       }
     });
   }
 
+  const planId = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).optional().describe('Plan id from get_brief. Omit to use the board’s current plan.');
+  // Reading the brief records what this agent was sent, so people can see it on the board.
+  tool('get_brief', 'brief', DESCRIPTIONS.get_brief, shape.brief, 'mutation', false, true);
   tool('read_board', 'readBoard',
-    'Start here to read this board’s project instructions, agent workflow, and cards. Follow agentInstructions and use nextOffset to continue.',
+    'List this board’s cards and project instructions. Prefer get_brief for the plan and decisions. Use nextOffset to continue.',
     { offset: z.number().int().nonnegative().default(0) }, 'query');
   tool('read_card', 'readCard', 'Read a card’s saved text and current version from this board.', { nodeKey }, 'query');
   tool('read_context', 'readContext', 'Read recent agent progress and decisions published to this board.',
@@ -69,7 +75,16 @@ export async function boardAgentRequest(request: Request, engine: Engine) {
       'Before every assistant message, automatically publish a concise summary in the board’s Context. Include progress, questions, decisions, and final replies. Use a new requestId per message and reuse it only for a retry. Optionally link a board card.',
       { requestId, title: z.string().trim().min(1).max(120), result: z.string().trim().min(1).max(8_000), nodeKey: nodeKey.optional() },
       'mutation', true);
-    tool('create_card', 'createCard', 'Create a visible note card on the whiteboard.', { requestId, ...note }, 'mutation', true);
+    tool('update_plan', 'updatePlan', DESCRIPTIONS.update_plan, { planId, ...shape.plan }, 'mutation');
+    tool('add_card', 'addPlanCard', DESCRIPTIONS.add_card, { requestId, planId, ...shape.card }, 'mutation', true);
+    tool('revise_card', 'revisePlanCard', DESCRIPTIONS.revise_card,
+      { cardId: nodeKey.describe('Id of the card to change, from get_brief.'), ...shape.revise }, 'mutation');
+    tool('log_research', 'logPlanResearch', DESCRIPTIONS.log_research, shape.research, 'mutation', true);
+    tool('record_decision', 'recordPlanDecision', DESCRIPTIONS.record_decision, { requestId, planId, ...shape.decision }, 'mutation', true);
+    tool('add_source', 'addPlanSource', DESCRIPTIONS.add_source, { planId, ...shape.source }, 'mutation', true);
+    tool('create_card', 'createCard',
+      'Create a free-form Markdown note for a long document a person asked for. For findings, questions, risks and decisions use add_card or record_decision.',
+      { requestId, ...note }, 'mutation', true);
     tool('update_card', 'updateCard', 'Replace the title and text of a note created by this connection. Read its current version first.',
       edit, 'mutation');
     tool('propose_edit', 'propose',

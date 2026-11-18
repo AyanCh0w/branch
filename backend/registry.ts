@@ -18,4 +18,5 @@ import * as files from './functions/files';
 import * as sharing from './functions/sharing';
 import * as github from './functions/github';
 import * as githubActions from './functions/githubActions';
-export const registry = {agentContext,boardAgents,coding,chatgptBrowser,boards,chatgptActions,invitations,workspaceKeyActions,collaboration,chatgpt,people,chat,teams,accounts,library,workspaceKeys,files,sharing,github,githubActions};
+import * as planning from './functions/planning';
+export const registry = {agentContext,boardAgents,coding,chatgptBrowser,boards,chatgptActions,invitations,workspaceKeyActions,collaboration,chatgpt,people,chat,teams,accounts,library,workspaceKeys,files,sharing,github,githubActions,planning};

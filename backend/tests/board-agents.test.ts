@@ -116,7 +116,7 @@ it('protects edits with ownership, human changes and version checks, and makes p
   const readOnly = await openAgent(owner, 'Observer', 'read');
   try {
     expect((await readOnly.client.listTools()).tools.map(tool => tool.name))
-      .toEqual(['read_board', 'read_card', 'read_context']);
+      .toEqual(['get_brief', 'read_board', 'read_card', 'read_context']);
     const observerBoard = await readOnly.call('read_board');
     expect(observerBoard.agentInstructions).toBe(readOnly.client.getInstructions());
     expect(observerBoard.agentInstructions).toContain('This connection is read only');
